@@ -1,293 +1,155 @@
-// Seleziona il canvas
-const canvas = document.getElementById('webgl-canvas');
-const gl = canvas.getContext('webgl');
+"use strict";
 
-// Imposta le dimensioni del canvas
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
-
-if (!gl) {
-    console.error('WebGL not supported');
-} else {
-    console.log('WebGL initialized successfully');
-}
-
-// Imposta il colore di sfondo
-gl.clearColor(0.1, 0.1, 0.1, 1.0);
-gl.clear(gl.COLOR_BUFFER_BIT);
-
-// Funzione per ridimensionare il canvas e impostare la viewport correttamente
-window.addEventListener('resize', () => {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    gl.viewport(0, 0, canvas.width, canvas.height);
-});
-gl.viewport(0, 0, canvas.width, canvas.height);
-
-// Funzioni per creare shader e programma
-function createShader(gl, type, source) {
-    const shader = gl.createShader(type);
-    gl.shaderSource(shader, source);
-    gl.compileShader(shader);
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        console.error('Shader compilation failed:', gl.getShaderInfoLog(shader));
-        gl.deleteShader(shader);
-        return null;
-    }
-    return shader;
-}
-
-function createProgram(gl, vertexShaderSource, fragmentShaderSource) {
-    const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
-    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
-    const program = gl.createProgram();
-    gl.attachShader(program, vertexShader);
-    gl.attachShader(program, fragmentShader);
-    gl.linkProgram(program);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-        console.error('Program linking failed:', gl.getProgramInfoLog(program));
-        gl.deleteProgram(program);
-        return null;
-    }
-    return program;
-}
-
-// Carica i shader dai file e crea il programma WebGL
-async function loadShaderSource(url) {
-    const response = await fetch(url);
-    return response.text();
-}
-
-async function initShaders() {
-    const vertexShaderSource = await loadShaderSource('shaders/vertexShader.glsl');
-    const fragmentShaderSource = await loadShaderSource('shaders/fragmentShader.glsl');
-    const program = createProgram(gl, vertexShaderSource, fragmentShaderSource);
-    if (!program) {
-        console.error('Failed to initialize shaders.');
-        return null;
-    }
-    return program;
-}
-
-// Carica e parsa il modello OBJ
-function parseOBJ(text) {
-    const positions = [];
-    const normals = [];
-    const vertexData = [positions, normals];
-
-    const keywords = {
-        v(parts) {
-            positions.push(parts.map(parseFloat));
-        },
-        vn(parts) {
-            normals.push(parts.map(parseFloat));
-        },
-        f(parts) {
-            const numVertices = parts.length;
-            for (let i = 0; i < numVertices; i++) {
-                const indices = parts[i].split('/');
-                for (let j = 0; j < indices.length; j++) {
-                    const index = parseInt(indices[j], 10);
-                    if (!vertexData[j]) continue;
-                    vertexData[j].push(vertexData[j][index - 1]);
-                }
-            }
-        },
-    };
-
-    const lines = text.split('\n');
-    for (let line of lines) {
-        const parts = line.trim().split(/\s+/);
-        const keyword = parts.shift();
-        if (keyword in keywords) {
-            keywords[keyword](parts);
-        }
-    }
-
-    return {
-        positions: new Float32Array(positions.flat()),
-        normals: new Float32Array(normals.flat()),
-    };
-}
-
-// Variabili per la rotazione della vista
-let mouseDown = false;
-let lastMouseX = null;
-let lastMouseY = null;
-let rotationMatrix = mat4.create();
-let modelViewMatrix = mat4.create();
-let cameraMatrix = mat4.create();
-let cameraPosition = [0, 0, 5];
-let cameraTarget = [0, 0, 0];
-let up = [0, 1, 0];
-let keys = {};
-
-mat4.identity(rotationMatrix);
-mat4.identity(modelViewMatrix);
-mat4.lookAt(cameraMatrix, cameraPosition, cameraTarget, up);
-
-// Funzione per gestire il mouse down
-canvas.addEventListener('mousedown', (event) => {
-    mouseDown = true;
-    lastMouseX = event.clientX;
-    lastMouseY = event.clientY;
-});
-
-// Funzione per gestire il mouse up
-canvas.addEventListener('mouseup', () => {
-    mouseDown = false;
-});
-
-// Funzione per gestire il mouse move
-canvas.addEventListener('mousemove', (event) => {
-    if (!mouseDown) {
+function main() {
+    // Get A WebGL context
+    /** @type {HTMLCanvasElement} */
+    var canvas = document.querySelector("#canvas");
+    var gl = canvas.getContext("webgl");
+    if (!gl) {
+        console.error("WebGL not supported");
         return;
     }
-    const newX = event.clientX;
-    const newY = event.clientY;
 
-    const deltaX = newX - lastMouseX;
-    const deltaY = newY - lastMouseY;
+    // setup GLSL program
+    var program = webglUtils.createProgramFromScripts(gl, ["vertex-shader-3d", "fragment-shader-3d"]);
 
-    const newRotationMatrix = mat4.create();
-    mat4.identity(newRotationMatrix);
+    // look up where the vertex data needs to go.
+    var positionLocation = gl.getAttribLocation(program, "a_position");
 
-    mat4.rotate(newRotationMatrix, newRotationMatrix, degToRad(deltaX / 10), [0, 1, 0]); // riduci la sensibilità
-    mat4.rotate(newRotationMatrix, newRotationMatrix, degToRad(deltaY / 10), [1, 0, 0]); // riduci la sensibilità
+    // lookup uniforms
+    var skyboxLocation = gl.getUniformLocation(program, "u_skybox");
+    var viewDirectionProjectionInverseLocation = gl.getUniformLocation(program, "u_viewDirectionProjectionInverse");
 
-    mat4.multiply(rotationMatrix, newRotationMatrix, rotationMatrix);
+    // Create a buffer for positions
+    var positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    setGeometry(gl);
 
-    lastMouseX = newX;
-    lastMouseY = newY;
+    // Create a texture.
+    var texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, texture);
 
-    // Applica la rotazione alla matrice di vista
-    mat4.identity(modelViewMatrix);
-    mat4.translate(modelViewMatrix, modelViewMatrix, [0, 0, -5]);
-    mat4.multiply(modelViewMatrix, modelViewMatrix, rotationMatrix);
-});
+    const faceInfos = [
+        { target: gl.TEXTURE_CUBE_MAP_POSITIVE_X, url: 'textures/skybox/px.png' },
+        { target: gl.TEXTURE_CUBE_MAP_NEGATIVE_X, url: 'textures/skybox/nx.png' },
+        { target: gl.TEXTURE_CUBE_MAP_POSITIVE_Y, url: 'textures/skybox/py.png' },
+        { target: gl.TEXTURE_CUBE_MAP_NEGATIVE_Y, url: 'textures/skybox/ny.png' },
+        { target: gl.TEXTURE_CUBE_MAP_POSITIVE_Z, url: 'textures/skybox/pz.png' },
+        { target: gl.TEXTURE_CUBE_MAP_NEGATIVE_Z, url: 'textures/skybox/nz.png' },
+    ];
+    faceInfos.forEach((faceInfo) => {
+        const {target, url} = faceInfo;
 
-// Funzione di utilità per convertire gradi in radianti
-function degToRad(degrees) {
-    return degrees * Math.PI / 180;
-}
+        const level = 0;
+        const internalFormat = gl.RGBA;
+        const width = 512;
+        const height = 512;
+        const format = gl.RGBA;
+        const type = gl.UNSIGNED_BYTE;
 
-// Funzione per gestire i tasti WASD
-window.addEventListener('keydown', (event) => {
-    keys[event.key] = true;
-});
+        gl.texImage2D(target, level, internalFormat, width, height, 0, format, type, null);
 
-window.addEventListener('keyup', (event) => {
-    keys[event.key] = false;
-});
+        const image = new Image();
+        image.src = url;
+        image.addEventListener('load', function() {
+            gl.bindTexture(gl.TEXTURE_CUBE_MAP, texture);
+            gl.texImage2D(target, level, internalFormat, format, type, image);
 
-function updateCamera() {
-    const speed = 0.1;
-    if (keys['w']) {
-        cameraPosition[2] -= speed;
+            if (isPowerOf2(image.width) && isPowerOf2(image.height)) {
+                gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+            } else {
+                gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            }
+        });
+        image.addEventListener('error', function() {
+            console.error(`Failed to load image: ${url}`);
+        });
+    });
+
+    function isPowerOf2(value) {
+        return (value & (value - 1)) === 0;
     }
-    if (keys['s']) {
-        cameraPosition[2] += speed;
+
+    gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+
+    function radToDeg(r) {
+        return r * 180 / Math.PI;
     }
-    if (keys['a']) {
-        cameraPosition[0] -= speed;
+
+    function degToRad(d) {
+        return d * Math.PI / 180;
     }
-    if (keys['d']) {
-        cameraPosition[0] += speed;
-    }
-    mat4.lookAt(cameraMatrix, cameraPosition, cameraTarget, up);
-}
 
-// Caricamento del Modello e Rendering
-async function loadModel(url) {
-    const response = await fetch(url);
-    const text = await response.text();
-    return parseOBJ(text);
-}
+    const fieldOfViewRadians = degToRad(60);
+    const cameraPosition = [0, 0, 2];
+    const cameraTarget = [0, 0, 0];
+    const up = [0, 1, 0];
+    const cameraSpeed = 0.05;
+    const keys = {};
 
-async function main() {
-    const program = await initShaders();
-    if (!program) return;
+    window.addEventListener('keydown', (event) => keys[event.key] = true);
+    window.addEventListener('keyup', (event) => keys[event.key] = false);
 
-    const statueModel = await loadModel('models/haunted_statue.obj');
-    const houseModel = await loadModel('models/haunted_house.obj');
+    requestAnimationFrame(drawScene);
 
-    const statuePositionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, statuePositionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, statueModel.positions, gl.STATIC_DRAW);
+    function drawScene(time) {
+        webglUtils.resizeCanvasToDisplaySize(gl.canvas);
 
-    const statueNormalBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, statueNormalBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, statueModel.normals, gl.STATIC_DRAW);
-
-    const housePositionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, housePositionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, houseModel.positions, gl.STATIC_DRAW);
-
-    const houseNormalBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, houseNormalBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, houseModel.normals, gl.STATIC_DRAW);
-
-    const aPosition = gl.getAttribLocation(program, 'aPosition');
-    const aNormal = gl.getAttribLocation(program, 'aNormal');
-
-    gl.useProgram(program);
-
-    const uModelViewMatrix = gl.getUniformLocation(program, 'uModelViewMatrix');
-    const uProjectionMatrix = gl.getUniformLocation(program, 'uProjectionMatrix');
-    const uNormalMatrix = gl.getUniformLocation(program, 'uNormalMatrix');
-    const uLightPosition = gl.getUniformLocation(program, 'uLightPosition');
-    const uLightColor = gl.getUniformLocation(program, 'uLightColor');
-    const uAmbientColor = gl.getUniformLocation(program, 'uAmbientColor');
-
-    const projectionMatrix = mat4.create();
-    const normalMatrix = mat3.create();
-
-    mat4.perspective(projectionMatrix, Math.PI / 4, canvas.width / canvas.height, 0.1, 1000);
-
-    function drawScene() {
-        updateCamera();
-
-        mat4.identity(modelViewMatrix);
-        mat4.multiply(modelViewMatrix, cameraMatrix, rotationMatrix);
-
-        mat3.normalFromMat4(normalMatrix, modelViewMatrix);
-
-        gl.uniformMatrix4fv(uModelViewMatrix, false, modelViewMatrix);
-        gl.uniformMatrix4fv(uProjectionMatrix, false, projectionMatrix);
-        gl.uniformMatrix3fv(uNormalMatrix, false, normalMatrix);
-        gl.uniform3fv(uLightPosition, [1, 1, 1]);
-        gl.uniform3fv(uLightColor, [1, 1, 1]);
-        gl.uniform3fv(uAmbientColor, [0.2, 0.2, 0.2]);
-
-        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+        gl.enable(gl.CULL_FACE);
         gl.enable(gl.DEPTH_TEST);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-        // Disegna la casa
-        gl.bindBuffer(gl.ARRAY_BUFFER, housePositionBuffer);
-        gl.vertexAttribPointer(aPosition, 3, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(aPosition);
+        gl.useProgram(program);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, houseNormalBuffer);
-        gl.vertexAttribPointer(aNormal, 3, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(aNormal);
+        gl.enableVertexAttribArray(positionLocation);
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
-        gl.drawArrays(gl.TRIANGLES, 0, houseModel.positions.length / 3);
+        const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+        const projectionMatrix = m4.perspective(fieldOfViewRadians, aspect, 1, 2000);
 
-        // Disegna la statua
-        gl.bindBuffer(gl.ARRAY_BUFFER, statuePositionBuffer);
-        gl.vertexAttribPointer(aPosition, 3, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(aPosition);
+        if (keys['w']) {
+            cameraPosition[2] -= cameraSpeed;
+        }
+        if (keys['s']) {
+            cameraPosition[2] += cameraSpeed;
+        }
+        if (keys['a']) {
+            cameraPosition[0] -= cameraSpeed;
+        }
+        if (keys['d']) {
+            cameraPosition[0] += cameraSpeed;
+        }
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, statueNormalBuffer);
-        gl.vertexAttribPointer(aNormal, 3, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(aNormal);
+        const cameraMatrix = m4.lookAt(cameraPosition, cameraTarget, up);
+        const viewMatrix = m4.inverse(cameraMatrix);
+        const viewDirectionProjectionMatrix = m4.multiply(projectionMatrix, viewMatrix);
+        const viewDirectionProjectionInverseMatrix = m4.inverse(viewDirectionProjectionMatrix);
 
-        gl.drawArrays(gl.TRIANGLES, 0, statueModel.positions.length / 3);
+        gl.uniformMatrix4fv(viewDirectionProjectionInverseLocation, false, viewDirectionProjectionInverseMatrix);
+        gl.uniform1i(skyboxLocation, 0);
+
+        gl.depthFunc(gl.LEQUAL);
+        gl.drawArrays(gl.TRIANGLES, 0, 1 * 6);
 
         requestAnimationFrame(drawScene);
     }
+}
 
-    drawScene();
+function setGeometry(gl) {
+    const positions = new Float32Array([
+        -1, -1,
+        1, -1,
+        -1,  1,
+        -1,  1,
+        1, -1,
+        1,  1,
+    ]);
+    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
 }
 
 main();

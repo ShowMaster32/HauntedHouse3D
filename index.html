@@ -3,12 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Haunted Statue 3D</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>WebGL Skybox Example</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { width: 100vw; height: 100vh; display: block; }
+    </style>
 </head>
 <body>
-    <canvas id="webgl-canvas"></canvas>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
+    <canvas id="canvas"></canvas>
+    <script src="https://webglfundamentals.org/webgl/resources/webgl-utils.js"></script>
+    <script src="https://webglfundamentals.org/webgl/resources/m4.js"></script>
+    <script id="vertex-shader-3d" type="x-shader/x-vertex">
+        attribute vec4 a_position;
+        varying vec4 v_position;
+
+        void main() {
+            v_position = a_position;
+            gl_Position = a_position;
+        }
+    </script>
+    <script id="fragment-shader-3d" type="x-shader/x-fragment">
+        precision mediump float;
+        uniform samplerCube u_skybox;
+        uniform mat4 u_viewDirectionProjectionInverse;
+        varying vec4 v_position;
+
+        void main() {
+            vec4 t = u_viewDirectionProjectionInverse * v_position;
+            gl_FragColor = textureCube(u_skybox, normalize(t.xyz / t.w));
+        }
+    </script>
     <script src="app.js"></script>
 </body>
 </html>
