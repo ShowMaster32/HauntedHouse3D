@@ -90,12 +90,53 @@ function main() {
     const cameraSpeed = 0.05;
     const keys = {};
 
+    let mouseDown = false;
+    let lastMouseX = 0;
+    let lastMouseY = 0;
+    let rotationMatrix = mat4.create();
+    mat4.identity(rotationMatrix);
+
     window.addEventListener('keydown', (event) => keys[event.key] = true);
     window.addEventListener('keyup', (event) => keys[event.key] = false);
+
+    canvas.addEventListener('mousedown', (event) => {
+        mouseDown = true;
+        lastMouseX = event.clientX;
+        lastMouseY = event.clientY;
+    });
+
+    canvas.addEventListener('mouseup', () => {
+        mouseDown = false;
+    });
+
+    canvas.addEventListener('mousemove', (event) => {
+        if (!mouseDown) {
+            return;
+        }
+        const newX = event.clientX;
+        const newY = event.clientY;
+
+        const deltaX = newX - lastMouseX;
+        const deltaY = newY - lastMouseY;
+
+        const newRotationMatrix = mat4.create();
+        mat4.identity(newRotationMatrix);
+
+        mat4.rotate(newRotationMatrix, newRotationMatrix, degToRad(deltaX / 10), [0, 1, 0]); // Horizontal rotation
+        mat4.rotate(newRotationMatrix, newRotationMatrix, degToRad(deltaY / 10), [1, 0, 0]); // Vertical rotation
+
+        mat4.multiply(rotationMatrix, newRotationMatrix, rotationMatrix);
+
+        lastMouseX = newX;
+        lastMouseY = newY;
+    });
 
     requestAnimationFrame(drawScene);
 
     function drawScene(time) {
+        gl.canvas.width = gl.canvas.clientWidth;
+        gl.canvas.height = gl.canvas.clientHeight;
+        
         webglUtils.resizeCanvasToDisplaySize(gl.canvas);
 
         gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
@@ -110,7 +151,8 @@ function main() {
         gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
         const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
-        const projectionMatrix = m4.perspective(fieldOfViewRadians, aspect, 1, 2000);
+        const projectionMatrix = mat4.create();
+        mat4.perspective(projectionMatrix, fieldOfViewRadians, aspect, 1, 2000);
 
         if (keys['w']) {
             cameraPosition[2] -= cameraSpeed;
@@ -125,10 +167,15 @@ function main() {
             cameraPosition[0] += cameraSpeed;
         }
 
-        const cameraMatrix = m4.lookAt(cameraPosition, cameraTarget, up);
-        const viewMatrix = m4.inverse(cameraMatrix);
-        const viewDirectionProjectionMatrix = m4.multiply(projectionMatrix, viewMatrix);
-        const viewDirectionProjectionInverseMatrix = m4.inverse(viewDirectionProjectionMatrix);
+        const cameraMatrix = mat4.create();
+        mat4.lookAt(cameraMatrix, cameraPosition, cameraTarget, up);
+        const viewMatrix = mat4.create();
+        mat4.invert(viewMatrix, cameraMatrix);
+        mat4.multiply(viewMatrix, viewMatrix, rotationMatrix);
+        const viewDirectionProjectionMatrix = mat4.create();
+        mat4.multiply(viewDirectionProjectionMatrix, projectionMatrix, viewMatrix);
+        const viewDirectionProjectionInverseMatrix = mat4.create();
+        mat4.invert(viewDirectionProjectionInverseMatrix, viewDirectionProjectionMatrix);
 
         gl.uniformMatrix4fv(viewDirectionProjectionInverseLocation, false, viewDirectionProjectionInverseMatrix);
         gl.uniform1i(skyboxLocation, 0);
