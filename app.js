@@ -80,7 +80,7 @@ function main() {
         const deltaY = newY - lastMouseY;
         
         yaw -= deltaX * rotationSpeed; // Invertito l'asse X
-        pitch -= deltaY * rotationSpeed; // Invertito l'asse Y
+        pitch += deltaY * rotationSpeed; // Invertito l'asse Y
         
         // Limit pitch to avoid flipping
         pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
@@ -117,7 +117,7 @@ function main() {
         vec3.normalize(forward, forward);
         
         const right = vec3.create();
-        vec3.set(right, Math.sin(yaw + Math.PI / 2), 0, Math.cos(yaw + Math.PI / 2));
+        vec3.set(right, Math.sin(yaw - Math.PI / 2), 0, Math.cos(yaw - Math.PI / 2));
         vec3.normalize(right, right);
         
         if (keys['w']) {
@@ -127,16 +127,16 @@ function main() {
             vec3.scaleAndAdd(cameraPosition, cameraPosition, forward, -cameraSpeed);
         }
         if (keys['a']) {
-            yaw -= rotationSpeed; // Ruota a sinistra
+            vec3.scaleAndAdd(cameraPosition, cameraPosition, right, -cameraSpeed);
         }
         if (keys['d']) {
-            yaw += rotationSpeed; // Ruota a destra
+            vec3.scaleAndAdd(cameraPosition, cameraPosition, right, cameraSpeed);
         }
         if (keys[' ']) { // Spazio per muoversi in alto
-            cameraPosition[1] -= verticalSpeed;
+            cameraPosition[1] = Math.max(cameraPosition[1] - verticalSpeed, -1.6);
         }
         if (keys['Control']) { // Ctrl per muoversi in basso
-            cameraPosition[1] += verticalSpeed;
+            cameraPosition[1] = Math.min(cameraPosition[1] + verticalSpeed, -1.0);
         }
         
         const target = vec3.create();
