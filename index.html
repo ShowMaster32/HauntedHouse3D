@@ -3,35 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebGL Skybox Example</title>
+    <title>WebGL Example</title>
     <style>
         body { margin: 0; overflow: hidden; }
-        canvas { width: 100vw; height: 100vh; display: block; }
+        canvas { 
+            width: 100vw; 
+            height: 100vh; 
+            display: block; 
+        }
+        #coordinates {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 5px;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
     <canvas id="canvas"></canvas>
+    <div id="coordinates">X: 0.00, Y: 0.00, Z: 0.00</div>
     <script src="https://webglfundamentals.org/webgl/resources/webgl-utils.js"></script>
     <script src="https://webglfundamentals.org/webgl/resources/m4.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
     <script id="vertex-shader-3d" type="x-shader/x-vertex">
         attribute vec4 a_position;
-        varying vec4 v_position;
-
+        attribute vec2 a_texcoord;
+        varying vec2 v_texcoord;
+        uniform mat4 u_matrix;
         void main() {
-            v_position = a_position;
-            gl_Position = a_position;
+            gl_Position = u_matrix * a_position;
+            v_texcoord = a_texcoord;
         }
     </script>
     <script id="fragment-shader-3d" type="x-shader/x-fragment">
         precision mediump float;
-        uniform samplerCube u_skybox;
-        uniform mat4 u_viewDirectionProjectionInverse;
-        varying vec4 v_position;
-
+        varying vec2 v_texcoord;
+        uniform sampler2D u_texture;
         void main() {
-            vec4 t = u_viewDirectionProjectionInverse * v_position;
-            gl_FragColor = textureCube(u_skybox, normalize(t.xyz / t.w));
+            gl_FragColor = texture2D(u_texture, v_texcoord);
         }
     </script>
     <script src="app.js"></script>

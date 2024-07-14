@@ -9,82 +9,47 @@ function main() {
     }
 
     var program = webglUtils.createProgramFromScripts(gl, ["vertex-shader-3d", "fragment-shader-3d"]);
+    if (!program) {
+        console.error("Failed to create program");
+        return;
+    }
+    console.log("Program created");
 
     var positionLocation = gl.getAttribLocation(program, "a_position");
+    var texcoordLocation = gl.getAttribLocation(program, "a_texcoord");
 
-    var skyboxLocation = gl.getUniformLocation(program, "u_skybox");
-    var viewDirectionProjectionInverseLocation = gl.getUniformLocation(program, "u_viewDirectionProjectionInverse");
+    var matrixLocation = gl.getUniformLocation(program, "u_matrix");
+    var textureLocation = gl.getUniformLocation(program, "u_texture");
+
+    gl.useProgram(program);
 
     var positionBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    setGeometry(gl);
+    setFloorGeometry(gl);
+    console.log("Geometry set");
 
-    var texture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_CUBE_MAP, texture);
+    var texcoordBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+    setFloorTexcoords(gl);
+    console.log("Texcoords set");
 
-    const faceInfos = [
-        { target: gl.TEXTURE_CUBE_MAP_POSITIVE_X, url: 'textures/skybox/px.png' },
-        { target: gl.TEXTURE_CUBE_MAP_NEGATIVE_X, url: 'textures/skybox/nx.png' },
-        { target: gl.TEXTURE_CUBE_MAP_POSITIVE_Y, url: 'textures/skybox/py.png' },
-        { target: gl.TEXTURE_CUBE_MAP_NEGATIVE_Y, url: 'textures/skybox/ny.png' },
-        { target: gl.TEXTURE_CUBE_MAP_POSITIVE_Z, url: 'textures/skybox/pz.png' },
-        { target: gl.TEXTURE_CUBE_MAP_NEGATIVE_Z, url: 'textures/skybox/nz.png' },
-    ];
-    faceInfos.forEach((faceInfo) => {
-        const {target, url} = faceInfo;
-
-        const level = 0;
-        const internalFormat = gl.RGBA;
-        const width = 1024; // Ingrandito
-        const height = 1024; // Ingrandito
-        const format = gl.RGBA;
-        const type = gl.UNSIGNED_BYTE;
-
-        gl.texImage2D(target, level, internalFormat, width, height, 0, format, type, null);
-
-        const image = new Image();
-        image.src = url;
-        image.addEventListener('load', function() {
-            gl.bindTexture(gl.TEXTURE_CUBE_MAP, texture);
-            gl.texImage2D(target, level, internalFormat, format, type, image);
-
-            if (isPowerOf2(image.width) && isPowerOf2(image.height)) {
-                gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
-            } else {
-                gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-                gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-                gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-            }
-        });
-        image.addEventListener('error', function() {
-            console.error(`Failed to load image: ${url}`);
-        });
+    var woodTexture = gl.createTexture();
+    var image = new Image();
+    image.src = 'textures/wood.jpg'; // Percorso alla tua texture del pavimento in legno
+    image.addEventListener('load', function() {
+        gl.bindTexture(gl.TEXTURE_2D, woodTexture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        console.log("Texture loaded");
     });
 
-    function isPowerOf2(value) {
-        return (value & (value - 1)) === 0;
-    }
-
-    gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
-    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-
-    function radToDeg(r) {
-        return r * 180 / Math.PI;
-    }
-
-    function degToRad(d) {
-        return d * Math.PI / 180;
-    }
-
     const fieldOfViewRadians = degToRad(60);
-    const cameraPosition = [0, 0, 0];
-    const cameraTarget = [0, 0, 0];
-    const up = [0, 1, 0];
-    const cameraSpeed = 0.02;
-    const rotationSpeed = 0.005; 
+    const cameraPosition = vec3.fromValues(0, 1.6, 0); // Altezza della telecamera all'altezza di una persona
+    const up = vec3.fromValues(0, 1, 0); // Y positivo verso l'alto
+    const cameraSpeed = 0.05;
+    const rotationSpeed = 0.005;
+    const verticalSpeed = 0.05;
     const keys = {};
-
-    const limit = 5; // Limite di distanza dai bordi della skybox
 
     let mouseDown = false;
     let lastMouseX = null;
@@ -114,9 +79,10 @@ function main() {
         const deltaX = newX - lastMouseX;
         const deltaY = newY - lastMouseY;
 
-        yaw -= deltaX * rotationSpeed; // Invert X axis
-        pitch += deltaY * rotationSpeed;
+        yaw += deltaX * rotationSpeed; // Invertito l'asse X
+        pitch -= deltaY * rotationSpeed; // Invertito l'asse Y
 
+        // Limit pitch to avoid flipping
         pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
 
         lastMouseX = newX;
@@ -137,7 +103,11 @@ function main() {
 
         gl.enableVertexAttribArray(positionLocation);
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-        gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+        gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0);
+
+        gl.enableVertexAttribArray(texcoordLocation);
+        gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+        gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0);
 
         const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
         const projectionMatrix = mat4.perspective(mat4.create(), fieldOfViewRadians, aspect, 1, 2000);
@@ -150,54 +120,82 @@ function main() {
         vec3.set(right, Math.sin(yaw + Math.PI / 2), 0, Math.cos(yaw + Math.PI / 2));
         vec3.normalize(right, right);
 
-        const newPosition = vec3.clone(cameraPosition);
         if (keys['w']) {
-            vec3.scaleAndAdd(newPosition, newPosition, forward, cameraSpeed);
+            vec3.scaleAndAdd(cameraPosition, cameraPosition, forward, cameraSpeed);
         }
         if (keys['s']) {
-            vec3.scaleAndAdd(newPosition, newPosition, forward, -cameraSpeed);
+            vec3.scaleAndAdd(cameraPosition, cameraPosition, forward, -cameraSpeed);
         }
         if (keys['a']) {
-            vec3.scaleAndAdd(newPosition, newPosition, right, -cameraSpeed);
+            yaw -= rotationSpeed; // Ruota a sinistra
         }
         if (keys['d']) {
-            vec3.scaleAndAdd(newPosition, newPosition, right, cameraSpeed);
+            yaw += rotationSpeed; // Ruota a destra
         }
-
-        if (Math.abs(newPosition[0]) < limit && Math.abs(newPosition[1]) < limit && Math.abs(newPosition[2]) < limit) {
-            vec3.copy(cameraPosition, newPosition);
+        if (keys[' ']) { // Spazio per muoversi in alto
+            cameraPosition[1] += verticalSpeed;
+        }
+        if (keys['Control']) { // Ctrl per muoversi in basso
+            cameraPosition[1] -= verticalSpeed;
         }
 
         const target = vec3.create();
         vec3.add(target, cameraPosition, forward);
 
         const cameraMatrix = mat4.lookAt(mat4.create(), cameraPosition, target, up);
-        mat4.rotateX(cameraMatrix, cameraMatrix, pitch);
+        mat4.rotateX(cameraMatrix, cameraMatrix, pitch); // Rotate pitch around X-axis
 
         const viewMatrix = mat4.invert(mat4.create(), cameraMatrix);
         const viewDirectionProjectionMatrix = mat4.multiply(mat4.create(), projectionMatrix, viewMatrix);
-        const viewDirectionProjectionInverseMatrix = mat4.invert(mat4.create(), viewDirectionProjectionMatrix);
 
-        gl.uniformMatrix4fv(viewDirectionProjectionInverseLocation, false, viewDirectionProjectionInverseMatrix);
-        gl.uniform1i(skyboxLocation, 0);
+        gl.uniformMatrix4fv(matrixLocation, false, viewDirectionProjectionMatrix);
+        gl.uniform1i(textureLocation, 0);
+
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, woodTexture);
 
         gl.depthFunc(gl.LEQUAL);
-        gl.drawArrays(gl.TRIANGLES, 0, 1 * 6);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        // Aggiornare le coordinate sullo schermo
+        updateCoordinates(cameraPosition);
 
         requestAnimationFrame(drawScene);
     }
+
+    function updateCoordinates(position) {
+        const coordinates = document.getElementById("coordinates");
+        coordinates.textContent = `X: ${position[0].toFixed(2)}, Y: ${position[1].toFixed(2)}, Z: ${position[2].toFixed(2)}`;
+    }
 }
 
-function setGeometry(gl) {
-    const positions = new Float32Array([
-        -1, -1,
-         1, -1,
-        -1,  1,
-        -1,  1,
-         1, -1,
-         1,  1,
+function setFloorGeometry(gl) {
+    var size = 5; // Dimensione del monolocale
+    var positions = new Float32Array([
+        -size, 0, -size,
+         size, 0, -size,
+        -size, 0,  size,
+        -size, 0,  size,
+         size, 0, -size,
+         size, 0,  size,
     ]);
     gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+}
+
+function setFloorTexcoords(gl) {
+    var texcoords = new Float32Array([
+        0, 0,
+        5, 0,
+        0, 5,
+        0, 5,
+        5, 0,
+        5, 5,
+    ]);
+    gl.bufferData(gl.ARRAY_BUFFER, texcoords, gl.STATIC_DRAW);
+}
+
+function degToRad(d) {
+    return d * Math.PI / 180;
 }
 
 main();
