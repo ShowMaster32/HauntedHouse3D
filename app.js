@@ -9,7 +9,8 @@ function main() {
     }
 
     var program = webglUtils.createProgramFromScripts(gl, ["vertex-shader-3d", "fragment-shader-3d"]);
-    if (!program) {
+    var skyboxProgram = webglUtils.createProgramFromScripts(gl, ["skybox-vertex-shader", "skybox-fragment-shader"]);
+    if (!program || !skyboxProgram) {
         console.error("Failed to create program");
         return;
     }
@@ -17,9 +18,12 @@ function main() {
 
     var positionLocation = gl.getAttribLocation(program, "a_position");
     var texcoordLocation = gl.getAttribLocation(program, "a_texcoord");
-
     var matrixLocation = gl.getUniformLocation(program, "u_matrix");
     var textureLocation = gl.getUniformLocation(program, "u_texture");
+
+    var skyboxPositionLocation = gl.getAttribLocation(skyboxProgram, "a_position");
+    var skyboxViewDirectionProjectionInverseLocation = gl.getUniformLocation(skyboxProgram, "u_viewDirectionProjectionInverse");
+    var skyboxTextureLocation = gl.getUniformLocation(skyboxProgram, "u_skybox");
 
     gl.useProgram(program);
 
@@ -35,6 +39,35 @@ function main() {
 
     var woodTexture = gl.createTexture();
     var wallTexture = gl.createTexture();
+    var skyboxTexture = gl.createTexture();
+
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyboxTexture);
+    const faceInfos = [
+        { target: gl.TEXTURE_CUBE_MAP_POSITIVE_X, url: 'textures/skybox/px.png' },
+        { target: gl.TEXTURE_CUBE_MAP_NEGATIVE_X, url: 'textures/skybox/nx.png' },
+        { target: gl.TEXTURE_CUBE_MAP_POSITIVE_Y, url: 'textures/skybox/py.png' },
+        { target: gl.TEXTURE_CUBE_MAP_NEGATIVE_Y, url: 'textures/skybox/ny.png' },
+        { target: gl.TEXTURE_CUBE_MAP_POSITIVE_Z, url: 'textures/skybox/pz.png' },
+        { target: gl.TEXTURE_CUBE_MAP_NEGATIVE_Z, url: 'textures/skybox/nz.png' },
+    ];
+    faceInfos.forEach((faceInfo) => {
+        const { target, url } = faceInfo;
+        const level = 0;
+        const internalFormat = gl.RGBA;
+        const width = 1024;
+        const height = 1024;
+        const format = gl.RGBA;
+        const type = gl.UNSIGNED_BYTE;
+        gl.texImage2D(target, level, internalFormat, width, height, 0, format, type, null);
+
+        const image = new Image();
+        image.src = url;
+        image.addEventListener('load', function() {
+            gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyboxTexture);
+            gl.texImage2D(target, level, internalFormat, format, type, image);
+            gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+        });
+    });
 
     var floorImage = new Image();
     floorImage.src = 'textures/wood.jpg'; // Percorso alla tua texture del pavimento in legno
@@ -90,8 +123,8 @@ function main() {
         const deltaX = newX - lastMouseX;
         const deltaY = newY - lastMouseY;
 
-        yaw -= deltaX * rotationSpeed; // Invertito l'asse X
-        pitch -= deltaY * rotationSpeed; // Invertito l'asse Y
+        yaw -= deltaX * rotationSpeed; // Invertito l'asse X per invertire il movimento destra/sinistra
+        pitch += deltaY * rotationSpeed; // Invertito l'asse Y
 
         // Limit pitch to avoid flipping
         pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
@@ -110,16 +143,6 @@ function main() {
         gl.enable(gl.DEPTH_TEST);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-        gl.useProgram(program);
-
-        gl.enableVertexAttribArray(positionLocation);
-        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-        gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0);
-
-        gl.enableVertexAttribArray(texcoordLocation);
-        gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
-        gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0);
-
         const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
         const projectionMatrix = mat4.perspective(mat4.create(), fieldOfViewRadians, aspect, 1, 2000);
 
@@ -128,7 +151,7 @@ function main() {
         vec3.normalize(forward, forward);
 
         const right = vec3.create();
-        vec3.set(right, Math.sin(yaw - Math.PI / 2), 0, Math.cos(yaw - Math.PI / 2));
+        vec3.set(right, Math.sin(yaw + Math.PI / 2), 0, Math.cos(yaw + Math.PI / 2));
         vec3.normalize(right, right);
 
         if (keys['w']) {
@@ -138,9 +161,15 @@ function main() {
             vec3.scaleAndAdd(cameraPosition, cameraPosition, forward, -cameraSpeed);
         }
         if (keys['a']) {
-            vec3.scaleAndAdd(cameraPosition, cameraPosition, right, cameraSpeed);
+            yaw -= rotationSpeed; // Ruota a sinistra
         }
         if (keys['d']) {
+            yaw += rotationSpeed; // Ruota a destra
+        }
+        if (keys['q']) { // Traslazione orizzontale a sinistra
+            vec3.scaleAndAdd(cameraPosition, cameraPosition, right, cameraSpeed);
+        }
+        if (keys['e']) { // Traslazione orizzontale a destra
             vec3.scaleAndAdd(cameraPosition, cameraPosition, right, -cameraSpeed);
         }
         if (keys[' ']) { // Spazio per muoversi in alto
@@ -163,27 +192,52 @@ function main() {
         const viewMatrix = mat4.invert(mat4.create(), cameraMatrix);
         const viewDirectionProjectionMatrix = mat4.multiply(mat4.create(), projectionMatrix, viewMatrix);
 
+        // Disegna la skybox
+        gl.useProgram(skyboxProgram);
+        gl.depthFunc(gl.LEQUAL);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.vertexAttribPointer(skyboxPositionLocation, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(skyboxPositionLocation);
+
+        const viewDirectionProjectionInverseMatrix = mat4.invert(mat4.create(), viewDirectionProjectionMatrix);
+        gl.uniformMatrix4fv(skyboxViewDirectionProjectionInverseLocation, false, viewDirectionProjectionInverseMatrix);
+        gl.uniform1i(skyboxTextureLocation, 0);
+
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyboxTexture);
+
+        gl.drawArrays(gl.TRIANGLES, 0, 36);
+
+        // Disegna il pavimento e i muri
+        gl.useProgram(program);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(positionLocation);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+        gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(texcoordLocation);
+
         gl.uniformMatrix4fv(matrixLocation, false, viewDirectionProjectionMatrix);
         gl.uniform1i(textureLocation, 0);
 
-        gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, woodTexture);
-
-        gl.depthFunc(gl.LEQUAL);
         gl.drawArrays(gl.TRIANGLES, 0, 6); // Disegna il pavimento
 
         gl.bindTexture(gl.TEXTURE_2D, wallTexture);
         gl.drawArrays(gl.TRIANGLES, 6, 24); // Disegna i muri
 
         // Aggiornare le coordinate sullo schermo
-        updateCoordinates(cameraPosition);
+        updateCoordinates(cameraPosition, yaw);
 
         requestAnimationFrame(drawScene);
     }
 
-    function updateCoordinates(position) {
+    function updateCoordinates(position, yaw) {
         const coordinates = document.getElementById("coordinates");
-        coordinates.textContent = `X: ${position[0].toFixed(2)}, Y: ${position[1].toFixed(2)}, Z: ${position[2].toFixed(2)}`;
+        coordinates.textContent = `X: ${position[0].toFixed(2)}, Y: ${position[1].toFixed(2)}, Z: ${position[2].toFixed(2)}, Yaw: ${(yaw * 180 / Math.PI).toFixed(2)}°`;
     }
 }
 
@@ -226,6 +280,43 @@ function setFloorAndWallGeometry(gl) {
          size, height, -size,
          size, 0,  size,
          size, height,  size,
+        // Skybox
+        -size * 5,  size * 5, -size * 5,
+         size * 5,  size * 5, -size * 5,
+        -size * 5, -size * 5, -size * 5,
+        -size * 5, -size * 5, -size * 5,
+         size * 5,  size * 5, -size * 5,
+         size * 5, -size * 5, -size * 5,
+        -size * 5,  size * 5,  size * 5,
+         size * 5,  size * 5,  size * 5,
+        -size * 5, -size * 5,  size * 5,
+        -size * 5, -size * 5,  size * 5,
+         size * 5,  size * 5,  size * 5,
+         size * 5, -size * 5,  size * 5,
+        -size * 5,  size * 5, -size * 5,
+        -size * 5,  size * 5,  size * 5,
+        -size * 5, -size * 5, -size * 5,
+        -size * 5, -size * 5, -size * 5,
+        -size * 5,  size * 5,  size * 5,
+        -size * 5, -size * 5,  size * 5,
+         size * 5,  size * 5, -size * 5,
+         size * 5,  size * 5,  size * 5,
+         size * 5, -size * 5, -size * 5,
+         size * 5, -size * 5, -size * 5,
+         size * 5,  size * 5,  size * 5,
+         size * 5, -size * 5,  size * 5,
+        -size * 5,  size * 5, -size * 5,
+         size * 5,  size * 5, -size * 5,
+        -size * 5,  size * 5,  size * 5,
+        -size * 5,  size * 5,  size * 5,
+         size * 5,  size * 5, -size * 5,
+         size * 5,  size * 5,  size * 5,
+        -size * 5, -size * 5, -size * 5,
+         size * 5, -size * 5, -size * 5,
+        -size * 5, -size * 5,  size * 5,
+        -size * 5, -size * 5,  size * 5,
+         size * 5, -size * 5, -size * 5,
+         size * 5, -size * 5,  size * 5,
     ]);
     gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
 }
