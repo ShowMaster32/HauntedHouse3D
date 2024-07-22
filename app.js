@@ -1,5 +1,89 @@
 "use strict";
 
+// Classe Input come da esempio
+class Input {
+    constructor() {
+        this._keyMap = {};
+        this.events = [];
+
+        this.AddKeyDownListner(this._onKeyDown);
+        this.AddKeyUpListner(this._onKeyUp);
+        this.AddMouseMoveListner(this._onMouseMove);
+    }
+
+    _addEventListner(element, type, callback) {
+        element.addEventListener(type, callback);
+        this.events.push({ element, type, callback });
+    }
+
+    AddKeyDownListner(callback) {
+        this._addEventListner(document, 'keydown', callback);
+    }
+
+    AddKeyUpListner(callback) {
+        this._addEventListner(document, 'keyup', callback);
+    }
+
+    AddMouseMoveListner(callback) {
+        this._addEventListner(document, 'mousemove', callback);
+    }
+
+    AddClickListner(callback) {
+        this._addEventListner(document.body, 'click', callback);
+    }
+
+    AddMouseDownListner(callback) {
+        this._addEventListner(document.body, 'mousedown', callback);
+    }
+
+    AddMouseUpListner(callback) {
+        this._addEventListner(document.body, 'mouseup', callback);
+    }
+
+    _onKeyDown = (event) => {
+        this._keyMap[event.code] = 1;
+    }
+
+    _onKeyUp = (event) => {
+        this._keyMap[event.code] = 0;
+    }
+
+    _onMouseMove = (event) => {
+        this.mouseMovementX = event.movementX || 0;
+        this.mouseMovementY = event.movementY || 0;
+    }
+
+    GetKeyDown(code) {
+        return this._keyMap[code] === undefined ? 0 : this._keyMap[code];
+    }
+
+    GetMouseMovementX() {
+        return this.mouseMovementX;
+    }
+
+    GetMouseMovementY() {
+        return this.mouseMovementY;
+    }
+
+    ClearMouseMovement() {
+        this.mouseMovementX = 0;
+        this.mouseMovementY = 0;
+    }
+
+    ClearEventListners() {
+        this.events.forEach(e => {
+            e.element.removeEventListener(e.type, e.callback);
+        });
+
+        this.events = [];
+        this.AddKeyDownListner(this._onKeyDown);
+        this.AddKeyUpListner(this._onKeyUp);
+        this.AddMouseMoveListner(this._onMouseMove);
+    }
+}
+
+const inputInstance = new Input();
+
 function main() {
     var canvas = document.querySelector("#canvas");
     var gl = canvas.getContext("webgl");
@@ -62,7 +146,7 @@ function main() {
 
         const image = new Image();
         image.src = url;
-        image.addEventListener('load', function() {
+        image.addEventListener('load', function () {
             gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyboxTexture);
             gl.texImage2D(target, level, internalFormat, format, type, image);
             gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
@@ -71,7 +155,7 @@ function main() {
 
     var floorImage = new Image();
     floorImage.src = 'textures/wood.jpg'; // Percorso alla tua texture del pavimento in legno
-    floorImage.addEventListener('load', function() {
+    floorImage.addEventListener('load', function () {
         gl.bindTexture(gl.TEXTURE_2D, woodTexture);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, floorImage);
         gl.generateMipmap(gl.TEXTURE_2D);
@@ -80,7 +164,7 @@ function main() {
 
     var wallImage = new Image();
     wallImage.src = 'textures/wall.jpg'; // Percorso alla tua texture del muro
-    wallImage.addEventListener('load', function() {
+    wallImage.addEventListener('load', function () {
         gl.bindTexture(gl.TEXTURE_2D, wallTexture);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, wallImage);
         gl.generateMipmap(gl.TEXTURE_2D);
@@ -91,46 +175,32 @@ function main() {
     const cameraPosition = vec3.fromValues(0, -1.6, 0); // Altezza della telecamera all'altezza di una persona
     const up = vec3.fromValues(0, -1, 0); // Invertiamo l'asse Y
     const cameraSpeed = 0.05;
-    const rotationSpeed = 0.01;
+    const rotationSpeed = 0.002; // Velocità di rotazione ridotta
     const verticalSpeed = 0.05;
     const keys = {};
 
-    let mouseDown = false;
-    let lastMouseX = null;
-    let lastMouseY = null;
     let yaw = 0;
     let pitch = 0;
+    let mouseLocked = false;
 
-    window.addEventListener('keydown', (event) => keys[event.key] = true);
-    window.addEventListener('keyup', (event) => keys[event.key] = false);
+    document.getElementById('start-button').addEventListener('click', startGame);
 
-    canvas.addEventListener('mousedown', (event) => {
-        mouseDown = true;
-        lastMouseX = event.clientX;
-        lastMouseY = event.clientY;
+    function startGame() {
+        document.getElementById('start-menu').style.display = 'none';
+        canvas.style.display = 'block';
+        document.getElementById('crosshair').style.display = 'block';
+        canvas.requestPointerLock();
+    }
+
+    document.addEventListener('pointerlockchange', () => {
+        mouseLocked = !!document.pointerLockElement;
     });
 
-    canvas.addEventListener('mouseup', () => {
-        mouseDown = false;
-    });
-
-    canvas.addEventListener('mousemove', (event) => {
-        if (!mouseDown) return;
-
-        const newX = event.clientX;
-        const newY = event.clientY;
-
-        const deltaX = newX - lastMouseX;
-        const deltaY = newY - lastMouseY;
-
-        yaw -= deltaX * rotationSpeed; // Invertito l'asse X per invertire il movimento destra/sinistra
-        pitch += deltaY * rotationSpeed; // Invertito l'asse Y
-
-        // Limit pitch to avoid flipping
+    document.addEventListener('mousemove', (event) => {
+        if (!mouseLocked) return;
+        yaw -= event.movementX * rotationSpeed;
+        pitch += event.movementY * rotationSpeed;
         pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
-
-        lastMouseX = newX;
-        lastMouseY = newY;
     });
 
     requestAnimationFrame(drawScene);
@@ -151,7 +221,7 @@ function main() {
         vec3.normalize(forward, forward);
 
         const right = vec3.create();
-        vec3.set(right, Math.sin(yaw + Math.PI / 2), 0, Math.cos(yaw + Math.PI / 2));
+        vec3.set(right, Math.sin(yaw - Math.PI / 2), 0, Math.cos(yaw - Math.PI / 2));
         vec3.normalize(right, right);
 
         if (keys['w']) {
@@ -161,16 +231,10 @@ function main() {
             vec3.scaleAndAdd(cameraPosition, cameraPosition, forward, -cameraSpeed);
         }
         if (keys['a']) {
-            yaw -= rotationSpeed; // Ruota a sinistra
+            vec3.scaleAndAdd(cameraPosition, cameraPosition, right, -cameraSpeed);
         }
         if (keys['d']) {
-            yaw += rotationSpeed; // Ruota a destra
-        }
-        if (keys['q']) { // Traslazione orizzontale a sinistra
             vec3.scaleAndAdd(cameraPosition, cameraPosition, right, cameraSpeed);
-        }
-        if (keys['e']) { // Traslazione orizzontale a destra
-            vec3.scaleAndAdd(cameraPosition, cameraPosition, right, -cameraSpeed);
         }
         if (keys[' ']) { // Spazio per muoversi in alto
             cameraPosition[1] = Math.max(cameraPosition[1] - verticalSpeed, -1.6);
@@ -191,6 +255,7 @@ function main() {
 
         const viewMatrix = mat4.invert(mat4.create(), cameraMatrix);
         const viewDirectionProjectionMatrix = mat4.multiply(mat4.create(), projectionMatrix, viewMatrix);
+        const viewDirectionProjectionInverseMatrix = mat4.invert(mat4.create(), viewDirectionProjectionMatrix);
 
         // Disegna la skybox
         gl.useProgram(skyboxProgram);
@@ -200,8 +265,7 @@ function main() {
         gl.vertexAttribPointer(skyboxPositionLocation, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(skyboxPositionLocation);
 
-        const viewDirectionProjectionInverseMatrix = mat4.invert(mat4.create(), viewDirectionProjectionMatrix);
-        gl.uniformMatrix4fv(skyboxViewDirectionProjectionInverseLocation, false, viewDirectionProjectionInverseMatrix);
+        //FIXME: gl.uniformMatrix4fv(skyboxViewDirectionProjectionInverseLocation, false, viewDirectionProjectionInverseMatrix);
         gl.uniform1i(skyboxTextureLocation, 0);
 
         gl.activeTexture(gl.TEXTURE0);
@@ -220,7 +284,7 @@ function main() {
         gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(texcoordLocation);
 
-        gl.uniformMatrix4fv(matrixLocation, false, viewDirectionProjectionMatrix);
+        gl.uniformMatrix4fv(matrixLocation, false, new Float32Array(viewDirectionProjectionMatrix));
         gl.uniform1i(textureLocation, 0);
 
         gl.bindTexture(gl.TEXTURE_2D, woodTexture);
