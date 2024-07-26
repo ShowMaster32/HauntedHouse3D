@@ -247,14 +247,13 @@ function main() {
         if (inputInstance.GetKeyDown('KeyD')) {
             vec3.scaleAndAdd(cameraPosition, cameraPosition, right, cameraSpeed);
         }
-        if (inputInstance.GetKeyDown('Space')) { // Spazio per muoversi in alto
+        if (inputInstance.GetKeyDown('Space')) {
             cameraPosition[1] = Math.max(cameraPosition[1] - verticalSpeed, -1.6);
         }
-        if (inputInstance.GetKeyDown('ControlLeft')) { // Ctrl per muoversi in basso
+        if (inputInstance.GetKeyDown('ControlLeft')) {
             cameraPosition[1] = Math.min(cameraPosition[1] + verticalSpeed, -1.0);
         }
 
-        // Limiti del movimento
         cameraPosition[0] = Math.max(Math.min(cameraPosition[0], 10), -10);
         cameraPosition[2] = Math.max(Math.min(cameraPosition[2], 10), -10);
 
@@ -262,13 +261,12 @@ function main() {
         vec3.add(target, cameraPosition, forward);
 
         const cameraMatrix = mat4.lookAt(mat4.create(), cameraPosition, target, up);
-        mat4.rotateX(cameraMatrix, cameraMatrix, pitch); // Rotate pitch around X-axis
+        mat4.rotateX(cameraMatrix, cameraMatrix, pitch);
 
         const viewMatrix = mat4.invert(mat4.create(), cameraMatrix);
         const viewDirectionProjectionMatrix = mat4.multiply(mat4.create(), projectionMatrix, viewMatrix);
         const viewDirectionProjectionInverseMatrix = mat4.invert(mat4.create(), viewDirectionProjectionMatrix);
 
-        // Disegna la skybox
         gl.useProgram(skyboxProgram);
         gl.depthFunc(gl.LEQUAL);
 
@@ -284,7 +282,6 @@ function main() {
 
         gl.drawArrays(gl.TRIANGLES, 0, 36);
 
-        // Disegna il pavimento e i muri
         gl.useProgram(program);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
@@ -304,7 +301,6 @@ function main() {
         gl.bindTexture(gl.TEXTURE_2D, wallTexture);
         gl.drawArrays(gl.TRIANGLES, 6, 24); // Disegna i muri
 
-        // Aggiornare le coordinate sullo schermo
         updateCoordinates(cameraPosition, yaw);
 
         requestAnimationFrame(drawScene);
@@ -441,4 +437,43 @@ function degToRad(d) {
     return d * Math.PI / 180;
 }
 
+const fpsElem = document.getElementById("fps");
+const avgElem = document.getElementById("avg");
+
+const frameTimes = [];
+let frameCursor = 0;
+let numFrames = 0;
+const maxFrames = 20;
+let totalFPS = 0;
+
+let then = 0;
+
+function render(now) {
+    now *= 0.001;                          // convert to seconds
+    const deltaTime = now - then;          // compute time since last frame
+    then = now;                            // remember time for next frame
+    const fps = 1 / deltaTime;             // compute frames per second
+
+    fpsElem.textContent = fps.toFixed(1);  // update fps display
+
+    // add the current fps and remove the oldest fps
+    totalFPS += fps - (frameTimes[frameCursor] || 0);
+
+    // record the newest fps
+    frameTimes[frameCursor++] = fps;
+
+    // needed so the first N frames, before we have maxFrames, is correct.
+    numFrames = Math.max(numFrames, frameCursor);
+
+    // wrap the cursor
+    frameCursor %= maxFrames;
+
+    const averageFPS = totalFPS / numFrames;
+
+    avgElem.textContent = averageFPS.toFixed(1);  // update avg display
+
+    requestAnimationFrame(render);
+}
+
 main();
+requestAnimationFrame(render);

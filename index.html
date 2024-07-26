@@ -52,6 +52,15 @@
             font-size: 20px;
             cursor: pointer;
         }
+        #fps-container {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 5px;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
@@ -62,7 +71,11 @@
     <canvas id="canvas"></canvas>
     <div id="coordinates"></div>
     <div id="crosshair"></div>
-    
+    <div id="fps-container">
+        fps: <span id="fps"></span><br>
+        average fps: <span id="avg"></span>
+    </div>
+
     <!-- Shaders -->
     <script id="vertex-shader-3d" type="x-shader/x-vertex">
         attribute vec4 a_position;
