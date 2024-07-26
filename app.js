@@ -41,11 +41,11 @@ class Input {
     }
 
     _onKeyDown = (event) => {
-        this._keyMap[event.code] = 1;
+        this._keyMap[event.code] = true;
     }
 
     _onKeyUp = (event) => {
-        this._keyMap[event.code] = 0;
+        this._keyMap[event.code] = false;
     }
 
     _onMouseMove = (event) => {
@@ -54,7 +54,7 @@ class Input {
     }
 
     GetKeyDown(code) {
-        return this._keyMap[code] === undefined ? 0 : this._keyMap[code];
+        return this._keyMap[code] || false;
     }
 
     GetMouseMovementX() {
@@ -177,7 +177,6 @@ function main() {
     const cameraSpeed = 0.05;
     const rotationSpeed = 0.002; // Velocità di rotazione ridotta
     const verticalSpeed = 0.05;
-    const keys = {};
 
     let yaw = 0;
     let pitch = 0;
@@ -203,6 +202,9 @@ function main() {
         pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
     });
 
+    window.addEventListener('keydown', (event) => inputInstance._onKeyDown(event));
+    window.addEventListener('keyup', (event) => inputInstance._onKeyUp(event));
+
     requestAnimationFrame(drawScene);
 
     function drawScene(time) {
@@ -224,22 +226,22 @@ function main() {
         vec3.set(right, Math.sin(yaw - Math.PI / 2), 0, Math.cos(yaw - Math.PI / 2));
         vec3.normalize(right, right);
 
-        if (keys['w']) {
+        if (inputInstance.GetKeyDown('KeyW')) {
             vec3.scaleAndAdd(cameraPosition, cameraPosition, forward, cameraSpeed);
         }
-        if (keys['s']) {
+        if (inputInstance.GetKeyDown('KeyS')) {
             vec3.scaleAndAdd(cameraPosition, cameraPosition, forward, -cameraSpeed);
         }
-        if (keys['a']) {
+        if (inputInstance.GetKeyDown('KeyA')) {
             vec3.scaleAndAdd(cameraPosition, cameraPosition, right, -cameraSpeed);
         }
-        if (keys['d']) {
+        if (inputInstance.GetKeyDown('KeyD')) {
             vec3.scaleAndAdd(cameraPosition, cameraPosition, right, cameraSpeed);
         }
-        if (keys[' ']) { // Spazio per muoversi in alto
+        if (inputInstance.GetKeyDown('Space')) { // Spazio per muoversi in alto
             cameraPosition[1] = Math.max(cameraPosition[1] - verticalSpeed, -1.6);
         }
-        if (keys['Control']) { // Ctrl per muoversi in basso
+        if (inputInstance.GetKeyDown('ControlLeft')) { // Ctrl per muoversi in basso
             cameraPosition[1] = Math.min(cameraPosition[1] + verticalSpeed, -1.0);
         }
 
