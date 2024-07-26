@@ -197,13 +197,22 @@ function main() {
 
     document.addEventListener('mousemove', (event) => {
         if (!mouseLocked) return;
-        yaw -= event.movementX * rotationSpeed;
-        pitch += event.movementY * rotationSpeed;
+        yaw += event.movementX * rotationSpeed; // invertito
+        pitch -= event.movementY * rotationSpeed; // invertito
         pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
     });
 
-    window.addEventListener('keydown', (event) => inputInstance._onKeyDown(event));
-    window.addEventListener('keyup', (event) => inputInstance._onKeyUp(event));
+    document.addEventListener('keydown', (event) => {
+        if (event.code === 'AltLeft') {
+            document.exitPointerLock();
+        }
+    });
+
+    document.addEventListener('click', () => {
+        if (!mouseLocked) {
+            canvas.requestPointerLock();
+        }
+    });
 
     requestAnimationFrame(drawScene);
 
@@ -267,7 +276,7 @@ function main() {
         gl.vertexAttribPointer(skyboxPositionLocation, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(skyboxPositionLocation);
 
-        //FIXME: gl.uniformMatrix4fv(skyboxViewDirectionProjectionInverseLocation, false, viewDirectionProjectionInverseMatrix);
+        // FIXME: gl.uniformMatrix4fv(skyboxViewDirectionProjectionInverseLocation, false, viewDirectionProjectionInverseMatrix);
         gl.uniform1i(skyboxTextureLocation, 0);
 
         gl.activeTexture(gl.TEXTURE0);
