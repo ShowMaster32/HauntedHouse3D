@@ -7,3 +7,14 @@ canvas {
   height: 100vh;
   display: block;
 }
+#crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  margin-left: -10px;
+  margin-top: -10px;
+  background: url('images/crosshair.png') no-repeat center center;
+  pointer-events: none;
+}
