@@ -181,10 +181,12 @@ function main() {
     let yaw = 0;
     let pitch = 0;
     let mouseLocked = false;
+    let gameStarted = false;  // Variabile per tracciare se il gioco è iniziato
 
     document.getElementById('start-button').addEventListener('click', startGame);
 
     function startGame() {
+        gameStarted = true;  // Imposta la variabile a true
         document.getElementById('start-menu').style.display = 'none';
         canvas.style.display = 'block';
         document.getElementById('crosshair').style.display = 'block';
@@ -203,13 +205,13 @@ function main() {
     });
 
     document.addEventListener('keydown', (event) => {
-        if (event.code === 'AltLeft') {
+        if (event.code === 'AltLeft' && gameStarted) {  // Aggiungi controllo su gameStarted
             document.exitPointerLock();
         }
     });
 
     document.addEventListener('click', () => {
-        if (!mouseLocked) {
+        if (!mouseLocked && gameStarted) {  // Aggiungi controllo su gameStarted
             canvas.requestPointerLock();
         }
     });
