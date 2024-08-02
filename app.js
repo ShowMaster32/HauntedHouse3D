@@ -315,8 +315,8 @@ function main() {
 }
 
 function setFloorAndWallGeometry(gl) {
-    var size = 10; // Raddoppia la dimensione del pavimento
-    var height = -3; // Altezza dei muri invertita
+    var size = 7; // Raddoppia la dimensione del pavimento
+    var height = -5; // Altezza dei muri invertita
     var positions = new Float32Array([
         // Pavimento
         -size, 0, -size,
