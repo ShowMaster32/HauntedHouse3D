@@ -1,10 +1,13 @@
-class input {
+class Input {
     constructor() {
         this._keyMap = {};
         this.events = [];
+        this.mouseDelta = { x: 0, y: 0 };
+        this.lastMousePosition = { x: 0, y: 0 };
 
         this.AddKeyDownListner(this._onKeyDown);
         this.AddKeyUpListner(this._onKeyUp);
+        this.AddMouseMoveListner(this._onMouseMove);
     }
 
     _addEventListner(element, type, callback) {
@@ -44,8 +47,20 @@ class input {
         this._keyMap[event.code] = 0;
     }
 
+    _onMouseMove = (event) => {
+        this.mouseDelta.x = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
+        this.mouseDelta.y = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
+    }
+
     GetKeyDown(code) {
         return this._keyMap[code] === undefined ? 0 : this._keyMap[code];
+    }
+
+    GetMouseMovement() {
+        const delta = { ...this.mouseDelta };
+        this.mouseDelta.x = 0;
+        this.mouseDelta.y = 0;
+        return delta;
     }
 
     ClearEventListners() {
@@ -56,6 +71,7 @@ class input {
         this.events = [];
         this.AddKeyDownListner(this._onKeyDown);
         this.AddKeyUpListner(this._onKeyUp);
+        this.AddMouseMoveListner(this._onMouseMove);
     }
 }
 
