@@ -24,6 +24,8 @@
 		import Stats from 'three/addons/libs/stats.module.js';
 		import { Octree } from 'three/addons/math/Octree.js';
 		import { Capsule } from 'three/addons/math/Capsule.js';
+		import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';  // Importa il loader OBJ
+		import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';  // Importa il loader MTL
 		
 		const clock = new THREE.Clock();
 		
@@ -108,6 +110,38 @@
 			camera.updateProjectionMatrix();
 			renderer.setSize(window.innerWidth, window.innerHeight);
 		}
+		
+		// Caricamento del modello OBJ
+		mtlLoader.load('models/haunted_statue.mtl', (materials) => {
+    materials.preload();
+    objLoader.setMaterials(materials);
+    objLoader.load('models/haunted_statue.obj', (object) => {
+        object.position.set(0, 0, 0);
+        object.scale.set(0.3, 0.3, 0.3);
+        scene.add(object);
+    });
+});		
+		
+		// doll.obj
+		objLoader.load('models/doll.obj', function (object) {
+			object.position.set((Math.random() - 0.5) * roomWidth, 0, (Math.random() - 0.5) * roomDepth);
+			object.scale.set(1, 1, 1); // Ridimensiona se necessario
+			scene.add(object);
+		});
+		
+		// kurumaisu.unity_1.obj
+		objLoader.load('models/kurumaisu.unity_1.obj', function (object) {
+			object.position.set((Math.random() - 0.5) * roomWidth, 0, (Math.random() - 0.5) * roomDepth);
+			object.scale.set(0.1, 0.1, 0.1); // Ridimensiona se necessario
+			scene.add(object);
+		});
+		
+		// UnsavedScene_1.obj
+		objLoader.load('models/UnsavedScene_1.obj', function (object) {
+			object.position.set((Math.random() - 0.5) * roomWidth, 0, (Math.random() - 0.5) * roomDepth);
+			object.scale.set(0.1, 0.1, 0.1); // Ridimensiona se necessario
+			scene.add(object);
+		});
 		
 		// Creazione della stanza
 		const roomWidth = 20;
@@ -221,7 +255,6 @@
 			rightWallRight.position.set(roomWidth / 2, roomHeight / 2, -(roomDepth - windowWidth) / 4 - windowWidth / 2);
 			scene.add(rightWallRight);
 			
-			// Finestra
 			const rightWindow = new THREE.Mesh(new THREE.PlaneGeometry(windowWidth, windowHeight), glassMaterial);
 			rightWindow.position.set(roomWidth / 2 + wallThickness / 2, roomHeight / 2, 0);
 			rightWindow.rotation.y = -Math.PI / 2;
