@@ -41,17 +41,14 @@
         ]);
         scene.background = texture;
 
+        // Configurazione della camera
         const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.rotation.order = 'YXZ';
 
+        // Aggiunta di una luce emisferica
         const fillLight1 = new THREE.HemisphereLight(0x8dc1de, 0x00668d, 1.5);
         fillLight1.position.set(2, 1, 1);
         scene.add(fillLight1);
-
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 2.5);
-        directionalLight.position.set(-5, 25, -1);
-        directionalLight.castShadow = true;
-        scene.add(directionalLight);
 
         const container = document.getElementById('container');
 
@@ -60,7 +57,7 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setAnimationLoop(animate);
         renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.VSMShadowMap;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Migliore qualità delle ombre
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         container.appendChild(renderer.domElement);
 
@@ -125,14 +122,172 @@
 		const floorTexture = textureLoader.load('textures/wood.jpg');
 		const doorTexture = textureLoader.load('textures/door.png');
 
-		const wallMaterial = new THREE.MeshBasicMaterial({ map: wallTexture });
-		const floorMaterial = new THREE.MeshBasicMaterial({ map: floorTexture });
-		const glassMaterial = new THREE.MeshBasicMaterial({ color: 0x88ccee, opacity: 0.3, transparent: true, side: THREE.DoubleSide });
-		const doorMaterial = new THREE.MeshBasicMaterial({ map: doorTexture });
+		// Materiali aggiornati
+		const wallMaterial = new THREE.MeshStandardMaterial({ map: wallTexture });
+		const floorMaterial = new THREE.MeshStandardMaterial({ map: floorTexture });
+		const glassMaterial = new THREE.MeshStandardMaterial({ color: 0x88ccee, opacity: 0.3, transparent: true, side: THREE.DoubleSide });
+		const doorMaterial = new THREE.MeshStandardMaterial({ map: doorTexture });
+
+        function createWallWithWindowAndDoor() {
+            const frontWallTop = new THREE.Mesh(
+                new THREE.BoxGeometry(windowWidth, (roomHeight - windowHeight) / 2, wallThickness), wallMaterial);
+            frontWallTop.position.set(0, roomHeight - (roomHeight - windowHeight) / 4, -roomDepth / 2);
+            frontWallTop.castShadow = true; // Abilita le ombre per le pareti
+            frontWallTop.receiveShadow = true; // Permette alle pareti di ricevere le ombre
+            scene.add(frontWallTop);
+
+            const frontWallBottom = new THREE.Mesh(new THREE.BoxGeometry(windowWidth, (roomHeight - windowHeight) / 2, wallThickness), wallMaterial);
+            frontWallBottom.position.set(0, (roomHeight - windowHeight) / 4, -roomDepth / 2);
+            frontWallBottom.castShadow = true;
+            frontWallBottom.receiveShadow = true;
+            scene.add(frontWallBottom);
+
+            const frontWallLeft = new THREE.Mesh(new THREE.BoxGeometry((roomWidth - windowWidth) / 2, roomHeight, wallThickness), wallMaterial);
+            frontWallLeft.position.set(-((roomWidth - windowWidth) / 4 + windowWidth / 2), roomHeight / 2, -roomDepth / 2);
+            frontWallLeft.castShadow = true;
+            frontWallLeft.receiveShadow = true;
+            scene.add(frontWallLeft);
+
+            const frontWallRight = new THREE.Mesh(new THREE.BoxGeometry((roomWidth - windowWidth) / 2, roomHeight, wallThickness), wallMaterial);
+            frontWallRight.position.set(((roomWidth - windowWidth) / 4 + windowWidth / 2), roomHeight / 2, -roomDepth / 2);
+            frontWallRight.castShadow = true;
+            frontWallRight.receiveShadow = true;
+            scene.add(frontWallRight);
+
+            const frontWindow = new THREE.Mesh(new THREE.PlaneGeometry(windowWidth, windowHeight), glassMaterial);
+            frontWindow.position.set(0, roomHeight / 2, -roomDepth / 2 + wallThickness / 2);
+            frontWindow.castShadow = true;
+            frontWindow.receiveShadow = true;
+            scene.add(frontWindow);
+
+            const backWallTop = new THREE.Mesh(
+            new THREE.BoxGeometry(windowWidth, (roomHeight - windowHeight) / 2, wallThickness), wallMaterial);
+            backWallTop.position.set(0, roomHeight - (roomHeight - windowHeight) / 4, roomDepth / 2);
+            backWallTop.castShadow = true;
+            backWallTop.receiveShadow = true;
+            scene.add(backWallTop);
+
+            const backWallBottom = new THREE.Mesh(new THREE.BoxGeometry(windowWidth, (roomHeight - windowHeight) / 2, wallThickness), wallMaterial);
+            backWallBottom.position.set(0, (roomHeight - windowHeight) / 4, roomDepth / 2);
+            backWallBottom.castShadow = true;
+            backWallBottom.receiveShadow = true;
+            scene.add(backWallBottom);
+
+            const backWallLeft = new THREE.Mesh(new THREE.BoxGeometry((roomWidth - windowWidth) / 2, roomHeight, wallThickness), wallMaterial);
+            backWallLeft.position.set(-((roomWidth - windowWidth) / 4 + windowWidth / 2), roomHeight / 2, roomDepth / 2);
+            backWallLeft.castShadow = true;
+            backWallLeft.receiveShadow = true;
+            scene.add(backWallLeft);
+
+            const backWallRight = new THREE.Mesh(new THREE.BoxGeometry((roomWidth - windowWidth) / 2, roomHeight, wallThickness), wallMaterial);
+            backWallRight.position.set(((roomWidth - windowWidth) / 4 + windowWidth / 2), roomHeight / 2, roomDepth / 2);
+            backWallRight.castShadow = true;
+            backWallRight.receiveShadow = true;
+            scene.add(backWallRight);
+
+            const backWindow = new THREE.Mesh(new THREE.PlaneGeometry(windowWidth, windowHeight), glassMaterial);
+            backWindow.position.set(0, roomHeight / 2, roomDepth / 2 + wallThickness / 2);
+            backWindow.castShadow = true;
+            backWindow.receiveShadow = true;
+            scene.add(backWindow);
+
+            const leftWallTop = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight - doorHeight, doorWidth), wallMaterial);
+            leftWallTop.position.set(-roomWidth / 2, roomHeight - (roomHeight - doorHeight) / 2, 0);
+            leftWallTop.castShadow = true;
+            leftWallTop.receiveShadow = true;
+            scene.add(leftWallTop);
+
+            const leftWallLeft = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight, (roomDepth - doorWidth) / 2), wallMaterial);
+            leftWallLeft.position.set(-roomWidth / 2, roomHeight / 2, (roomDepth - doorWidth) / 4 + doorWidth / 2);
+            leftWallLeft.castShadow = true;
+            leftWallLeft.receiveShadow = true;
+            scene.add(leftWallLeft);
+
+            const leftWallRight = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight, (roomDepth - doorWidth) / 2), wallMaterial);
+            leftWallRight.position.set(-roomWidth / 2, roomHeight / 2, -(roomDepth - doorWidth) / 4 - doorWidth / 2);
+            leftWallRight.castShadow = true;
+            leftWallRight.receiveShadow = true;
+            scene.add(leftWallRight);
+
+            const door = new THREE.Mesh(new THREE.PlaneGeometry(doorWidth, doorHeight), doorMaterial);
+            door.position.set(-roomWidth / 2 + wallThickness / 2, doorHeight / 2, 0);
+            door.rotation.y = Math.PI / 2;
+            door.castShadow = true;
+            door.receiveShadow = true;
+            scene.add(door);
+
+            const rightWallTop = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, (roomHeight - windowHeight) / 2, windowWidth), wallMaterial);
+            rightWallTop.position.set(roomWidth / 2, roomHeight - (roomHeight - windowHeight) / 4, 0);
+            rightWallTop.castShadow = true;
+            rightWallTop.receiveShadow = true;
+            scene.add(rightWallTop);
+
+            const rightWallBottom = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, (roomHeight - windowHeight) / 2, windowWidth), wallMaterial);
+            rightWallBottom.position.set(roomWidth / 2, (roomHeight - windowHeight) / 4, 0);
+            rightWallBottom.castShadow = true;
+            rightWallBottom.receiveShadow = true;
+            scene.add(rightWallBottom);
+
+            const rightWallLeft = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight, (roomDepth - windowWidth) / 2), wallMaterial);
+            rightWallLeft.position.set(roomWidth / 2, roomHeight / 2, (roomDepth - windowWidth) / 4 + windowWidth / 2);
+            rightWallLeft.castShadow = true;
+            rightWallLeft.receiveShadow = true;
+            scene.add(rightWallLeft);
+
+            const rightWallRight = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight, (roomDepth - windowWidth) / 2), wallMaterial);
+            rightWallRight.position.set(roomWidth / 2, roomHeight / 2, -(roomDepth - windowWidth) / 4 - windowWidth / 2);
+            rightWallRight.castShadow = true;
+            rightWallRight.receiveShadow = true;
+            scene.add(rightWallRight);
+
+            const rightWindow = new THREE.Mesh(new THREE.PlaneGeometry(windowWidth, windowHeight), glassMaterial);
+            rightWindow.position.set(roomWidth / 2 + wallThickness / 2, roomHeight / 2, 0);
+            rightWindow.rotation.y = -Math.PI / 2;
+            rightWindow.castShadow = true;
+            rightWindow.receiveShadow = true;
+            scene.add(rightWindow);
+        }
+
+        createWallWithWindowAndDoor();
+
+        // Pavimento
+        const floor = new THREE.Mesh(new THREE.BoxGeometry(roomWidth, 0.1, roomDepth), floorMaterial);
+        floor.position.set(0, 0, 0);
+        floor.receiveShadow = true; // Permette al pavimento di ricevere le ombre
+        scene.add(floor);
+
+        // Soffitto
+        const ceiling = floor.clone();
+        ceiling.position.set(0, roomHeight, 0);
+        ceiling.receiveShadow = true;
+        scene.add(ceiling);
 
         // Caricamento del modello OBJ con MTL
         const mtlLoader = new MTLLoader();
         const objLoader = new OBJLoader();
+
+        // Aggiunta di una luce puntuale per simulare un lampadario al centro della stanza
+        const pointLight = new THREE.PointLight(0xffd700, 100, 50); // Luce calda e più intensa
+        pointLight.position.set(0, 9, 0); // Posizionata vicino al soffitto, al centro della stanza
+        pointLight.castShadow = true; // Abilita le ombre
+        pointLight.shadow.mapSize.width = 1024; // Risoluzione delle ombre
+        pointLight.shadow.mapSize.height = 1024;
+        pointLight.shadow.camera.near = 0.5;
+        pointLight.shadow.camera.far = 150;
+        scene.add(pointLight);
+
+        mtlLoader.load('models/lamp.mtl', (materials) => {
+            materials.preload();
+            objLoader.setMaterials(materials);
+            objLoader.load('models/lamp.obj', (object) => {
+                object.position.set(0, roomHeight, 0);
+				object.rotation.set(Math.PI / 2, 0, 0);
+                object.scale.set(2.5, 2.5, 2.5);
+                object.castShadow = true;
+                object.receiveShadow = true;
+                scene.add(object);
+            });
+        });
 
         mtlLoader.load('models/haunted_statue.mtl', (materials) => {
             materials.preload();
@@ -140,62 +295,68 @@
             objLoader.load('models/haunted_statue.obj', (object) => {
                 object.position.set(0, 0, 0);
                 object.scale.set(0.3, 0.3, 0.3);
+                object.castShadow = true; // Abilita le ombre per l'oggetto
+                object.receiveShadow = true; // Permette all'oggetto di ricevere le ombre
                 scene.add(object);
             });
         });
 
-        // Caricamento di altri OBJ
+        // Caricamento del modello OBJ della bambola
+        const dollTexture = textureLoader.load('models/Doll_Doll_BaseColor.png');
 
-		// Caricamento del modello OBJ della bambola
-		const dollTexture = textureLoader.load('models/Doll_Doll_BaseColor.png');
+        objLoader.load('models/doll.obj', (object) => {
+            object.traverse((child) => {
+                if (child.isMesh) {
+                    child.material.map = dollTexture; 
+                    child.material.needsUpdate = true;
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
 
-		objLoader.load('models/doll.obj', (object) => {
-			object.traverse((child) => {
-				if (child.isMesh) {
-					child.material.map = dollTexture; 
-					child.material.needsUpdate = true;
-				}
-			});
+            object.position.set((Math.random() - 0.5) * roomWidth, 0, (Math.random() - 0.5) * roomDepth);
+            object.scale.set(1, 1, 1);
+            scene.add(object);
+        });
 
-			object.position.set((Math.random() - 0.5) * roomWidth, 0, (Math.random() - 0.5) * roomDepth);
-			object.scale.set(1, 1, 1);
-			scene.add(object);
-		});
+        // Caricamento del modello OBJ della carrozzina 1
+        const wheelchair1Texture = textureLoader.load('models/Doll_Doll_BaseColor.png');
 
-		// Caricamento del modello OBJ della carrozzina 1
-		const wheelchair1Texture = textureLoader.load('models/Doll_Doll_BaseColor.png');
+        objLoader.load('models/kurumaisu.unity_1.obj', (object) => {
+            object.traverse((child) => {
+                if (child.isMesh) {
+                    child.material.map = wheelchair1Texture; 
+                    child.material.needsUpdate = true;
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
 
-		objLoader.load('models/kurumaisu.unity_1.obj', (object) => {
-			object.traverse((child) => {
-				if (child.isMesh) {
-					child.material.map = wheelchair1Texture; 
-					child.material.needsUpdate = true;
-				}
-			});
+            // Posizionamento vicino al bordo sinistro della stanza
+            object.position.set(-roomWidth + 10.5, -2.7, -roomDepth / 2 + 8);
+            object.rotation.set(0, -Math.PI / 2, 0);
+            object.scale.set(0.2, 0.2, 0.2);
+            scene.add(object);
+        });
 
-			// Posizionamento vicino al bordo sinistro della stanza
-			object.position.set(-roomWidth + 10.5, -2.5, -roomDepth / 2 + 8);
-			object.rotation.set(0, -Math.PI / 2, 0);
-			object.scale.set(0.2, 0.2, 0.2);
-			scene.add(object);
-		});
+        // Caricamento del modello OBJ della carrozzina 2
+        const wheelchair2Texture = textureLoader.load('models/Doll_Doll_BaseColor.png');
 
-		// Caricamento del modello OBJ della carrozzina 2
-		const wheelchair2Texture = textureLoader.load('models/Doll_Doll_BaseColor.png');
+        objLoader.load('models/UnsavedScene_1.obj', (object) => {
+            object.traverse((child) => {
+                if (child.isMesh) {
+                    child.material.map = wheelchair2Texture; 
+                    child.material.needsUpdate = true;
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
 
-		objLoader.load('models/UnsavedScene_1.obj', (object) => {
-			object.traverse((child) => {
-				if (child.isMesh) {
-					child.material.map = wheelchair2Texture; 
-					child.material.needsUpdate = true;
-				}
-			});
-
-			object.position.set(-roomWidth / 2 + 20, -2, -roomDepth / 2 + 8);
-			object.rotation.set(0, Math.PI -30 / 2, 0);
-			object.scale.set(0.2, 0.2, 0.2);
-			scene.add(object);
-		});
+            object.position.set(-roomWidth / 2 + 20, -2.1, -roomDepth / 2 + 8);
+            object.rotation.set(0, Math.PI / 2, 0);
+            object.scale.set(0.2, 0.2, 0.2);
+            scene.add(object);
+        });
 
         // Aggiunta di teschi posizionati lungo le pareti della stanza
         function addSkull(position, rotation, scale) {
@@ -207,6 +368,8 @@
                     object.position.set(position.x, position.y, position.z);
                     object.scale.set(scale, scale, scale);
                     object.rotation.set(rotation.x, rotation.y, rotation.z);
+                    object.castShadow = true;
+                    object.receiveShadow = true;
                     scene.add(object);
                 });
             });
@@ -283,100 +446,6 @@
             { x: -Math.PI / 2, y: -Math.PI / 2 - 0.1, z: 2 },
             0.05
         );
-
-        function createWallWithWindowAndDoor() {
-            const frontWallTop = new THREE.Mesh(
-            new THREE.BoxGeometry(windowWidth, (roomHeight - windowHeight) / 2, wallThickness), wallMaterial);
-            frontWallTop.position.set(0, roomHeight - (roomHeight - windowHeight) / 4, -roomDepth / 2);
-            scene.add(frontWallTop);
-
-            const frontWallBottom = new THREE.Mesh(new THREE.BoxGeometry(windowWidth, (roomHeight - windowHeight) / 2, wallThickness), wallMaterial);
-            frontWallBottom.position.set(0, (roomHeight - windowHeight) / 4, -roomDepth / 2);
-            scene.add(frontWallBottom);
-
-            const frontWallLeft = new THREE.Mesh(new THREE.BoxGeometry((roomWidth - windowWidth) / 2, roomHeight, wallThickness), wallMaterial);
-            frontWallLeft.position.set(-((roomWidth - windowWidth) / 4 + windowWidth / 2), roomHeight / 2, -roomDepth / 2);
-            scene.add(frontWallLeft);
-
-            const frontWallRight = new THREE.Mesh(new THREE.BoxGeometry((roomWidth - windowWidth) / 2, roomHeight, wallThickness), wallMaterial);
-            frontWallRight.position.set(((roomWidth - windowWidth) / 4 + windowWidth / 2), roomHeight / 2, -roomDepth / 2);
-            scene.add(frontWallRight);
-
-            const frontWindow = new THREE.Mesh(new THREE.PlaneGeometry(windowWidth, windowHeight), glassMaterial);
-            frontWindow.position.set(0, roomHeight / 2, -roomDepth / 2 + wallThickness / 2);
-            scene.add(frontWindow);
-
-            const backWallTop = new THREE.Mesh(
-            new THREE.BoxGeometry(windowWidth, (roomHeight - windowHeight) / 2, wallThickness), wallMaterial);
-            backWallTop.position.set(0, roomHeight - (roomHeight - windowHeight) / 4, roomDepth / 2);
-            scene.add(backWallTop);
-
-            const backWallBottom = new THREE.Mesh(new THREE.BoxGeometry(windowWidth, (roomHeight - windowHeight) / 2, wallThickness), wallMaterial);
-            backWallBottom.position.set(0, (roomHeight - windowHeight) / 4, roomDepth / 2);
-            scene.add(backWallBottom);
-
-            const backWallLeft = new THREE.Mesh(new THREE.BoxGeometry((roomWidth - windowWidth) / 2, roomHeight, wallThickness), wallMaterial);
-            backWallLeft.position.set(-((roomWidth - windowWidth) / 4 + windowWidth / 2), roomHeight / 2, roomDepth / 2);
-            scene.add(backWallLeft);
-
-            const backWallRight = new THREE.Mesh(new THREE.BoxGeometry((roomWidth - windowWidth) / 2, roomHeight, wallThickness), wallMaterial);
-            backWallRight.position.set(((roomWidth - windowWidth) / 4 + windowWidth / 2), roomHeight / 2, roomDepth / 2);
-            scene.add(backWallRight);
-
-            const backWindow = new THREE.Mesh(new THREE.PlaneGeometry(windowWidth, windowHeight), glassMaterial);
-            backWindow.position.set(0, roomHeight / 2, roomDepth / 2 + wallThickness / 2);
-            scene.add(backWindow);
-
-            const leftWallTop = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight - doorHeight, doorWidth), wallMaterial);
-            leftWallTop.position.set(-roomWidth / 2, roomHeight - (roomHeight - doorHeight) / 2, 0);
-            scene.add(leftWallTop);
-
-            const leftWallLeft = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight, (roomDepth - doorWidth) / 2), wallMaterial);
-            leftWallLeft.position.set(-roomWidth / 2, roomHeight / 2, (roomDepth - doorWidth) / 4 + doorWidth / 2);
-            scene.add(leftWallLeft);
-
-            const leftWallRight = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight, (roomDepth - doorWidth) / 2), wallMaterial);
-            leftWallRight.position.set(-roomWidth / 2, roomHeight / 2, -(roomDepth - doorWidth) / 4 - doorWidth / 2);
-            scene.add(leftWallRight);
-
-            const door = new THREE.Mesh(new THREE.PlaneGeometry(doorWidth, doorHeight), doorMaterial);
-            door.position.set(-roomWidth / 2 + wallThickness / 2, doorHeight / 2, 0);
-            door.rotation.y = Math.PI / 2;
-            scene.add(door);
-
-            const rightWallTop = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, (roomHeight - windowHeight) / 2, windowWidth), wallMaterial);
-            rightWallTop.position.set(roomWidth / 2, roomHeight - (roomHeight - windowHeight) / 4, 0);
-            scene.add(rightWallTop);
-
-            const rightWallBottom = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, (roomHeight - windowHeight) / 2, windowWidth), wallMaterial);
-            rightWallBottom.position.set(roomWidth / 2, (roomHeight - windowHeight) / 4, 0);
-            scene.add(rightWallBottom);
-
-            const rightWallLeft = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight, (roomDepth - windowWidth) / 2), wallMaterial);
-            rightWallLeft.position.set(roomWidth / 2, roomHeight / 2, (roomDepth - windowWidth) / 4 + windowWidth / 2);
-            scene.add(rightWallLeft);
-
-            const rightWallRight = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight, (roomDepth - windowWidth) / 2), wallMaterial);
-            rightWallRight.position.set(roomWidth / 2, roomHeight / 2, -(roomDepth - windowWidth) / 4 - windowWidth / 2);
-            scene.add(rightWallRight);
-
-            const rightWindow = new THREE.Mesh(new THREE.PlaneGeometry(windowWidth, windowHeight), glassMaterial);
-            rightWindow.position.set(roomWidth / 2 + wallThickness / 2, roomHeight / 2, 0);
-            rightWindow.rotation.y = -Math.PI / 2;
-            scene.add(rightWindow);
-        }
-
-        createWallWithWindowAndDoor();
-
-        // Pavimento
-        const floor = new THREE.Mesh(new THREE.BoxGeometry(roomWidth, 0.1, roomDepth), floorMaterial);
-        floor.position.set(0, 0, 0);
-        scene.add(floor);
-
-        // Soffitto
-        const ceiling = floor.clone();
-        ceiling.position.set(0, roomHeight, 0);
-        scene.add(ceiling);
 
         // Aggiunta delle pareti e del pavimento all'Octree per le collisioni
         worldOctree.fromGraphNode(scene);
