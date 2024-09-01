@@ -173,10 +173,11 @@
 				}
 			});
 
-			object.position.set(-5, 0, -5.0);
-			object.rotation.set(rotation.x, rotation.y, rotation.z);
-            object.scale.set(0.2, 0.2, 0.2);
-            scene.add(object);
+			// Posizionamento vicino al bordo sinistro della stanza
+			object.position.set(-roomWidth + 10.5, -2.5, -roomDepth / 2 + 8);
+			object.rotation.set(0, -Math.PI / 2, 0);
+			object.scale.set(0.2, 0.2, 0.2);
+			scene.add(object);
 		});
 
 		// Caricamento del modello OBJ della carrozzina 2
@@ -190,8 +191,8 @@
 				}
 			});
 
-			object.position.set(-8, 0, -11.0);
-			object.rotation.set(rotation.x, rotation.y, rotation.z);
+			object.position.set(-roomWidth / 2 + 20, -2, -roomDepth / 2 + 8);
+			object.rotation.set(0, Math.PI -30 / 2, 0);
 			object.scale.set(0.2, 0.2, 0.2);
 			scene.add(object);
 		});
