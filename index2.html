@@ -8,7 +8,9 @@
 </head>
 <body>
     <div id="container"></div>
-    
+    <div id="instructions">Press <span>F</span> to turn on the light</div>
+    <div id="crosshair"></div> <!-- Aggiungi il puntatore qui -->
+
     <script type="importmap">
         {
             "imports": {
@@ -25,6 +27,7 @@
         import { Octree } from 'three/addons/math/Octree.js';
         import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
         import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+        import { FBXLoader } from 'three/addons/loaders/FBXLoader.js'; // Import FBXLoader
 
         const clock = new THREE.Clock();
         const scene = new THREE.Scene();
@@ -76,6 +79,8 @@
         const playerDirection = new THREE.Vector3();
 
         let playerOnFloor = false;
+        let canToggleLight = true; // Variabile per controllare il toggle
+        let isFlickering = false;  // Controlla se la luce sta sfarfallando
 
         const keyStates = {};
 
@@ -85,10 +90,14 @@
 
         document.addEventListener('keyup', (event) => {
             keyStates[event.code] = false;
+            if (event.code === 'KeyF') {
+                canToggleLight = true;  // Reset della possibilità di togglare la luce
+            }
         });
 
         container.addEventListener('mousedown', () => {
             document.body.requestPointerLock();
+            document.getElementById('crosshair').style.display = 'block'; // Rendi visibile il crosshair
         });
 
         document.body.addEventListener('mousemove', (event) => {
@@ -106,27 +115,27 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-		// Creazione della stanza
-		const roomWidth = 20;
-		const roomHeight = 10;
-		const roomDepth = 25;
+        // Creazione della stanza
+        const roomWidth = 20;
+        const roomHeight = 10;
+        const roomDepth = 25;
 
-		const wallThickness = 0.1;
-		const windowWidth = 6;
-		const windowHeight = 4;
-		const doorWidth = 4;
-		const doorHeight = 8;
+        const wallThickness = 0.1;
+        const windowWidth = 6;
+        const windowHeight = 4;
+        const doorWidth = 4;
+        const doorHeight = 8;
 
-		const textureLoader = new THREE.TextureLoader();
-		const wallTexture = textureLoader.load('textures/wall.jpg');
-		const floorTexture = textureLoader.load('textures/wood.jpg');
-		const doorTexture = textureLoader.load('textures/door.png');
+        const textureLoader = new THREE.TextureLoader();
+        const wallTexture = textureLoader.load('textures/wall.jpg');
+        const floorTexture = textureLoader.load('textures/wood.jpg');
+        const doorTexture = textureLoader.load('textures/door.png');
 
-		// Materiali aggiornati
-		const wallMaterial = new THREE.MeshStandardMaterial({ map: wallTexture });
-		const floorMaterial = new THREE.MeshStandardMaterial({ map: floorTexture });
-		const glassMaterial = new THREE.MeshStandardMaterial({ color: 0x88ccee, opacity: 0.3, transparent: true, side: THREE.DoubleSide });
-		const doorMaterial = new THREE.MeshStandardMaterial({ map: doorTexture });
+        // Materiali aggiornati
+        const wallMaterial = new THREE.MeshStandardMaterial({ map: wallTexture });
+        const floorMaterial = new THREE.MeshStandardMaterial({ map: floorTexture });
+        const glassMaterial = new THREE.MeshStandardMaterial({ color: 0x88ccee, opacity: 0.3, transparent: true, side: THREE.DoubleSide });
+        const doorMaterial = new THREE.MeshStandardMaterial({ map: doorTexture });
 
         function createWallWithWindowAndDoor() {
             const frontWallTop = new THREE.Mesh(
@@ -281,12 +290,49 @@
             objLoader.setMaterials(materials);
             objLoader.load('models/lamp.obj', (object) => {
                 object.position.set(0, roomHeight, 0);
-				object.rotation.set(Math.PI / 2, 0, 0);
+                object.rotation.set(Math.PI / 2, 0, 0);
                 object.scale.set(2.5, 2.5, 2.5);
                 object.castShadow = true;
                 object.receiveShadow = true;
                 scene.add(object);
             });
+        });
+
+        // Aggiunta delle texture per il materiale dell'interruttore
+        const baseColor = textureLoader.load('textures/DefaultMaterial_Base_color.png');
+        const normalMap = textureLoader.load('textures/DefaultMaterial_Normal.png');
+        const roughnessMap = textureLoader.load('textures/DefaultMaterial_Roughness.png');
+        const metalnessMap = textureLoader.load('textures/DefaultMaterial_Metallic.png');
+        const aoMap = textureLoader.load('textures/DefaultMaterial_Mixed_AO.png');
+
+        // Creazione del materiale per l'interruttore
+        const switchMaterial = new THREE.MeshStandardMaterial({
+            map: baseColor,
+            normalMap: normalMap,
+            roughnessMap: roughnessMap,
+            metalnessMap: metalnessMap,
+            aoMap: aoMap
+        });
+
+        // Inizializza la posizione dell'interruttore
+        let switchPosition = new THREE.Vector3(-roomWidth / 2 + 0.1, doorHeight / 2, doorWidth / 2 + 0.5);  // Posizione dell'interruttore
+
+        // Caricamento dell'interruttore
+        const fbxLoader = new FBXLoader();
+        fbxLoader.load('models/Switch.fbx', (object) => {
+            object.traverse((child) => {
+                if (child.isMesh) {
+                    child.material = switchMaterial;
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+
+            // Posizionamento dell'interruttore accanto alla porta d'ingresso
+            object.rotation.set(0, Math.PI / 2, 0);
+            object.position.copy(switchPosition);
+            object.scale.set(0.05, 0.05, 0.05); // Scala corretta per l'interruttore
+            scene.add(object);
         });
 
         mtlLoader.load('models/haunted_statue.mtl', (materials) => {
@@ -492,6 +538,23 @@
             return playerDirection;
         }
 
+        let instructions = document.getElementById('instructions');
+        const crosshair = document.getElementById('crosshair');
+
+        // Funzione per gestire lo sfarfallio della luce
+        function flickerLight(light, duration) {
+            let flickerCount = Math.floor(Math.random() * 5) + 3; // Numero casuale di sfarfallii tra 3 e 7
+            let flickerInterval = setInterval(() => {
+                light.visible = !light.visible;
+                flickerCount--;
+                if (flickerCount <= 0) {
+                    clearInterval(flickerInterval);
+                    light.visible = true; // Assicurati che la luce rimanga accesa alla fine
+                }
+            }, duration / flickerCount);
+        }
+        
+        // Controllo e aggiornamento della posizione e dell'interazione del giocatore
         function controls(deltaTime) {
             const speedDelta = deltaTime * (playerOnFloor ? 25 : 8);
             if (keyStates['KeyW']) {
@@ -506,10 +569,27 @@
             if (keyStates['KeyD']) {
                 playerVelocity.add(getSideVector().multiplyScalar(speedDelta));
             }
-            if (playerOnFloor) {
-                if (keyStates['Space']) {
-                    playerVelocity.y = 10;
+            if (playerOnFloor && keyStates['Space']) {
+                playerVelocity.y = 10;
+            }
+
+            const playerPosition = playerCollider.end;
+            const distanceToSwitch = playerPosition.distanceTo(switchPosition);
+
+            if (distanceToSwitch < 2) {  // Se il giocatore è vicino all'interruttore
+                instructions.style.visibility = 'visible';
+                crosshair.style.backgroundImage = "url('images/crosshair-selection.png')"; // Cambia il colore del crosshair
+
+                if (keyStates['KeyF'] && canToggleLight && !isFlickering) {
+                    pointLight.visible = !pointLight.visible; // Accendi/spegni la luce
+                    canToggleLight = false;  // Evita il toggling continuo mentre il tasto è premuto
+                    if (pointLight.visible) {
+                        flickerLight(pointLight, 500); // Aggiungi l'effetto di sfarfallio
+                    }
                 }
+            } else {
+                instructions.style.visibility = 'hidden';
+                crosshair.style.backgroundImage = "url('images/crosshair.png')"; // Torna al crosshair originale
             }
         }
 
