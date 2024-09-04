@@ -1,20 +1,68 @@
+/* Stile per il corpo della pagina */
 body {
     margin: 0;
     overflow: hidden;
-    font-family: Arial, sans-serif;
+    font-family: 'Creepster', cursive;
+    background-color: black;
+    color: white;
 }
 
-#container {
-    width: 100vw;
+/* Stile per il menu iniziale con trasparenza e overlay */
+#start-menu {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
     height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), 
+                url('images/background.png') no-repeat center center; /* Aggiunge l'overlay semitrasparente */
+    background-size: cover;
+    backdrop-filter: blur(5px); /* Aggiunge l'effetto sfocatura */
 }
 
+/* Stile per il titolo con un aspetto più inquietante */
+#start-menu h1 {
+    font-size: 5rem;
+    color: #ff3333;
+    text-shadow: 4px 4px 10px #000, 6px 6px 0 #ff0000, 8px 8px 15px #ff3333;
+    margin-bottom: 50px;
+    letter-spacing: 2px;
+}
+
+/* Stile per il pulsante "INIZIA" */
+#start-button {
+    padding: 20px 50px;
+    font-size: 1.5rem;
+    background: rgba(255, 255, 255, 0.15);
+    border: 2px solid #ff3333;
+    color: white;
+    cursor: pointer;
+    transition: background 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
+    backdrop-filter: blur(2px); /* Sfocatura sul pulsante */
+}
+
+#start-button:hover {
+    background: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 0 10px #fff, 0 0 20px #ff3333, 0 0 30px #ff3333;
+    transform: scale(1.1); /* Ingrandimento al passaggio del mouse */
+}
+
+/* Stile per il puntatore */
+body.no-cursor {
+    cursor: none;
+}
+
+/* Stile per il crosshair */
 #crosshair {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 24px; /* Adatta la larghezza dell'immagine */
-    height: 24px; /* Adatta l'altezza dell'immagine */
+    width: 24px;
+    height: 24px;
     background: url('images/crosshair.png') no-repeat center center;
     background-size: contain;
     transform: translate(-50%, -50%);
@@ -22,9 +70,10 @@ body {
     display: none;
 }
 
+/* Stile per le istruzioni */
 #instructions {
     position: absolute;
-    top: 10%; /* Sposta la scritta in alto al centro */
+    top: 10%;
     width: 100%;
     text-align: center;
     font-size: 48px;

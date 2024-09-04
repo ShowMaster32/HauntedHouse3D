@@ -1,16 +1,82 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>three.js - Room with Skybox, Windows, and Door</title>
+    <title>Progetto CG A.A.2023/2024</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
+    <link href="https://fonts.googleapis.com/css2?family=Creepster&display=swap" rel="stylesheet">
     <link type="text/css" rel="stylesheet" href="main.css">
 </head>
 <body>
+    <!-- Start Menu -->
+    <div id="start-menu">
+        <h1>Welcome to HauntedHouse</h1>
+        <button id="start-button">START</button>
+    </div>
+    
+    <!-- Canvas for rendering -->
+    <canvas id="canvas"></canvas>
+    
+    <!-- Game container -->
     <div id="container"></div>
+    
+    <!-- Instructions -->
     <div id="instructions">Press <span>F</span> to turn on the light</div>
-    <div id="crosshair"></div> <!-- Aggiungi il puntatore qui -->
-
+    
+    <!-- Crosshair for aiming -->
+    <div id="crosshair"></div>
+    
+    <!-- Control Panel -->
+    <div id="control-panel">
+        <h2>Control Panel</h2>
+        <button id="toggleShadows">Toggle Shadows</button>
+        <button id="toggleReflections">Toggle Reflections</button>
+        <button id="toggleFPS">Toggle FPS Counter</button>
+        <button id="advancedRendering">Toggle Advanced Rendering</button>
+    </div>
+    
+    <!-- Gestione della musica -->
+    <audio id="intro-music" src="./sounds/intro.mp3"></audio>
+    <audio id="start-music" src="./sounds/start-game.mp3"></audio>
+    
+    <script>
+        const startButton = document.getElementById('start-button');
+        const startMenu = document.getElementById('start-menu');
+        const canvas = document.getElementById('canvas');
+        const container = document.getElementById('container');
+        const controlPanel = document.getElementById('control-panel');
+        const instructions = document.getElementById('instructions');
+        const crosshair = document.getElementById('crosshair');
+        const introMusic = document.getElementById('intro-music');
+        const startMusic = document.getElementById('start-music');
+        
+        // Avvia la musica dell'intro quando viene caricata la pagina
+        window.onload = () => {
+            introMusic.play();
+        };
+        
+        // Evento click per avviare il gioco
+        startButton.addEventListener('click', () => {
+            // Interrompi la musica dell'intro e avvia la musica del gioco
+            introMusic.pause();
+            startMusic.play();
+            
+            // Nascondi il menu di avvio
+            startMenu.style.display = 'none';
+            
+            // Nascondi il puntatore del mouse
+            document.body.classList.add('no-cursor');
+            
+            // Mostra gli elementi di gioco
+            canvas.style.display = 'block';
+            container.style.display = 'block';
+            controlPanel.style.display = 'block';
+            instructions.style.display = 'block';
+            crosshair.style.display = 'block';
+        });
+    </script>
+    
     <script type="importmap">
         {
             "imports": {
@@ -28,33 +94,31 @@
         import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
         import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
         import { FBXLoader } from 'three/addons/loaders/FBXLoader.js'; // Import FBXLoader
-
+        
         const clock = new THREE.Clock();
         const scene = new THREE.Scene();
-
+        
         // Configurazione della skybox
         const loader = new THREE.CubeTextureLoader();
         const texture = loader.load([
-            'textures/skybox/px.png', // Positivo X
-            'textures/skybox/nx.png', // Negativo X
-            'textures/skybox/py.png', // Positivo Y
-            'textures/skybox/ny.png', // Negativo Y
-            'textures/skybox/pz.png', // Positivo Z
-            'textures/skybox/nz.png'  // Negativo Z
+        'textures/skybox/px.png', // Positivo X
+        'textures/skybox/nx.png', // Negativo X
+        'textures/skybox/py.png', // Positivo Y
+        'textures/skybox/ny.png', // Negativo Y
+        'textures/skybox/pz.png', // Positivo Z
+        'textures/skybox/nz.png'  // Negativo Z
         ]);
         scene.background = texture;
-
+        
         // Configurazione della camera
         const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.rotation.order = 'YXZ';
-
+        
         // Aggiunta di una luce emisferica
         const fillLight1 = new THREE.HemisphereLight(0x8dc1de, 0x00668d, 1.5);
         fillLight1.position.set(2, 1, 1);
         scene.add(fillLight1);
-
-        const container = document.getElementById('container');
-
+        
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -63,192 +127,224 @@
         renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Migliore qualità delle ombre
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         container.appendChild(renderer.domElement);
-
+        
+        // Definisci il contatore degli FPS e la telemetria come nascosti all'inizio
         const stats = new Stats();
         stats.domElement.style.position = 'absolute';
         stats.domElement.style.top = '0px';
+        stats.domElement.style.display = 'none'; // Nascondi all'inizio
         container.appendChild(stats.domElement);
-
+        
+        // Evento per monitorare se il puntatore viene sganciato (es. con il tasto ALT)
+        document.addEventListener('pointerlockchange', () => {
+            if (document.pointerLockElement === null) {
+                // Se il puntatore è stato sganciato, mostra il mouse
+                document.body.style.cursor = 'default';
+            } else {
+                // Se il puntatore è bloccato, nascondi il mouse
+                document.body.style.cursor = 'none';
+            }
+        });
+        
+        // Quando il gioco inizia, blocca il puntatore e nascondi il mouse
+        startButton.addEventListener('click', () => {
+            stats.domElement.style.display = 'block';  // Mostra il contatore degli FPS
+            startMenu.style.display = 'none';
+            canvas.style.display = 'block';
+            container.style.display = 'block';
+            controlPanel.style.display = 'block';
+            instructions.style.display = 'block';
+            crosshair.style.display = 'block';
+            introMusic.pause();
+            startMusic.play();
+            
+            // Blocca il puntatore e nascondi il mouse
+            document.body.requestPointerLock();
+            document.body.style.cursor = 'none';
+        });
+        
+        
+        
         const GRAVITY = 30;
         const STEPS_PER_FRAME = 5;
-
+        
         const worldOctree = new Octree();
-
+        
         const playerCollider = new Capsule(new THREE.Vector3(0, 0.35, 0), new THREE.Vector3(0, 4, 0), 0.35);
         const playerVelocity = new THREE.Vector3();
         const playerDirection = new THREE.Vector3();
-
+        
         let playerOnFloor = false;
         let canToggleLight = true; // Variabile per controllare il toggle
         let isFlickering = false;  // Controlla se la luce sta sfarfallando
-
+        
         const keyStates = {};
-
+        
         document.addEventListener('keydown', (event) => {
             keyStates[event.code] = true;
         });
-
+        
         document.addEventListener('keyup', (event) => {
             keyStates[event.code] = false;
             if (event.code === 'KeyF') {
                 canToggleLight = true;  // Reset della possibilità di togglare la luce
             }
         });
-
+        
         container.addEventListener('mousedown', () => {
             document.body.requestPointerLock();
             document.getElementById('crosshair').style.display = 'block'; // Rendi visibile il crosshair
         });
-
+        
         document.body.addEventListener('mousemove', (event) => {
             if (document.pointerLockElement === document.body) {
                 camera.rotation.y -= event.movementX / 500;
                 camera.rotation.x -= event.movementY / 500;
             }
         });
-
+        
         window.addEventListener('resize', onWindowResize);
-
+        
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
-
+        
         // Creazione della stanza
         const roomWidth = 20;
         const roomHeight = 10;
         const roomDepth = 25;
-
+        
         const wallThickness = 0.1;
         const windowWidth = 6;
         const windowHeight = 4;
         const doorWidth = 4;
         const doorHeight = 8;
-
+        
         const textureLoader = new THREE.TextureLoader();
         const wallTexture = textureLoader.load('textures/wall.jpg');
         const floorTexture = textureLoader.load('textures/wood.jpg');
         const doorTexture = textureLoader.load('textures/door.png');
-
+        
         // Materiali aggiornati
         const wallMaterial = new THREE.MeshStandardMaterial({ map: wallTexture });
         const floorMaterial = new THREE.MeshStandardMaterial({ map: floorTexture });
         const glassMaterial = new THREE.MeshStandardMaterial({ color: 0x88ccee, opacity: 0.3, transparent: true, side: THREE.DoubleSide });
         const doorMaterial = new THREE.MeshStandardMaterial({ map: doorTexture });
-
+        
         function createWallWithWindowAndDoor() {
             const frontWallTop = new THREE.Mesh(
-                new THREE.BoxGeometry(windowWidth, (roomHeight - windowHeight) / 2, wallThickness), wallMaterial);
+            new THREE.BoxGeometry(windowWidth, (roomHeight - windowHeight) / 2, wallThickness), wallMaterial);
             frontWallTop.position.set(0, roomHeight - (roomHeight - windowHeight) / 4, -roomDepth / 2);
             frontWallTop.castShadow = true; // Abilita le ombre per le pareti
             frontWallTop.receiveShadow = true; // Permette alle pareti di ricevere le ombre
             scene.add(frontWallTop);
-
+            
             const frontWallBottom = new THREE.Mesh(new THREE.BoxGeometry(windowWidth, (roomHeight - windowHeight) / 2, wallThickness), wallMaterial);
             frontWallBottom.position.set(0, (roomHeight - windowHeight) / 4, -roomDepth / 2);
             frontWallBottom.castShadow = true;
             frontWallBottom.receiveShadow = true;
             scene.add(frontWallBottom);
-
+            
             const frontWallLeft = new THREE.Mesh(new THREE.BoxGeometry((roomWidth - windowWidth) / 2, roomHeight, wallThickness), wallMaterial);
             frontWallLeft.position.set(-((roomWidth - windowWidth) / 4 + windowWidth / 2), roomHeight / 2, -roomDepth / 2);
             frontWallLeft.castShadow = true;
             frontWallLeft.receiveShadow = true;
             scene.add(frontWallLeft);
-
+            
             const frontWallRight = new THREE.Mesh(new THREE.BoxGeometry((roomWidth - windowWidth) / 2, roomHeight, wallThickness), wallMaterial);
             frontWallRight.position.set(((roomWidth - windowWidth) / 4 + windowWidth / 2), roomHeight / 2, -roomDepth / 2);
             frontWallRight.castShadow = true;
             frontWallRight.receiveShadow = true;
             scene.add(frontWallRight);
-
+            
             const frontWindow = new THREE.Mesh(new THREE.PlaneGeometry(windowWidth, windowHeight), glassMaterial);
             frontWindow.position.set(0, roomHeight / 2, -roomDepth / 2 + wallThickness / 2);
             frontWindow.castShadow = true;
             frontWindow.receiveShadow = true;
             scene.add(frontWindow);
-
+            
             const backWallTop = new THREE.Mesh(
             new THREE.BoxGeometry(windowWidth, (roomHeight - windowHeight) / 2, wallThickness), wallMaterial);
             backWallTop.position.set(0, roomHeight - (roomHeight - windowHeight) / 4, roomDepth / 2);
             backWallTop.castShadow = true;
             backWallTop.receiveShadow = true;
             scene.add(backWallTop);
-
+            
             const backWallBottom = new THREE.Mesh(new THREE.BoxGeometry(windowWidth, (roomHeight - windowHeight) / 2, wallThickness), wallMaterial);
             backWallBottom.position.set(0, (roomHeight - windowHeight) / 4, roomDepth / 2);
             backWallBottom.castShadow = true;
             backWallBottom.receiveShadow = true;
             scene.add(backWallBottom);
-
+            
             const backWallLeft = new THREE.Mesh(new THREE.BoxGeometry((roomWidth - windowWidth) / 2, roomHeight, wallThickness), wallMaterial);
             backWallLeft.position.set(-((roomWidth - windowWidth) / 4 + windowWidth / 2), roomHeight / 2, roomDepth / 2);
             backWallLeft.castShadow = true;
             backWallLeft.receiveShadow = true;
             scene.add(backWallLeft);
-
+            
             const backWallRight = new THREE.Mesh(new THREE.BoxGeometry((roomWidth - windowWidth) / 2, roomHeight, wallThickness), wallMaterial);
             backWallRight.position.set(((roomWidth - windowWidth) / 4 + windowWidth / 2), roomHeight / 2, roomDepth / 2);
             backWallRight.castShadow = true;
             backWallRight.receiveShadow = true;
             scene.add(backWallRight);
-
+            
             const backWindow = new THREE.Mesh(new THREE.PlaneGeometry(windowWidth, windowHeight), glassMaterial);
             backWindow.position.set(0, roomHeight / 2, roomDepth / 2 + wallThickness / 2);
             backWindow.castShadow = true;
             backWindow.receiveShadow = true;
             scene.add(backWindow);
-
+            
             const leftWallTop = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight - doorHeight, doorWidth), wallMaterial);
             leftWallTop.position.set(-roomWidth / 2, roomHeight - (roomHeight - doorHeight) / 2, 0);
             leftWallTop.castShadow = true;
             leftWallTop.receiveShadow = true;
             scene.add(leftWallTop);
-
+            
             const leftWallLeft = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight, (roomDepth - doorWidth) / 2), wallMaterial);
             leftWallLeft.position.set(-roomWidth / 2, roomHeight / 2, (roomDepth - doorWidth) / 4 + doorWidth / 2);
             leftWallLeft.castShadow = true;
             leftWallLeft.receiveShadow = true;
             scene.add(leftWallLeft);
-
+            
             const leftWallRight = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight, (roomDepth - doorWidth) / 2), wallMaterial);
             leftWallRight.position.set(-roomWidth / 2, roomHeight / 2, -(roomDepth - doorWidth) / 4 - doorWidth / 2);
             leftWallRight.castShadow = true;
             leftWallRight.receiveShadow = true;
             scene.add(leftWallRight);
-
+            
             const door = new THREE.Mesh(new THREE.PlaneGeometry(doorWidth, doorHeight), doorMaterial);
             door.position.set(-roomWidth / 2 + wallThickness / 2, doorHeight / 2, 0);
             door.rotation.y = Math.PI / 2;
             door.castShadow = true;
             door.receiveShadow = true;
             scene.add(door);
-
+            
             const rightWallTop = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, (roomHeight - windowHeight) / 2, windowWidth), wallMaterial);
             rightWallTop.position.set(roomWidth / 2, roomHeight - (roomHeight - windowHeight) / 4, 0);
             rightWallTop.castShadow = true;
             rightWallTop.receiveShadow = true;
             scene.add(rightWallTop);
-
+            
             const rightWallBottom = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, (roomHeight - windowHeight) / 2, windowWidth), wallMaterial);
             rightWallBottom.position.set(roomWidth / 2, (roomHeight - windowHeight) / 4, 0);
             rightWallBottom.castShadow = true;
             rightWallBottom.receiveShadow = true;
             scene.add(rightWallBottom);
-
+            
             const rightWallLeft = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight, (roomDepth - windowWidth) / 2), wallMaterial);
             rightWallLeft.position.set(roomWidth / 2, roomHeight / 2, (roomDepth - windowWidth) / 4 + windowWidth / 2);
             rightWallLeft.castShadow = true;
             rightWallLeft.receiveShadow = true;
             scene.add(rightWallLeft);
-
+            
             const rightWallRight = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight, (roomDepth - windowWidth) / 2), wallMaterial);
             rightWallRight.position.set(roomWidth / 2, roomHeight / 2, -(roomDepth - windowWidth) / 4 - windowWidth / 2);
             rightWallRight.castShadow = true;
             rightWallRight.receiveShadow = true;
             scene.add(rightWallRight);
-
+            
             const rightWindow = new THREE.Mesh(new THREE.PlaneGeometry(windowWidth, windowHeight), glassMaterial);
             rightWindow.position.set(roomWidth / 2 + wallThickness / 2, roomHeight / 2, 0);
             rightWindow.rotation.y = -Math.PI / 2;
@@ -256,25 +352,25 @@
             rightWindow.receiveShadow = true;
             scene.add(rightWindow);
         }
-
+        
         createWallWithWindowAndDoor();
-
+        
         // Pavimento
         const floor = new THREE.Mesh(new THREE.BoxGeometry(roomWidth, 0.1, roomDepth), floorMaterial);
         floor.position.set(0, 0, 0);
         floor.receiveShadow = true; // Permette al pavimento di ricevere le ombre
         scene.add(floor);
-
+        
         // Soffitto
         const ceiling = floor.clone();
         ceiling.position.set(0, roomHeight, 0);
         ceiling.receiveShadow = true;
         scene.add(ceiling);
-
+        
         // Caricamento del modello OBJ con MTL
         const mtlLoader = new MTLLoader();
         const objLoader = new OBJLoader();
-
+        
         // Aggiunta di una luce puntuale per simulare un lampadario al centro della stanza
         const pointLight = new THREE.PointLight(0xffd700, 100, 50); // Luce calda e più intensa
         pointLight.position.set(0, 9, 0); // Posizionata vicino al soffitto, al centro della stanza
@@ -284,7 +380,7 @@
         pointLight.shadow.camera.near = 0.5;
         pointLight.shadow.camera.far = 150;
         scene.add(pointLight);
-
+        
         mtlLoader.load('models/lamp.mtl', (materials) => {
             materials.preload();
             objLoader.setMaterials(materials);
@@ -297,14 +393,14 @@
                 scene.add(object);
             });
         });
-
+        
         // Aggiunta delle texture per il materiale dell'interruttore
         const baseColor = textureLoader.load('textures/DefaultMaterial_Base_color.png');
         const normalMap = textureLoader.load('textures/DefaultMaterial_Normal.png');
         const roughnessMap = textureLoader.load('textures/DefaultMaterial_Roughness.png');
         const metalnessMap = textureLoader.load('textures/DefaultMaterial_Metallic.png');
         const aoMap = textureLoader.load('textures/DefaultMaterial_Mixed_AO.png');
-
+        
         // Creazione del materiale per l'interruttore
         const switchMaterial = new THREE.MeshStandardMaterial({
             map: baseColor,
@@ -313,10 +409,10 @@
             metalnessMap: metalnessMap,
             aoMap: aoMap
         });
-
+        
         // Inizializza la posizione dell'interruttore
         let switchPosition = new THREE.Vector3(-roomWidth / 2 + 0.1, doorHeight / 2, doorWidth / 2 + 0.5);  // Posizione dell'interruttore
-
+        
         // Caricamento dell'interruttore
         const fbxLoader = new FBXLoader();
         fbxLoader.load('models/Switch.fbx', (object) => {
@@ -327,14 +423,14 @@
                     child.receiveShadow = true;
                 }
             });
-
+            
             // Posizionamento dell'interruttore accanto alla porta d'ingresso
             object.rotation.set(0, Math.PI / 2, 0);
             object.position.copy(switchPosition);
             object.scale.set(0.05, 0.05, 0.05); // Scala corretta per l'interruttore
             scene.add(object);
         });
-
+        
         mtlLoader.load('models/haunted_statue.mtl', (materials) => {
             materials.preload();
             objLoader.setMaterials(materials);
@@ -346,10 +442,10 @@
                 scene.add(object);
             });
         });
-
+        
         // Caricamento del modello OBJ della bambola
         const dollTexture = textureLoader.load('models/Doll_Doll_BaseColor.png');
-
+        
         objLoader.load('models/doll.obj', (object) => {
             object.traverse((child) => {
                 if (child.isMesh) {
@@ -359,15 +455,15 @@
                     child.receiveShadow = true;
                 }
             });
-
+            
             object.position.set((Math.random() - 0.5) * roomWidth, 0, (Math.random() - 0.5) * roomDepth);
             object.scale.set(1, 1, 1);
             scene.add(object);
         });
-
+        
         // Caricamento del modello OBJ della carrozzina 1
         const wheelchair1Texture = textureLoader.load('models/Doll_Doll_BaseColor.png');
-
+        
         objLoader.load('models/kurumaisu.unity_1.obj', (object) => {
             object.traverse((child) => {
                 if (child.isMesh) {
@@ -377,17 +473,17 @@
                     child.receiveShadow = true;
                 }
             });
-
+            
             // Posizionamento vicino al bordo sinistro della stanza
             object.position.set(-roomWidth + 10.5, -2.7, -roomDepth / 2 + 8);
             object.rotation.set(0, -Math.PI / 2, 0);
             object.scale.set(0.2, 0.2, 0.2);
             scene.add(object);
         });
-
+        
         // Caricamento del modello OBJ della carrozzina 2
         const wheelchair2Texture = textureLoader.load('models/Doll_Doll_BaseColor.png');
-
+        
         objLoader.load('models/UnsavedScene_1.obj', (object) => {
             object.traverse((child) => {
                 if (child.isMesh) {
@@ -397,19 +493,19 @@
                     child.receiveShadow = true;
                 }
             });
-
+            
             object.position.set(-roomWidth / 2 + 20, -2.1, -roomDepth / 2 + 8);
             object.rotation.set(0, Math.PI / 2, 0);
             object.scale.set(0.2, 0.2, 0.2);
             scene.add(object);
         });
-
+        
         // Aggiunta di teschi posizionati lungo le pareti della stanza
         function addSkull(position, rotation, scale) {
             mtlLoader.load('models/12140_Skull_v3_L2.mtl', (materials) => {
                 materials.preload();
                 objLoader.setMaterials(materials);
-
+                
                 objLoader.load('models/12140_Skull_v3_L2.obj', (object) => {
                     object.position.set(position.x, position.y, position.z);
                     object.scale.set(scale, scale, scale);
@@ -420,82 +516,82 @@
                 });
             });
         }
-
+        
         // Teschio sul muro frontale sinistro
         addSkull(
-            { x: -8, y: 0, z: -11.0 },
-            { x: -Math.PI / 2, y: 0, z: 0 },
-            0.05
+        { x: -8, y: 0, z: -11.0 },
+        { x: -Math.PI / 2, y: 0, z: 0 },
+        0.05
         );
         addSkull(
-            { x: -8, y: 1.5, z: -10.8 },
-            { x: -Math.PI / 2 + 0.4, y: 0.2, z: 0.5 },
-            0.06
+        { x: -8, y: 1.5, z: -10.8 },
+        { x: -Math.PI / 2 + 0.4, y: 0.2, z: 0.5 },
+        0.06
         );
         addSkull(
-            { x: -8, y: 3.3, z: -10.9 },
-            { x: -Math.PI / 2 + 0.2, y: 1.3, z: -0.15 },
-            0.05
+        { x: -8, y: 3.3, z: -10.9 },
+        { x: -Math.PI / 2 + 0.2, y: 1.3, z: -0.15 },
+        0.05
         );
-
+        
         // Teschio sul muro frontale destro
         addSkull(
-            { x: 8, y: 0.2, z: -10.9 },
-            { x: -Math.PI / 2 + 0.1, y: 0, z: 0 },
-            0.06
+        { x: 8, y: 0.2, z: -10.9 },
+        { x: -Math.PI / 2 + 0.1, y: 0, z: 0 },
+        0.06
         );
         addSkull(
-            { x: 8, y: 1.8, z: -10.6 },
-            { x: -Math.PI / 2 + 0.3, y: 0, z: -0.3 },
-            0.07
+        { x: 8, y: 1.8, z: -10.6 },
+        { x: -Math.PI / 2 + 0.3, y: 0, z: -0.3 },
+        0.07
         );
-
+        
         // Teschio sulla parete posteriore sinistra
         addSkull(
-            { x: -8, y: 0, z: 11.3 },
-            { x: Math.PI / 2, y: Math.PI, z: 0 },
-            0.08
+        { x: -8, y: 0, z: 11.3 },
+        { x: Math.PI / 2, y: Math.PI, z: 0 },
+        0.08
         );
         addSkull(
-            { x: -8, y: 2, z: 11.3 },
-            { x: Math.PI / 2 + 0.1, y: Math.PI, z: 0.2 },
-            0.07
+        { x: -8, y: 2, z: 11.3 },
+        { x: Math.PI / 2 + 0.1, y: Math.PI, z: 0.2 },
+        0.07
         );
-
+        
         // Teschio sulla parete posteriore destra
         addSkull(
-            { x: 7.7, y: 0, z: 11.3 },
-            { x: Math.PI / 2, y: Math.PI, z: 0 },
-            0.06
+        { x: 7.7, y: 0, z: 11.3 },
+        { x: Math.PI / 2, y: Math.PI, z: 0 },
+        0.06
         );
         addSkull(
-            { x: 8, y: 1.4, z: 11.3 },
-            { x: Math.PI / 2 + 0.3, y: Math.PI, z: 0 },
-            0.07
+        { x: 8, y: 1.4, z: 11.3 },
+        { x: Math.PI / 2 + 0.3, y: Math.PI, z: 0 },
+        0.07
         );
         addSkull(
-            { x: 7.8, y: 2.8, z: 11.3 },
-            { x: Math.PI / 2 + 0.3, y: Math.PI, z: 0.1 },
-            0.07
+        { x: 7.8, y: 2.8, z: 11.3 },
+        { x: Math.PI / 2 + 0.3, y: Math.PI, z: 0.1 },
+        0.07
         );
-
+        
         // Teschio sul muro laterale sinistro, sopra la porta
         addSkull(
-            { x: -10, y: doorHeight + 0.5, z: 0 },
-            { x: -Math.PI / 2, y: Math.PI / 2, z: 0 },
-            0.05
+        { x: -10, y: doorHeight + 0.5, z: 0 },
+        { x: -Math.PI / 2, y: Math.PI / 2, z: 0 },
+        0.05
         );
-
+        
         // Teschio sul muro laterale destro
         addSkull(
-            { x: 10, y: 0.7, z: 4 },
-            { x: -Math.PI / 2, y: -Math.PI / 2 - 0.1, z: 2 },
-            0.05
+        { x: 10, y: 0.7, z: 4 },
+        { x: -Math.PI / 2, y: -Math.PI / 2 - 0.1, z: 2 },
+        0.05
         );
-
+        
         // Aggiunta delle pareti e del pavimento all'Octree per le collisioni
         worldOctree.fromGraphNode(scene);
-
+        
         function playerCollisions() {
             const result = worldOctree.capsuleIntersect(playerCollider);
             playerOnFloor = false;
@@ -509,7 +605,7 @@
                 }
             }
         }
-
+        
         function updatePlayer(deltaTime) {
             let damping = Math.exp(-4 * deltaTime) - 1;
             if (!playerOnFloor) {
@@ -522,14 +618,14 @@
             playerCollisions();
             camera.position.copy(playerCollider.end);
         }
-
+        
         function getForwardVector() {
             camera.getWorldDirection(playerDirection);
             playerDirection.y = 0;
             playerDirection.normalize();
             return playerDirection;
         }
-
+        
         function getSideVector() {
             camera.getWorldDirection(playerDirection);
             playerDirection.y = 0;
@@ -537,10 +633,7 @@
             playerDirection.cross(camera.up);
             return playerDirection;
         }
-
-        let instructions = document.getElementById('instructions');
-        const crosshair = document.getElementById('crosshair');
-
+        
         // Funzione per gestire lo sfarfallio della luce
         function flickerLight(light, duration) {
             let flickerCount = Math.floor(Math.random() * 5) + 3; // Numero casuale di sfarfallii tra 3 e 7
@@ -572,48 +665,48 @@
             if (playerOnFloor && keyStates['Space']) {
                 playerVelocity.y = 10;
             }
-
+            
             const playerPosition = playerCollider.end;
             const distanceToSwitch = playerPosition.distanceTo(switchPosition);
-
+            
             if (distanceToSwitch < 2) {  // Se il giocatore è vicino all'interruttore
-                instructions.style.visibility = 'visible';
-                crosshair.style.backgroundImage = "url('images/crosshair-selection.png')"; // Cambia il colore del crosshair
-
-                if (keyStates['KeyF'] && canToggleLight && !isFlickering) {
-                    pointLight.visible = !pointLight.visible; // Accendi/spegni la luce
-                    canToggleLight = false;  // Evita il toggling continuo mentre il tasto è premuto
-                    if (pointLight.visible) {
-                        flickerLight(pointLight, 500); // Aggiungi l'effetto di sfarfallio
-                    }
+            instructions.style.visibility = 'visible';
+            crosshair.style.backgroundImage = "url('images/crosshair-selection.png')"; // Cambia il colore del crosshair
+            
+            if (keyStates['KeyF'] && canToggleLight && !isFlickering) {
+                pointLight.visible = !pointLight.visible; // Accendi/spegni la luce
+                canToggleLight = false;  // Evita il toggling continuo mentre il tasto è premuto
+                if (pointLight.visible) {
+                    flickerLight(pointLight, 500); // Aggiungi l'effetto di sfarfallio
                 }
-            } else {
-                instructions.style.visibility = 'hidden';
-                crosshair.style.backgroundImage = "url('images/crosshair.png')"; // Torna al crosshair originale
             }
+        } else {
+            instructions.style.visibility = 'hidden';
+            crosshair.style.backgroundImage = "url('images/crosshair.png')"; // Torna al crosshair originale
         }
-
-        function teleportPlayerIfOob() {
-            if (camera.position.y <= -20) {
-                playerCollider.start.set(0, 0.35, 0);
-                playerCollider.end.set(0, 4, 0);
-                playerCollider.radius = 0.35;
-                camera.position.copy(playerCollider.end);
-                camera.rotation.set(0, 0, 0);
-            }
+    }
+    
+    function teleportPlayerIfOob() {
+        if (camera.position.y <= -20) {
+            playerCollider.start.set(0, 0.35, 0);
+            playerCollider.end.set(0, 4, 0);
+            playerCollider.radius = 0.35;
+            camera.position.copy(playerCollider.end);
+            camera.rotation.set(0, 0, 0);
         }
-
-        function animate() {
-            const deltaTime = Math.min(0.05, clock.getDelta()) / STEPS_PER_FRAME;
-            for (let i = 0; i < STEPS_PER_FRAME; i++) {
-                controls(deltaTime);
-                updatePlayer(deltaTime);
-                teleportPlayerIfOob();
-            }
-            renderer.render(scene, camera);
-            stats.update();
+    }
+    
+    function animate() {
+        const deltaTime = Math.min(0.05, clock.getDelta()) / STEPS_PER_FRAME;
+        for (let i = 0; i < STEPS_PER_FRAME; i++) {
+            controls(deltaTime);
+            updatePlayer(deltaTime);
+            teleportPlayerIfOob();
         }
-
-    </script>
+        renderer.render(scene, camera);
+        stats.update();
+    }
+    
+</script>
 </body>
 </html>

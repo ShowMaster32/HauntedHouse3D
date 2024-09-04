@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Progetto CG A.A.2023/2024</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="start-menu">
+        <h1>Welcome to HauntedHouse - A Computer Graphics Exam Project</h1>
+        <button id="start-button">INIZIA</button>
+    </div>
+    <canvas id="canvas"></canvas>
+    <div id="coordinates"></div>
+    <div id="crosshair"></div>
+    <div id="fps-container">
+        fps: <span id="fps"></span><br>
+        average fps: <span id="avg"></span>
+    </div>
+
+    <!-- Shaders -->
+    <script id="vertex-shader-3d" type="x-shader/x-vertex">
+        attribute vec4 a_position;
+        attribute vec2 a_texcoord;
+        uniform mat4 u_matrix;
+        varying vec2 v_texcoord;
+        void main() {
+            gl_Position = u_matrix * a_position;
+            v_texcoord = a_texcoord;
+        }
+    </script>
+
+    <script id="fragment-shader-3d" type="x-shader/x-fragment">
+        precision mediump float;
+        uniform sampler2D u_texture;
+        varying vec2 v_texcoord;
+        void main() {
+            gl_FragColor = texture2D(u_texture, v_texcoord);
+        }
+    </script>
+
+    <script id="skybox-vertex-shader" type="x-shader/x-vertex">
+        attribute vec4 a_position;
+        varying vec4 v_position;
+        void main() {
+            v_position = a_position;
+            gl_Position = a_position;
+            gl_Position.z = 1.0;
+        }
+    </script>
+
+    <script id="skybox-fragment-shader" type="x-shader/x-fragment">
+        precision mediump float;
+        uniform samplerCube u_skybox;
+        uniform mat4 u_viewDirectionProjectionInverse;
+        varying vec4 v_position;
+        void main() {
+            vec4 t = u_viewDirectionProjectionInverse * v_position;
+            gl_FragColor = textureCube(u_skybox, normalize(t.xyz / t.w));
+        }
+    </script>
+
+    <script src="https://webglfundamentals.org/webgl/resources/webgl-utils.js"></script>
+    <script src="https://webglfundamentals.org/webgl/resources/m4.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/loaders/OBJLoader.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
