@@ -39,6 +39,9 @@
     <!-- Gestione della musica -->
     <audio id="intro-music" src="./sounds/intro.mp3"></audio>
     <audio id="start-music" src="./sounds/start-game.mp3"></audio>
+    <audio id="random-ghost" src="./sounds/random-ghost.mp3"></audio>
+    <audio id="la-la-la" src="./sounds/la-la-la.mp3"></audio>
+    <audio id="demon-laugh" src="./sounds/demon-laugh.mp3"></audio>
     
     <script>
         const startButton = document.getElementById('start-button');
@@ -50,30 +53,44 @@
         const crosshair = document.getElementById('crosshair');
         const introMusic = document.getElementById('intro-music');
         const startMusic = document.getElementById('start-music');
+        const randomGhostSound = document.getElementById('random-ghost');
+        const laLaLaSound = document.getElementById('la-la-la');
+        const demonLaughSound = document.getElementById('demon-laugh');
         
         // Avvia la musica dell'intro quando viene caricata la pagina
         window.onload = () => {
             introMusic.play();
         };
         
+        // Definizione della funzione per avviare la riproduzione del suono random ghost a intervalli casuali
+        function playRandomGhostSound() {
+            const randomDelay = Math.random() * (30000 - 10000) + 10000; // Intervallo casuale tra 10s e 30s
+            setTimeout(() => {
+                randomGhostSound.play(); // Riproduci il suono
+                playRandomGhostSound();  // Richiama la funzione per continuare a riprodurre il suono a intervalli casuali
+            }, randomDelay);
+        }
+        
         // Evento click per avviare il gioco
         startButton.addEventListener('click', () => {
-            // Interrompi la musica dell'intro e avvia la musica del gioco
+            // Nascondi il menu di avvio e avvia la musica di gioco
             introMusic.pause();
             startMusic.play();
             
-            // Nascondi il menu di avvio
+            // Nascondi il menu e mostra gli elementi di gioco
             startMenu.style.display = 'none';
-            
-            // Nascondi il puntatore del mouse
-            document.body.classList.add('no-cursor');
-            
-            // Mostra gli elementi di gioco
             canvas.style.display = 'block';
             container.style.display = 'block';
             controlPanel.style.display = 'block';
             instructions.style.display = 'block';
             crosshair.style.display = 'block';
+            
+            // Avvia l'audio a intervalli casuali
+            playRandomGhostSound();
+            
+            // Blocca il puntatore e nascondi il mouse
+            document.body.requestPointerLock();
+            document.body.style.cursor = 'none';
         });
     </script>
     
@@ -135,17 +152,6 @@
         stats.domElement.style.display = 'none'; // Nascondi all'inizio
         container.appendChild(stats.domElement);
         
-        // Evento per monitorare se il puntatore viene sganciato (es. con il tasto ALT)
-        document.addEventListener('pointerlockchange', () => {
-            if (document.pointerLockElement === null) {
-                // Se il puntatore è stato sganciato, mostra il mouse
-                document.body.style.cursor = 'default';
-            } else {
-                // Se il puntatore è bloccato, nascondi il mouse
-                document.body.style.cursor = 'none';
-            }
-        });
-        
         // Quando il gioco inizia, blocca il puntatore e nascondi il mouse
         startButton.addEventListener('click', () => {
             stats.domElement.style.display = 'block';  // Mostra il contatore degli FPS
@@ -192,8 +198,16 @@
         });
         
         container.addEventListener('mousedown', () => {
-            document.body.requestPointerLock();
-            document.getElementById('crosshair').style.display = 'block'; // Rendi visibile il crosshair
+            canvas.requestPointerLock();  // Richiedi il blocco del puntatore sul canvas
+            document.getElementById('crosshair').style.display = 'block'; // Mostra il crosshair
+        });
+        
+        document.addEventListener('pointerlockchange', () => {
+            if (document.pointerLockElement === canvas) {  // Controlla se il canvas ha il blocco del puntatore
+                document.body.style.cursor = 'none';  // Nascondi il cursore
+            } else {
+                document.body.style.cursor = 'default';  // Mostra il cursore
+            }
         });
         
         document.body.addEventListener('mousemove', (event) => {
@@ -694,7 +708,6 @@
         renderer.render(scene, camera);
         stats.update();
     }
-    
 </script>
 </body>
 </html>
