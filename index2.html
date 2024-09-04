@@ -39,6 +39,9 @@
     <!-- Gestione della musica -->
     <audio id="intro-music" src="./sounds/intro.mp3"></audio>
     <audio id="start-music" src="./sounds/start-game.mp3"></audio>
+    <audio id="random-ghost" src="./sounds/random-ghost.mp3"></audio>
+    <audio id="la-la-la" src="./sounds/la-la-la.mp3"></audio>
+    <audio id="demon-laugh" src="./sounds/demon-laugh.mp3"></audio>
     
     <script>
         const startButton = document.getElementById('start-button');
@@ -50,6 +53,9 @@
         const crosshair = document.getElementById('crosshair');
         const introMusic = document.getElementById('intro-music');
         const startMusic = document.getElementById('start-music');
+        const randomGhostSound = document.getElementById('random-ghost');
+        const laLaLaSound = document.getElementById('la-la-la');
+        const demonLaughSound = document.getElementById('demon-laugh');
         
         // Avvia la musica dell'intro quando viene caricata la pagina
         window.onload = () => {
@@ -74,7 +80,31 @@
             controlPanel.style.display = 'block';
             instructions.style.display = 'block';
             crosshair.style.display = 'block';
+
+            // Avvia i suoni random solo dopo che il gioco è stato avviato
+            playRandomGhostSound();
         });
+        
+        // Funzione per avviare la riproduzione del suono random ghost a intervalli casuali
+        function playRandomGhostSound() {
+            const randomDelay = Math.random() * (60000 - 10000) + 10000; // Intervallo casuale tra 10s e 1min
+            setTimeout(() => {
+                randomGhostSound.play();
+                playRandomGhostSound(); // Richiama la funzione per continuare a riprodurre il suono a intervalli casuali
+            }, randomDelay);
+        }
+
+        function interactWithDoll() {
+            if (!playerCollider || !dollPosition) return; // Controllo per evitare errori prima della definizione
+
+            const playerPosition = playerCollider.end;
+            const distanceToDoll = playerPosition.distanceTo(dollPosition);
+            
+            if (distanceToDoll < 3) { // Se il giocatore è vicino alla bambola (distanza < 3)
+                const randomSound = Math.random() < 0.5 ? laLaLaSound : demonLaughSound;
+                randomSound.play();
+            }
+        }
     </script>
     
     <script type="importmap">
@@ -163,14 +193,12 @@
             document.body.style.cursor = 'none';
         });
         
-        
-        
         const GRAVITY = 30;
         const STEPS_PER_FRAME = 5;
         
         const worldOctree = new Octree();
         
-        const playerCollider = new Capsule(new THREE.Vector3(0, 0.35, 0), new THREE.Vector3(0, 4, 0), 0.35);
+        let playerCollider = new Capsule(new THREE.Vector3(0, 0.35, 0), new THREE.Vector3(0, 4, 0), 0.35);
         const playerVelocity = new THREE.Vector3();
         const playerDirection = new THREE.Vector3();
         
@@ -180,9 +208,9 @@
         
         const keyStates = {};
         
-        document.addEventListener('keydown', (event) => {
-            keyStates[event.code] = true;
-        });
+        document.addEventListener('keydown', (event) => { keyStates[event.code] = true; });
+        document.addEventListener('keyup', (event) => { keyStates[event.code] = false; });
+        
         
         document.addEventListener('keyup', (event) => {
             keyStates[event.code] = false;
@@ -232,6 +260,9 @@
         const floorMaterial = new THREE.MeshStandardMaterial({ map: floorTexture });
         const glassMaterial = new THREE.MeshStandardMaterial({ color: 0x88ccee, opacity: 0.3, transparent: true, side: THREE.DoubleSide });
         const doorMaterial = new THREE.MeshStandardMaterial({ map: doorTexture });
+        
+        // Posizione della bambola
+        const dollPosition = new THREE.Vector3((Math.random() - 0.5) * roomWidth, 0, (Math.random() - 0.5) * roomDepth);
         
         function createWallWithWindowAndDoor() {
             const frontWallTop = new THREE.Mesh(
@@ -456,7 +487,7 @@
                 }
             });
             
-            object.position.set((Math.random() - 0.5) * roomWidth, 0, (Math.random() - 0.5) * roomDepth);
+            object.position.set(dollPosition);
             object.scale.set(1, 1, 1);
             scene.add(object);
         });
@@ -597,21 +628,14 @@
             playerOnFloor = false;
             if (result) {
                 playerOnFloor = result.normal.y > 0;
-                if (!playerOnFloor) {
-                    playerVelocity.addScaledVector(result.normal, -result.normal.dot(playerVelocity));
-                }
-                if (result.depth >= 1e-10) {
-                    playerCollider.translate(result.normal.multiplyScalar(result.depth));
-                }
+                playerVelocity.addScaledVector(result.normal, -result.normal.dot(playerVelocity));
+                playerCollider.translate(result.normal.multiplyScalar(result.depth));
             }
         }
         
         function updatePlayer(deltaTime) {
             let damping = Math.exp(-4 * deltaTime) - 1;
-            if (!playerOnFloor) {
-                playerVelocity.y -= GRAVITY * deltaTime;
-                damping *= 0.1;
-            }
+            if (!playerOnFloor) playerVelocity.y -= 30 * deltaTime;
             playerVelocity.addScaledVector(playerVelocity, damping);
             const deltaPosition = playerVelocity.clone().multiplyScalar(deltaTime);
             playerCollider.translate(deltaPosition);
@@ -695,17 +719,27 @@
             camera.rotation.set(0, 0, 0);
         }
     }
-    
-    function animate() {
-        const deltaTime = Math.min(0.05, clock.getDelta()) / STEPS_PER_FRAME;
-        for (let i = 0; i < STEPS_PER_FRAME; i++) {
-            controls(deltaTime);
+        
+        function animate() {
+            const deltaTime = Math.min(0.05, clock.getDelta()) / 5;
             updatePlayer(deltaTime);
-            teleportPlayerIfOob();
+            interactWithDoll();
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
         }
-        renderer.render(scene, camera);
-        stats.update();
-    }
+        
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setAnimationLoop(animate);
+        container.appendChild(renderer.domElement);
+        
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        animate();
     
 </script>
 </body>
