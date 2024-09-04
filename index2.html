@@ -431,18 +431,6 @@
             scene.add(object);
         });
         
-        mtlLoader.load('models/haunted_statue.mtl', (materials) => {
-            materials.preload();
-            objLoader.setMaterials(materials);
-            objLoader.load('models/haunted_statue.obj', (object) => {
-                object.position.set(0, 0, 0);
-                object.scale.set(0.3, 0.3, 0.3);
-                object.castShadow = true; // Abilita le ombre per l'oggetto
-                object.receiveShadow = true; // Permette all'oggetto di ricevere le ombre
-                scene.add(object);
-            });
-        });
-        
         // Caricamento del modello OBJ della bambola
         const dollTexture = textureLoader.load('models/Doll_Doll_BaseColor.png');
         
