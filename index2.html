@@ -69,7 +69,9 @@
                 randomGhostSound.play(); // Riproduci il suono
                 playRandomGhostSound();  // Richiama la funzione per continuare a riprodurre il suono a intervalli casuali
             }, randomDelay);
-        }// Evento click per avviare il gioco
+        }
+        
+        // Evento click per avviare il gioco
         startButton.addEventListener('click', () => {
             // Nascondi il menu di avvio e avvia la musica di gioco
             introMusic.pause();
