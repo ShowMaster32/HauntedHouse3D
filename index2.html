@@ -69,9 +69,7 @@
                 randomGhostSound.play(); // Riproduci il suono
                 playRandomGhostSound();  // Richiama la funzione per continuare a riprodurre il suono a intervalli casuali
             }, randomDelay);
-        }
-        
-        // Evento click per avviare il gioco
+        }// Evento click per avviare il gioco
         startButton.addEventListener('click', () => {
             // Nascondi il menu di avvio e avvia la musica di gioco
             introMusic.pause();
@@ -88,9 +86,12 @@
             // Avvia l'audio a intervalli casuali
             playRandomGhostSound();
             
-            // Blocca il puntatore e nascondi il mouse
-            document.body.requestPointerLock();
-            document.body.style.cursor = 'none';
+            // Richiedi il blocco del puntatore con un piccolo ritardo
+            setTimeout(() => {
+                canvas.requestPointerLock();
+            }, 100);  // 100 millisecondi di ritardo per permettere al browser di aggiornare lo stato
+            
+            document.body.style.cursor = 'none';  // Nascondi il mouse
         });
     </script>
     
@@ -144,6 +145,18 @@
         renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Migliore qualità delle ombre
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         container.appendChild(renderer.domElement);
+        
+        let isPointerLocked = false; // Variabile per tracciare lo stato del blocco del puntatore
+        
+        // Funzione per richiedere il blocco del puntatore
+        function requestPointerLock() {
+            if (!isPointerLocked) {
+                canvas.requestPointerLock();
+            }
+        }
+        
+        // Aggiungi evento per rientrare nel "pointer lock" cliccando sul canvas
+        canvas.addEventListener('click', requestPointerLock);
         
         // Definisci il contatore degli FPS e la telemetria come nascosti all'inizio
         const stats = new Stats();
@@ -202,18 +215,30 @@
             document.getElementById('crosshair').style.display = 'block'; // Mostra il crosshair
         });
         
+        // Gestisci il cambiamento dello stato del pointer lock
         document.addEventListener('pointerlockchange', () => {
-            if (document.pointerLockElement === canvas) {  // Controlla se il canvas ha il blocco del puntatore
-                document.body.style.cursor = 'none';  // Nascondi il cursore
+            if (document.pointerLockElement === canvas) {
+                isPointerLocked = true;
+                document.body.style.cursor = 'none';  // Nascondi il cursore quando è bloccato
             } else {
-                document.body.style.cursor = 'default';  // Mostra il cursore
+                isPointerLocked = false;
+                document.body.style.cursor = 'default';  // Mostra il cursore quando non è bloccato
             }
         });
         
-        document.body.addEventListener('mousemove', (event) => {
-            if (document.pointerLockElement === document.body) {
+        // Evento mousemove per muovere la camera solo se il puntatore è bloccato sul canvas
+        document.addEventListener('mousemove', (event) => {
+            if (document.pointerLockElement === canvas) {  // Controlla se il puntatore è bloccato sul canvas
                 camera.rotation.y -= event.movementX / 500;
                 camera.rotation.x -= event.movementY / 500;
+                camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));  // Limita il pitch della camera
+            }
+        });
+        
+        // Aggiungi evento per richiedere il pointer lock cliccando sul canvas
+        canvas.addEventListener('click', () => {
+            if (!isPointerLocked) {
+                canvas.requestPointerLock();
             }
         });
         
