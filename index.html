@@ -655,6 +655,29 @@
         });
     });
     
+    // Caricamento del modello OBJ dell'orologio
+    const clockTexture = textureLoader.load('models/orologio-horror/textures/Clock_default_color.jpg');
+    
+    mtlLoader.load('models/orologio_horror.mtl', (materials) => {
+        materials.preload();
+        objLoader.setMaterials(materials);
+        objLoader.load('models/orologio_horror.obj', (object) => {
+            object.traverse((child) => {
+                if (child.isMesh) {
+                    child.material.map = clockTexture;
+                    child.material.needsUpdate = true;
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+            object.position.set(-5, 3, -13.2);
+            object.rotation.set(0, -7, 0);  // Gli angoli di rotazione sono in radianti, probabilmente vuoi usarne di più piccoli
+            object.scale.set(2.5, 2.5, 2.5);
+            
+            scene.add(object);
+        });
+    });
+    
     // Aggiunta delle texture per il materiale dell'interruttore
     const baseColor = textureLoader.load('textures/DefaultMaterial_Base_color.png');
     const normalMap = textureLoader.load('textures/DefaultMaterial_Normal.png');
