@@ -688,10 +688,18 @@
         // Raggio entro il quale il suono viene attivato
         const proximityRadius = 5; // Imposta il raggio di prossimità alla bambola
         
-        // Funzione per riprodurre casualmente uno dei due suoni
+        // Funzione per riprodurre casualmente uno dei due suoni solo se la luce è spenta
         function playRandomDollSound() {
-            const randomSound = Math.random() < 0.5 ? laLaLaSound : demonLaughSound; // 50% di probabilità per ogni suono
-            randomSound.play();
+            if (!pointLight.visible) {  // Controlla se la luce è spenta
+                const randomSound = Math.random() < 0.5 ? laLaLaSound : demonLaughSound; // 50% di probabilità per ogni suono
+                if (!randomSound.playing) {  // Controlla che il suono non sia già in esecuzione
+                    randomSound.play();
+                    randomSound.playing = true;
+                    randomSound.onended = () => {
+                        randomSound.playing = false;  // Reimposta lo stato dopo che il suono è terminato
+                    };
+                }
+            }
         }
         
         // Aggiorna la funzione `controls` per includere il controllo di prossimità alla bambola
