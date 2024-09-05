@@ -94,6 +94,11 @@
             }, 100);  // 100 millisecondi di ritardo per permettere al browser di aggiornare lo stato
             
             document.body.style.cursor = 'none';  // Nascondi il mouse
+            
+            // Inizia il ciclo di animazione DOPO che renderer è definito
+            if (typeof renderer !== 'undefined') {
+                renderer.setAnimationLoop(animate);
+            }
         });
     </script>
     
@@ -744,6 +749,26 @@
             playerCollider.radius = 0.35;
             camera.position.copy(playerCollider.end);
             camera.rotation.set(0, 0, 0);
+        }
+    }
+    
+    // Funzione per gestire l'interazione con la bambola
+    function interactWithDoll() {
+        if (!playerCollider || !dollPosition) return;
+        
+        const playerPosition = playerCollider.end;
+        const distanceToDoll = playerPosition.distanceTo(dollPosition);
+        
+        if (distanceToDoll < 10) {
+            const randomSound = Math.random() < 0.5 ? laLaLaSound : demonLaughSound;
+            
+            if (!randomSound.playing) {
+                randomSound.play();
+                randomSound.playing = true;
+                randomSound.onended = () => {
+                    randomSound.playing = false;
+                };
+            }
         }
     }
     
