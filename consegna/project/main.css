@@ -1,0 +1,193 @@
+/* Stile per il corpo della pagina */
+body {
+    margin: 0;
+    overflow: hidden;
+    font-family: 'Creepster', cursive;
+    background-color: black;
+    color: white;
+}
+
+#canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    display: inline-block; /* Usa inline-block per evitare problemi con block */
+}
+
+#top-bar {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-family: 'Creepster', cursive;
+    display: flex;
+    justify-content: space-between;
+    min-width: 150px;
+    z-index: 1000;
+}
+
+@media (max-width: 768px) {
+    #top-bar {
+        height: 40px; /* Riduci l'altezza della barra */
+        font-size: 14px; /* Riduci la dimensione del font */
+        padding: 5px; /* Meno padding */
+        justify-content: space-between; /* Riduci gli spazi tra gli elementi */
+    }
+}
+
+@media (max-width: 480px) {
+    #top-bar {
+        display: none; /* Nascondi la barra completamente sui dispositivi molto piccoli */
+    }
+}
+
+/* Stile per il menu iniziale con trasparenza e overlay */
+#start-menu {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), 
+                url('images/background.png') no-repeat center center; /* Aggiunge l'overlay semitrasparente */
+    background-size: cover;
+    backdrop-filter: blur(5px); /* Aggiunge l'effetto sfocatura */
+}
+
+/* Stile per il titolo con un aspetto più inquietante */
+#start-menu h1 {
+    font-size: 5rem;
+    color: #ff3333;
+    text-shadow: 4px 4px 10px #000, 6px 6px 0 #ff0000, 8px 8px 15px #ff3333;
+    margin-bottom: 50px;
+    letter-spacing: 2px;
+}
+
+/* Stile per il pulsante "INIZIA" */
+#start-button {
+    padding: 20px 50px;
+    font-size: 1.5rem;
+    background: rgba(255, 255, 255, 0.15);
+    border: 2px solid #ff3333;
+    color: white;
+    cursor: pointer;
+    transition: background 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
+    backdrop-filter: blur(2px); /* Sfocatura sul pulsante */
+}
+
+#start-button:hover {
+    background: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 0 10px #fff, 0 0 20px #ff3333, 0 0 30px #ff3333;
+    transform: scale(1.1); /* Ingrandimento al passaggio del mouse */
+}
+
+/* Stile per il puntatore */
+body.no-cursor {
+    cursor: none;
+}
+
+/* Stile per il crosshair */
+#crosshair {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 24px;
+    height: 24px;
+    background: url('images/crosshair.png') no-repeat center center;
+    background-size: contain;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    display: none;
+}
+
+/* Stile per le istruzioni */
+#instructions {
+    position: absolute;
+    top: 10%;
+    width: 100%;
+    text-align: center;
+    font-size: 48px;
+    color: white;
+    font-weight: bold;
+    visibility: hidden;
+}
+
+#instructions span {
+    color: yellow;
+}
+
+/* Stile per il pannello laterale */
+#side-panel {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 250px;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.85);
+    padding: 20px;
+    color: white;
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.7);
+    transform: translateX(100%); /* Nascondi fuori dallo schermo */
+    transition: transform 0.3s ease; /* Animazione di apertura/chiusura */
+}
+
+/* Quando il pannello è visibile */
+#side-panel.visible {
+    transform: translateX(0); /* Mostra il pannello */
+}
+
+/* Stile per nascondere il pannello */
+.hidden {
+    display: none;
+}
+
+/* Adattamento dinamico per la barra superiore */
+#fps-counter {
+    font-family: 'Creepster', cursive;
+    color: white;
+}
+
+#panel-instructions {
+    font-style: italic;
+    opacity: 0.8;
+}
+
+/* Stile per il pannello laterale */
+#side-panel {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 250px;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.85);
+    padding: 20px;
+    color: white;
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.7);
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+}
+
+#side-panel.visible {
+    transform: translateX(0);
+}
+
+.hidden {
+    display: none;
+}
+
+#game-controls {
+    color: white; /* Colore del testo */
+    font-family: 'Creepster', sans-serif; /* Font usato per il titolo */
+    font-size: 1.2em; /* Dimensione del font */
+    margin-left: 20px; /* Spazio a sinistra per separare dal resto */
+}

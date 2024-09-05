@@ -662,22 +662,23 @@
     });
     
     // Caricamento del modello OBJ dell'orologio
-    const clockTexture = textureLoader.load('models/orologio-horror/textures/Clock_default_color.jpg');
+    const clockTexture = textureLoader.load('models/orologio-horror_baseColor.jpg');
     
-    mtlLoader.load('models/orologio_horror.mtl', (materials) => {
+    mtlLoader.load('models/orologio-horror.mtl', (materials) => {
         materials.preload();
         objLoader.setMaterials(materials);
-        objLoader.load('models/orologio_horror.obj', (object) => {
+        objLoader.load('models/orologio-horror.obj', (object) => {
             object.traverse((child) => {
                 if (child.isMesh) {
                     child.material.map = clockTexture;
                     child.material.needsUpdate = true;
+                    child.material.side = THREE.DoubleSide;
                     child.castShadow = true;
                     child.receiveShadow = true;
                 }
             });
-            object.position.set(-5, 3, -13.2);
-            object.rotation.set(0, -7, 0);  // Gli angoli di rotazione sono in radianti, probabilmente vuoi usarne di più piccoli
+            object.position.set(-5, 2.5, -10.5);
+            object.rotation.set(-Math.PI / 2, 0, Math.PI);
             object.scale.set(2.5, 2.5, 2.5);
             
             scene.add(object);
