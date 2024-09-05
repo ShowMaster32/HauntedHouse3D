@@ -718,11 +718,9 @@
             // Controlla la distanza tra il giocatore e la bambola
             const distanceToDoll = playerPosition.distanceTo(dollPosition);
             
+            // Se il giocatore è vicino alla bambola e la luce è spenta, avvia un suono casuale
             if (distanceToDoll < proximityRadius) {
-                // Se il giocatore è vicino alla bambola, avvia un suono casuale
-                if (!laLaLaSound.isPlaying && !demonLaughSound.isPlaying) { // Evita di riprodurre suoni multipli
-                    playRandomDollSound();
-                }
+                playRandomDollSound();
             }
             
             const distanceToSwitch = playerPosition.distanceTo(switchPosition);
@@ -741,7 +739,8 @@
             instructions.style.visibility = 'hidden';
             crosshair.style.backgroundImage = "url('images/crosshair.png')"; // Torna al crosshair originale
         }
-    }    
+    }
+    
     function teleportPlayerIfOob() {
         if (camera.position.y <= -20) {
             playerCollider.start.set(0, 0.35, 0);
