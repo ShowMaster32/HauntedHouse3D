@@ -29,7 +29,6 @@
     
     <!-- Barra in alto -->
     <div id="top-bar" style="display: none;">
-        <span id="fps-counter">FPS: </span>
         <span id="panel-instructions">Press P to open control panel</span>
         <span id="game-controls" style="margin-left: 20px;"></span> <!-- Legenda dei comandi -->
     </div>
@@ -55,7 +54,7 @@
         const startMenu = document.getElementById('start-menu');
         const canvas = document.getElementById('canvas');
         const container = document.getElementById('container');
-        const controlPanel = document.getElementById('control-panel');
+        const controlPanel = document.getElementById('side-panel');
         const instructions = document.getElementById('instructions');
         const crosshair = document.getElementById('crosshair');
         const introMusic = document.getElementById('intro-music');
@@ -78,17 +77,16 @@
             }, randomDelay);
         }
         
-        // Funzione per mostrare la legenda dei comandi
         function showGameControls() {
             const gameControls = document.getElementById('game-controls');
             gameControls.innerHTML = `
-        W: Move Forward | 
-        S: Move Backward | 
-        A: Move Left | 
-        D: Move Right | 
-        F: Toggle Light | 
-        P: Open/Close Control Panel
-    `;
+                W: Move Forward | 
+                S: Move Backward | 
+                A: Move Left | 
+                D: Move Right | 
+                F: Toggle Light | 
+                P: Open/Close Control Panel
+            `;
         }
         
         // Evento click per avviare il gioco
@@ -107,7 +105,7 @@
             
             // Mostra la barra superiore con la legenda dei comandi
             const topBar = document.getElementById('top-bar');
-            topBar.style.display = 'block';  // Mostra la top bar
+            topBar.style.display = 'flex';  // Mostra la top bar come flex
             showGameControls();  // Mostra la legenda dei comandi
             
             // Avvia l'audio a intervalli casuali
@@ -215,6 +213,13 @@
             // Blocca il puntatore e nascondi il mouse
             document.body.requestPointerLock();
             document.body.style.cursor = 'none';
+
+            // Mostra la top bar
+            const topBar = document.getElementById('top-bar');
+            topBar.style.display = 'flex';  // Cambia da 'none' a 'flex' per mostrare la top bar
+
+            // Mostra i comandi
+            showGameControls();
         });
         
         
@@ -459,9 +464,10 @@
     });
     
     window.addEventListener('resize', () => {
-        const topBar = document.getElementById('top-bar');
-        topBar.style.left = `${(window.innerWidth - topBar.offsetWidth) / 2}px`;
-    });
+    const topBar = document.getElementById('top-bar');
+    topBar.style.left = '50%'; // Posiziona sempre al centro
+    topBar.style.transform = 'translateX(-50%)'; // Corregge lo spostamento di metà della larghezza
+});
     
     
     function onWindowResize() {
