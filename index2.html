@@ -677,6 +677,19 @@
         }
         
         // Controllo e aggiornamento della posizione e dell'interazione del giocatore
+        // Posizione della bambola (aggiorna con la posizione effettiva della tua bambola)
+        const dollPosition = new THREE.Vector3((Math.random() - 0.5) * roomWidth, 0, (Math.random() - 0.5) * roomDepth);
+        
+        // Raggio entro il quale il suono viene attivato
+        const proximityRadius = 5; // Imposta il raggio di prossimità alla bambola
+        
+        // Funzione per riprodurre casualmente uno dei due suoni
+        function playRandomDollSound() {
+            const randomSound = Math.random() < 0.5 ? laLaLaSound : demonLaughSound; // 50% di probabilità per ogni suono
+            randomSound.play();
+        }
+        
+        // Aggiorna la funzione `controls` per includere il controllo di prossimità alla bambola
         function controls(deltaTime) {
             const speedDelta = deltaTime * (playerOnFloor ? 25 : 8);
             if (keyStates['KeyW']) {
@@ -696,9 +709,19 @@
             }
             
             const playerPosition = playerCollider.end;
-            const distanceToSwitch = playerPosition.distanceTo(switchPosition);
             
-            if (distanceToSwitch < 2) {  // Se il giocatore è vicino all'interruttore
+            // Controlla la distanza tra il giocatore e la bambola
+            const distanceToDoll = playerPosition.distanceTo(dollPosition);
+            
+            if (distanceToDoll < proximityRadius) {
+                // Se il giocatore è vicino alla bambola, avvia un suono casuale
+                if (!laLaLaSound.isPlaying && !demonLaughSound.isPlaying) { // Evita di riprodurre suoni multipli
+                    playRandomDollSound();
+                }
+            }
+            
+            const distanceToSwitch = playerPosition.distanceTo(switchPosition);
+            if (distanceToSwitch < 7) {  // Se il giocatore è vicino all'interruttore
             instructions.style.visibility = 'visible';
             crosshair.style.backgroundImage = "url('images/crosshair-selection.png')"; // Cambia il colore del crosshair
             
@@ -713,8 +736,7 @@
             instructions.style.visibility = 'hidden';
             crosshair.style.backgroundImage = "url('images/crosshair.png')"; // Torna al crosshair originale
         }
-    }
-    
+    }    
     function teleportPlayerIfOob() {
         if (camera.position.y <= -20) {
             playerCollider.start.set(0, 0.35, 0);
