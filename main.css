@@ -7,6 +7,15 @@ body {
     color: white;
 }
 
+#canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    display: inline-block; /* Usa inline-block per evitare problemi con block */
+}
+
 /* Stile per il menu iniziale con trasparenza e overlay */
 #start-menu {
     position: absolute;
@@ -163,7 +172,8 @@ body.no-cursor {
 }
 
 #game-controls {
-    color: white;
-    font-size: 14px;
-    font-family: 'Creepster', sans-serif;
+    color: white; /* Colore del testo */
+    font-family: 'Creepster', sans-serif; /* Font usato per il titolo */
+    font-size: 1.2em; /* Dimensione del font */
+    margin-left: 20px; /* Spazio a sinistra per separare dal resto */
 }
