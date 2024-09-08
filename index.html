@@ -664,10 +664,10 @@
     // Caricamento del modello OBJ dell'orologio
     const clockTexture = textureLoader.load('models/orologio-horror_baseColor.jpg');
     
-    mtlLoader.load('models/orologio-horror.mtl', (materials) => {
+    mtlLoader.load('models/pendent-clock.mtl', (materials) => {
         materials.preload();
         objLoader.setMaterials(materials);
-        objLoader.load('models/orologio-horror.obj', (object) => {
+        objLoader.load('models/pendent-clock.obj', (object) => {
             object.traverse((child) => {
                 if (child.isMesh) {
                     child.material.map = clockTexture;
