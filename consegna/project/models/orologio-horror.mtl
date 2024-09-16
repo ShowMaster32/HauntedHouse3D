@@ -1,9 +1,0 @@
-newmtl orologio-horror_baseColor
-Ka 0.117647 0.117647 0.117647
-Kd 1.000000 1.000000 1.000000
-Ks 0.752941 0.752941 0.752941
-Tr 1.000000
-d 1.000000
-Ns 600.000000
-map_Kd orologio-horror_baseColor.jpg
-map_bump orologio-horror_baseColor.jpg

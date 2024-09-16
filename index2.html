@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Progetto CG A.A.2023/2024</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
+    <link href="https://fonts.googleapis.com/css2?family=Creepster&display=swap" rel="stylesheet">
+    <link type="text/css" rel="stylesheet" href="main.css">
+    <script src="./libs/webgl-utils.js"></script>
+    <script src="./libs/m4.js"></script>
+    <script src="./libs/glm-js.min.js"></script>
+    <script src="./libs/dat.gui.min.js"></script>
+    <script src="./libs/jquery-3.6.0.min.js"></script>
+
+</head>
+<body>
+    <!-- Start Menu -->
+    <div id="start-menu">
+        <h1>Welcome to HauntedHouse</h1>
+        <button id="start-button">START</button>
+    </div>
+    
+    <!-- Canvas per il rendering -->
+    <canvas id="canvas" style="display: none;"></canvas> <!-- Nascondi il canvas all'inizio -->
+    
+    <!-- Contenitore del gioco -->
+    <div id="container" style="display: none;"></div>
+    
+    <!-- Istruzioni -->
+    <div id="instructions" style="visibility: hidden;">Press <span>F</span> to turn on the light</div>
+    
+    <!-- Crosshair per mirare -->
+    <div id="crosshair" style="display: none;"></div>
+    
+    <!-- Barra in alto -->
+    <div id="top-bar" style="display: none;">
+        <span id="panel-instructions">Press P to open control panel</span>
+        <span id="game-controls" style="margin-left: 20px;"></span> <!-- Legenda dei comandi -->
+    </div>
+    
+    <!-- Pannello laterale nascosto all'inizio -->
+    <div id="side-panel" class="hidden">
+        <h2>Control Panel</h2>
+        <button id="toggleShadows">Toggle Shadows</button>
+        <button id="toggleReflections">Toggle Reflections</button>
+        <button id="toggleFPS">Toggle FPS Counter</button>
+        <button id="advancedRendering">Toggle Advanced Rendering</button>
+    </div>
+    
+    <!-- Gestione della musica -->
+    <audio id="intro-music" src="./sounds/intro.mp3"></audio>
+    <audio id="start-music" src="./sounds/start-game.mp3"></audio>
+    <audio id="random-ghost" src="./sounds/random-ghost.mp3"></audio>
+    <audio id="la-la-la" src="./sounds/la-la-la.mp3"></audio>
+    <audio id="demon-laugh" src="./sounds/demon-laugh.mp3"></audio>
+    
+    <script type="module">
+
+        const canvas = document.getElementById('canvas');
+        const gl = webglUtils.setupWebGL(canvas);
+        if (!gl) {
+            alert("WebGL non è supportato sul tuo browser.");
+        }
+
+        // Inizializza i controlli con dat.gui
+        const gui = new GUI.GUI();
+
+        // Definizione delle dimensioni della stanza
+        const roomWidth = 20;
+        const roomHeight = 10;
+        const roomDepth = 25;
+
+        let scene = []; // Contiene gli oggetti della scena
+        let objects = {}; // Per tenere traccia degli oggetti caricati
+
+        // Funzione per creare cubi (usati per i muri, pavimento e soffitto)
+        function createCube(gl, width, height, depth, color) {
+            const vertices = new Float32Array([
+                // Front face
+                -width / 2, -height / 2, depth / 2,
+                 width / 2, -height / 2, depth / 2,
+                 width / 2,  height / 2, depth / 2,
+                -width / 2,  height / 2, depth / 2,
+                // Back face
+                -width / 2, -height / 2, -depth / 2,
+                 width / 2, -height / 2, -depth / 2,
+                 width / 2,  height / 2, -depth / 2,
+                -width / 2,  height / 2, -depth / 2
+            ]);
+            const colors = new Float32Array([
+                color[0], color[1], color[2], 1.0,
+                color[0], color[1], color[2], 1.0,
+                color[0], color[1], color[2], 1.0,
+                color[0], color[1], color[2], 1.0,
+            ]);
+            const indices = new Uint16Array([
+                0, 1, 2, 0, 2, 3, // Front face
+                4, 5, 6, 4, 6, 7  // Back face
+            ]);
+            return { vertices, colors, indices };
+        }
+
+        // Funzione per creare muri, pavimento e soffitto
+        function createRoom(gl) {
+            const walls = [];
+
+            const wallColor = [0.5, 0.5, 0.5];
+            walls.push(createCube(gl, roomWidth, roomHeight, 0.1, wallColor)); // Front wall
+            walls.push(createCube(gl, roomWidth, roomHeight, 0.1, wallColor)); // Back wall
+            walls.push(createCube(gl, 0.1, roomHeight, roomDepth, wallColor)); // Left wall
+            walls.push(createCube(gl, 0.1, roomHeight, roomDepth, wallColor)); // Right wall
+
+            const floorColor = [0.4, 0.3, 0.3];
+            walls.push(createCube(gl, roomWidth, 0.1, roomDepth, floorColor)); // Floor
+
+            const ceilingColor = [0.9, 0.9, 0.9];
+            walls.push(createCube(gl, roomWidth, 0.1, roomDepth, ceilingColor)); // Ceiling
+
+            return walls;
+        }
+
+        scene.push(...createRoom(gl)); // Aggiungi i muri, pavimento e soffitto alla scena
+
+        // Funzione per caricare i modelli OBJ
+        function loadModel(gl, url, name, position = [0, 0, 0], rotation = [0, 0, 0], scale = [1, 1, 1]) {
+            const loader = new GLMOBJLoader();
+            loader.load(url, (object) => {
+                object.position = position;
+                object.rotation = rotation;
+                object.scale = scale;
+                objects[name] = object; // Salva l'oggetto con un nome
+                scene.push(object);     // Aggiungi l'oggetto alla scena
+            });
+        }
+
+        // Caricamento dei teschi e altri oggetti
+        function addSkulls() {
+            const skullPositions = [
+                { x: -8, y: 0, z: -11.0 },
+                { x: -8, y: 1.5, z: -10.8 },
+                { x: -8, y: 3.3, z: -10.9 },
+                { x: 8, y: 0.2, z: -10.9 },
+                { x: 8, y: 1.8, z: -10.6 },
+                { x: -8, y: 0, z: 11.3 },
+                { x: -8, y: 2, z: 11.3 },
+                { x: 7.7, y: 0, z: 11.3 },
+                { x: 8, y: 1.4, z: 11.3 },
+                { x: -10, y: 9, z: 0 }, // Skull sopra la porta
+                { x: 10, y: 0.7, z: 4 }
+            ];
+
+            skullPositions.forEach((pos, i) => {
+                loadModel(gl, 'models/skull.obj', `skull${i}`, [pos.x, pos.y, pos.z]);
+            });
+        }
+
+        addSkulls(); // Aggiungi i teschi
+
+        // Caricamento della bambola
+        loadModel(gl, 'models/doll.obj', 'doll', [-5, 0, -11]);
+
+        // Funzione per disegnare la scena
+        function drawScene() {
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+            let viewMatrix = m4.inverse(camera.position);
+            let viewProjectionMatrix = m4.multiply(camera.projectionMatrix, viewMatrix);
+
+            scene.forEach((object) => {
+                loader.render(gl, object, viewProjectionMatrix);
+            });
+        }
+
+        // Funzione di animazione
+        function animate() {
+            drawScene();
+            requestAnimationFrame(animate);
+        }
+
+        // Evento click per avviare il gioco
+        document.getElementById('start-button').addEventListener('click', () => {
+            document.getElementById('start-menu').style.display = 'none';
+            document.getElementById('canvas').style.display = 'block';
+            animate();  // Inizia l'animazione
+        });
+
+    </script>
+
+</body>
+</html>
