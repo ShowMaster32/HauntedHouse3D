@@ -12,6 +12,7 @@
     <script src="./libs/glm-js.min.js"></script>
     <script src="./libs/dat.gui.min.js"></script>
     <script src="./libs/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/webgl-obj-loader@2.0.3/dist/webgl-obj-loader.min.js"></script>
 
 </head>
 <body>
@@ -58,13 +59,14 @@
     <script type="module">
 
         const canvas = document.getElementById('canvas');
-        const gl = webglUtils.setupWebGL(canvas);
+        const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
         if (!gl) {
             alert("WebGL non è supportato sul tuo browser.");
         }
 
+
         // Inizializza i controlli con dat.gui
-        const gui = new GUI.GUI();
+        const gui = new dat.GUI();
 
         // Definizione delle dimensioni della stanza
         const roomWidth = 20;
@@ -124,15 +126,34 @@
 
         // Funzione per caricare i modelli OBJ
         function loadModel(gl, url, name, position = [0, 0, 0], rotation = [0, 0, 0], scale = [1, 1, 1]) {
-            const loader = new GLMOBJLoader();
-            loader.load(url, (object) => {
-                object.position = position;
-                object.rotation = rotation;
-                object.scale = scale;
-                objects[name] = object; // Salva l'oggetto con un nome
-                scene.push(object);     // Aggiungi l'oggetto alla scena
+        fetch(url)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Errore nel caricamento del file OBJ: ${response.statusText}`);
+                }
+                return response.text();
+            })
+            .then(data => {
+                if (!data) {
+                    throw new Error("Il file OBJ è vuoto o non è stato caricato correttamente.");
+                }
+
+                const mesh = new OBJ.Mesh(data); // Usa il costruttore della Mesh con i dati del file OBJ
+
+                // Imposta posizione, rotazione e scala dell'oggetto
+                mesh.position = position;
+                mesh.rotation = rotation;
+                mesh.scale = scale;
+
+                // Aggiungi l'oggetto alla scena
+                objects[name] = mesh;
+                scene.push(mesh);
+            })
+            .catch(error => {
+                console.error("Errore nel caricamento del modello OBJ:", error);
             });
-        }
+    }
+
 
         // Caricamento dei teschi e altri oggetti
         function addSkulls() {
