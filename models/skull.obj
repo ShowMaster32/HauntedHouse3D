@@ -1,10 +1,10 @@
 # 3ds Max Wavefront OBJ Exporter v0.97b - (c)2007 guruware
 # File Created: 21.12.2011 14:29:19
 
-mtllib 12140_Skull_v3_L2.mtl
+mtllib skull.mtl
 
 #
-# object 12140_Skull_v3_jaw
+# object skull
 #
 
 v  -1.6458 -14.7959 1.0976

@@ -1,7 +1,7 @@
 # 3ds Max Wavefront OBJ Exporter v0.97b - (c)2007 guruware
 # File Created: 21.12.2011 14:29:19
 
-newmtl 12140_Skull_v3
+newmtl skull
 	Ns 24.0000
 	Ni 1.5000
 	d 1.0000
