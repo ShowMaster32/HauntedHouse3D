@@ -3,17 +3,14 @@
 <head>
     <title>Progetto CG A.A.2023/2024</title>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <meta name="viewport" content="width=device-width, minimum-scale=1.0, maximum-scale=1.0">
     <link rel="icon" type="image/x-icon" href="images/favicon.ico">
     <link href="https://fonts.googleapis.com/css2?family=Creepster&display=swap" rel="stylesheet">
-    <link type="text/css" rel="stylesheet" href="main.css">
+    <link rel="stylesheet" href="main.css">
 
-    <!-- Librerie consentite dal corso -->
+    <!-- Librerie del corso -->
     <script src="./libs/webgl-utils.js"></script>
     <script src="./libs/m4.js"></script>
-    <script src="./libs/glm-js.min.js"></script>        <!-- se ne hai bisogno -->
-    <script src="./libs/dat.gui.min.js"></script>       <!-- se vuoi un pannello di debug -->
-    <script src="./libs/jquery-3.6.0.min.js"></script>  <!-- se vuoi usare jQuery -->
     <script src="https://cdn.jsdelivr.net/npm/webgl-obj-loader@2.0.3/dist/webgl-obj-loader.min.js"></script>
 </head>
 <body>
@@ -22,430 +19,549 @@
         <h1>Welcome to HauntedHouse</h1>
         <button id="start-button">START</button>
     </div>
-
-    <!-- Canvas per il rendering -->
+    <!-- Canvas -->
     <canvas id="canvas" style="display: none;"></canvas>
-
-    <!-- Contenitore del gioco (es: hud, etc.) -->
+    <!-- Eventuali div/hud -->
     <div id="container" style="display: none;"></div>
 
-    <!-- Istruzioni -->
-    <div id="instructions" style="visibility: hidden;">Press <span>F</span> to turn on the light</div>
-
-    <!-- Crosshair per mirare -->
-    <div id="crosshair" style="display: none;"></div>
-
-    <!-- Barra in alto -->
-    <div id="top-bar" style="display: none;">
-        <span id="panel-instructions">Press P to open control panel</span>
-        <span id="game-controls" style="margin-left: 20px;"></span>
-    </div>
-
-    <!-- Pannello laterale nascosto all'inizio -->
-    <div id="side-panel" class="hidden">
-        <h2>Control Panel</h2>
-        <button id="toggleShadows">Toggle Shadows</button>
-        <button id="toggleReflections">Toggle Reflections</button>
-        <button id="toggleFPS">Toggle FPS Counter</button>
-        <button id="advancedRendering">Toggle Advanced Rendering</button>
-    </div>
-
-    <!-- Gestione della musica -->
-    <audio id="intro-music" src="./sounds/intro.mp3"></audio>
-    <audio id="start-music" src="./sounds/start-game.mp3"></audio>
-    <audio id="random-ghost" src="./sounds/random-ghost.mp3"></audio>
-    <audio id="la-la-la" src="./sounds/la-la-la.mp3"></audio>
-    <audio id="demon-laugh" src="./sounds/demon-laugh.mp3"></audio>
-
-    <!-- Vertex Shader -->
-    <script id="vertex-shader" type="x-shader/x-vertex">
+    <!-- SHADER OGGETTI (VERTEX) -->
+    <script id="obj-vertex-shader" type="x-shader/x-vertex">
     attribute vec4 a_position;
+    attribute vec2 a_texcoord;
 
     uniform mat4 u_matrix;
 
+    varying vec2 v_texcoord;
+
     void main() {
         gl_Position = u_matrix * a_position;
+        v_texcoord  = a_texcoord;
     }
     </script>
 
-    <!-- Fragment Shader -->
-    <script id="fragment-shader" type="x-shader/x-fragment">
+    <!-- SHADER OGGETTI (FRAGMENT) -->
+    <script id="obj-fragment-shader" type="x-shader/x-fragment">
     precision mediump float;
 
-    uniform vec4 u_color;
+    varying vec2 v_texcoord;
+    uniform sampler2D u_texture;
 
     void main() {
-        gl_FragColor = u_color;
+        gl_FragColor = texture2D(u_texture, v_texcoord);
+    }
+    </script>
+
+    <!-- SHADER SKYBOX (VERTEX) -->
+    <script id="sky-vertex-shader" type="x-shader/x-vertex">
+    attribute vec4 a_position;
+    varying vec4 v_position;
+
+    void main() {
+        v_position = a_position;
+        gl_Position = a_position;
+    }
+    </script>
+
+    <!-- SHADER SKYBOX (FRAGMENT) -->
+    <script id="sky-fragment-shader" type="x-shader/x-fragment">
+    precision mediump float;
+
+    uniform mat4 u_invViewProj;
+    uniform samplerCube u_skybox;
+
+    varying vec4 v_position;
+
+    void main() {
+        vec4 t = u_invViewProj * v_position;
+        vec3 dir = normalize(t.xyz / t.w);
+        gl_FragColor = textureCube(u_skybox, dir);
     }
     </script>
 
     <script type="module">
 
     /**************************************************************
-     * 1. GESTIONE UI (Start, Audio, Pointer Lock)
+     * 1. SETUP BASE
      **************************************************************/
-    const startButton    = document.getElementById('start-button');
-    const startMenu      = document.getElementById('start-menu');
-    const canvas         = document.getElementById('canvas');
-    const container      = document.getElementById('container');
-    const instructions   = document.getElementById('instructions');
-    const crosshair      = document.getElementById('crosshair');
-    const introMusic     = document.getElementById('intro-music');
-    const startMusic     = document.getElementById('start-music');
-    const randomGhost    = document.getElementById('random-ghost');
-    const laLaLaSound    = document.getElementById('la-la-la');
-    const demonLaugh     = document.getElementById('demon-laugh');
+    const startButton = document.getElementById('start-button');
+    const startMenu   = document.getElementById('start-menu');
+    const canvas      = document.getElementById('canvas');
+    const container   = document.getElementById('container');
 
-    window.onload = () => {
-        //introMusic.play();
-    };
-
+    // Al click su START
     startButton.addEventListener('click', () => {
-        introMusic.play().catch(err => console.log(err));
-        startMusic.play();
+        // Nascondi menu, mostra canvas
         startMenu.style.display = 'none';
         canvas.style.display    = 'block';
         container.style.display = 'block';
 
-        // Avvio pointer lock
+        // Pointer lock
         canvas.requestPointerLock();
-        document.body.style.cursor = 'none';
 
-        animate();
+        // Avvia animazione
+        requestAnimationFrame(animate);
     });
 
-    /**************************************************************
-     * 2. INIZIALIZZA WEBGL
-     **************************************************************/
-    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-    if(!gl) {
-        alert("Il tuo browser non supporta WebGL!");
-    }
-    resizeCanvas();
-    gl.enable(gl.DEPTH_TEST);
-    gl.clearColor(0,0,0,1);
+    const gl = canvas.getContext("webgl");
+    if(!gl) alert("Il tuo browser non supporta WebGL!");
 
-    window.addEventListener('resize', resizeCanvas);
     function resizeCanvas() {
         canvas.width  = window.innerWidth;
         canvas.height = window.innerHeight;
         gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
     }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    gl.enable(gl.DEPTH_TEST);
+    gl.clearColor(0,0,0,1);
 
     /**************************************************************
-     * 3. SHADER PROGRAM (Vertex + Fragment)
+     * 2. SHADERS
      **************************************************************/
     function createShader(gl, type, source) {
-        const shader = gl.createShader(type);
-        gl.shaderSource(shader, source);
-        gl.compileShader(shader);
-        const ok = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
-        if(!ok) {
-            console.error("Errore shader:", gl.getShaderInfoLog(shader));
-            gl.deleteShader(shader);
+        const s = gl.createShader(type);
+        gl.shaderSource(s, source);
+        gl.compileShader(s);
+        if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(s));
+            gl.deleteShader(s);
             return null;
         }
-        return shader;
+        return s;
     }
+    function createProgram(gl, vsSrc, fsSrc) {
+        const vs = createShader(gl, gl.VERTEX_SHADER,   vsSrc);
+        const fs = createShader(gl, gl.FRAGMENT_SHADER, fsSrc);
+        if(!vs || !fs) return null;
 
-    function createProgram(gl, vsSource, fsSource) {
-        const vs = createShader(gl, gl.VERTEX_SHADER,   vsSource);
-        const fs = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
-        const program = gl.createProgram();
-        gl.attachShader(program, vs);
-        gl.attachShader(program, fs);
-        gl.linkProgram(program);
-        const ok = gl.getProgramParameter(program, gl.LINK_STATUS);
-        if(!ok) {
-            console.error("Errore link programma:", gl.getProgramInfoLog(program));
-            gl.deleteProgram(program);
+        const prog = gl.createProgram();
+        gl.attachShader(prog, vs);
+        gl.attachShader(prog, fs);
+        gl.linkProgram(prog);
+        if(!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+            console.error(gl.getProgramInfoLog(prog));
+            gl.deleteProgram(prog);
             return null;
         }
-        return program;
+        return prog;
     }
 
-    const vsSource = document.getElementById('vertex-shader').text;
-    const fsSource = document.getElementById('fragment-shader').text;
-    const shaderProgram = createProgram(gl, vsSource, fsSource);
-
-    // Location attributi e uniform
-    const aPositionLoc = gl.getAttribLocation(shaderProgram, 'a_position');
-    const uMatrixLoc   = gl.getUniformLocation(shaderProgram, 'u_matrix');
-    const uColorLoc    = gl.getUniformLocation(shaderProgram, 'u_color');
-
-    /**************************************************************
-     * 4. CAMERA E SCENA
-     **************************************************************/
-    // Camera
-    const camera = {
-        position: [0, 0, 10], // z=10 per vedere la stanza
-        rotationX: 0,
-        rotationY: 0,
-        projectionMatrix: null
+    // Programma oggetti
+    const vsObj = document.getElementById('obj-vertex-shader').text;
+    const fsObj = document.getElementById('obj-fragment-shader').text;
+    const objProgram = createProgram(gl, vsObj, fsObj);
+    const objLocs = {
+        a_position: gl.getAttribLocation(objProgram, 'a_position'),
+        a_texcoord: gl.getAttribLocation(objProgram, 'a_texcoord'),
+        u_matrix:   gl.getUniformLocation(objProgram, 'u_matrix'),
+        u_texture:  gl.getUniformLocation(objProgram, 'u_texture'),
     };
 
-    function updateProjection() {
-        const fov   = Math.PI * 0.5; // 90 gradi
-        const aspect= canvas.width / canvas.height;
-        const near  = 0.1;
-        const far   = 1000;
-        camera.projectionMatrix = m4.perspective(fov, aspect, near, far);
-    }
-    updateProjection();
-
-    // Array di oggetti (mesh)
-    let sceneObjs = [];
+    // Programma skybox
+    const vsSky = document.getElementById('sky-vertex-shader').text;
+    const fsSky = document.getElementById('sky-fragment-shader').text;
+    const skyProgram = createProgram(gl, vsSky, fsSky);
+    const skyLocs = {
+        a_position:    gl.getAttribLocation(skyProgram, 'a_position'),
+        u_invViewProj: gl.getUniformLocation(skyProgram, 'u_invViewProj'),
+        u_skybox:      gl.getUniformLocation(skyProgram, 'u_skybox'),
+    };
 
     /**************************************************************
-     * 5. CREAZIONE CUBO COMPLETO (6 facce, 36 indici)
+     * 3. CAMERA E INPUT
      **************************************************************/
-    function createCubeMesh(gl, width, height, depth) {
-        const x = width/2;
-        const y = height/2;
-        const z = depth/2;
-        const vertices = new Float32Array([
-            // 8 vertici
-            // davanti
-            -x, -y,  z,
-             x, -y,  z,
-             x,  y,  z,
-            -x,  y,  z,
-            // dietro
-            -x, -y, -z,
-             x, -y, -z,
-             x,  y, -z,
-            -x,  y, -z
-        ]);
-        const indices = new Uint16Array([
-            // front
-            0,1,2,   0,2,3,
-            // back
-            4,5,6,   4,6,7,
-            // top
-            3,2,6,   3,6,7,
-            // bottom
-            0,1,5,   0,5,4,
-            // right
-            1,2,6,   1,6,5,
-            // left
-            0,3,7,   0,7,4
-        ]);
+    let oldTime = 0;
+    const keys = {};
+    document.addEventListener('keydown', e => { keys[e.code] = true; });
+    document.addEventListener('keyup',   e => { keys[e.code] = false; });
 
-        const mesh = {
-            vertexBuffer: gl.createBuffer(),
-            indexBuffer:  gl.createBuffer(),
-            indexCount:   indices.length,
-            position: [0,0,0],
-            rotation: [0,0,0],
-            scale:    [1,1,1]
-        };
+    document.addEventListener('mousemove', e => {
+        if(document.pointerLockElement === canvas){
+            camera.rotY -= e.movementX * 0.002;
+            camera.rotX -= e.movementY * 0.002;
+            camera.rotX = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotX));
+        }
+    });
 
-        // Carichiamo i dati
-        gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vertexBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+    // Parametri base
+    const GRAVITY     = 30;
+    const jumpImpulse = 10;
 
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+    const camera = {
+        position: [0, 2, 10],
+        rotX: 0,
+        rotY: 0,
 
-        return mesh;
+        velocityY: 0,
+        isOnFloor: false,
+
+        stance: 'stand',     // 'stand' o 'crouch'
+        baseHeight: 2,
+        crouchHeight: 1.4,
+        speedFactor: 1.0,
+    };
+
+    // Toggle crouch
+    function toggleCrouch() {
+        if(camera.stance === 'stand'){
+            camera.stance = 'crouch';
+            camera.speedFactor = 0.7;
+        } else {
+            camera.stance = 'stand';
+            camera.speedFactor = 1.0;
+        }
+    }
+
+    // Teniamo traccia del "KeyC" di frame precedente, per beccare la transizione
+    let oldKeyC = false;
+
+    function updateCamera(dt) {
+        // Gestione crouch
+        if(keys['KeyC'] && !oldKeyC) {
+            toggleCrouch();
+        }
+        oldKeyC = keys['KeyC'];
+
+        // Interp. altezza
+        let targetHeight = (camera.stance==='crouch') ? camera.crouchHeight : camera.baseHeight;
+        let currentHeight= camera.position[1];
+        let alpha= 10*dt;
+        camera.position[1] = Math.max(
+            currentHeight + alpha*(targetHeight - currentHeight),
+            0
+        );
+
+        // Floor
+        if(camera.position[1]<0.001){
+            camera.position[1]=0;
+            camera.isOnFloor= true;
+            camera.velocityY=0;
+        } else {
+            camera.isOnFloor= false;
+        }
+
+        // Salto (solo se stance=stand e isOnFloor)
+        if(keys['Space']){
+            if(camera.stance==='crouch'){
+                // esce dal crouch
+                camera.stance='stand';
+                camera.speedFactor=1.0;
+            } else {
+                // stance stand => salta se onFloor
+                if(camera.isOnFloor){
+                    camera.velocityY= jumpImpulse;
+                    camera.isOnFloor= false;
+                }
+            }
+        }
+
+        // Gravità
+        if(!camera.isOnFloor){
+            camera.velocityY -= GRAVITY* dt;
+            camera.position[1]+= camera.velocityY* dt;
+        }
+
+        // Movement
+        const speed= 10* camera.speedFactor;
+        let forward= [ Math.sin(camera.rotY), 0, Math.cos(camera.rotY)];
+        let right=   [ Math.cos(camera.rotY), 0,-Math.sin(camera.rotY)];
+
+        // W: muoviti avanti ( => -Z se rotY=0)
+        if(keys['KeyW']){
+            camera.position[0] -= forward[0]* dt* speed;
+            camera.position[2] -= forward[2]* dt* speed;
+        }
+        if(keys['KeyS']){
+            camera.position[0] += forward[0]* dt* speed;
+            camera.position[2] += forward[2]* dt* speed;
+        }
+        if(keys['KeyA']){
+            camera.position[0] -= right[0]* dt* speed;
+            camera.position[2] -= right[2]* dt* speed;
+        }
+        if(keys['KeyD']){
+            camera.position[0] += right[0]* dt* speed;
+            camera.position[2] += right[2]* dt* speed;
+        }
+    }
+
+    function computeViewProj(){
+        let fov   = Math.PI*0.5;
+        let aspect= canvas.width/canvas.height;
+        let near  = 0.1;
+        let far   = 1000;
+        let proj  = m4.perspective(fov, aspect, near, far);
+
+        let view  = m4.identity();
+        view= m4.xRotate(view, camera.rotX);
+        view= m4.yRotate(view, camera.rotY);
+        view= m4.translate(view, -camera.position[0], -camera.position[1], -camera.position[2]);
+        return m4.multiply(proj, view);
     }
 
     /**************************************************************
-     * 6. CREAZIONE STANZA (muri, pavimento, soffitto)
+     * 4. SKYBOX
      **************************************************************/
-    const ROOM_W = 20;
-    const ROOM_H = 10;
-    const ROOM_D = 25;
+    let skyTexture= gl.createTexture();
+    let skyBuffer= gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, skyBuffer);
+    let skyVerts= new Float32Array([
+       -1,-1,1,
+        1,-1,1,
+       -1, 1,1,
+       -1, 1,1,
+        1,-1,1,
+        1, 1,1
+    ]);
+    gl.bufferData(gl.ARRAY_BUFFER, skyVerts, gl.STATIC_DRAW);
 
-    function createRoom() {
-        // Creiamo 6 cubi “sottili”
-        // front wall
-        let frontWall = createCubeMesh(gl, ROOM_W, ROOM_H, 0.1);
-        frontWall.position = [0, ROOM_H/2, -ROOM_D/2];
-        sceneObjs.push(frontWall);
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyTexture);
+    const faces= [
+      { target: gl.TEXTURE_CUBE_MAP_POSITIVE_X, url:'skybox/px.png'},
+      { target: gl.TEXTURE_CUBE_MAP_NEGATIVE_X, url:'skybox/nx.png'},
+      { target: gl.TEXTURE_CUBE_MAP_POSITIVE_Y, url:'skybox/py.png'},
+      { target: gl.TEXTURE_CUBE_MAP_NEGATIVE_Y, url:'skybox/ny.png'},
+      { target: gl.TEXTURE_CUBE_MAP_POSITIVE_Z, url:'skybox/pz.png'},
+      { target: gl.TEXTURE_CUBE_MAP_NEGATIVE_Z, url:'skybox/nz.png'},
+    ];
+    faces.forEach(face=>{
+       gl.texImage2D(face.target,0, gl.RGBA,1,1,0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0,0,255,255]));
+       let img= new Image();
+       img.onload= ()=>{
+         gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyTexture);
+         gl.texImage2D(face.target,0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+         gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+       };
+       img.src= face.url;
+    });
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
 
-        // back wall
-        let backWall  = createCubeMesh(gl, ROOM_W, ROOM_H, 0.1);
-        backWall.position = [0, ROOM_H/2,  ROOM_D/2];
-        sceneObjs.push(backWall);
+    function drawSkybox(viewProj){
+        let invVP= m4.inverse(viewProj);
 
-        // left wall
-        let leftWall  = createCubeMesh(gl, 0.1, ROOM_H, ROOM_D);
-        leftWall.position= [-ROOM_W/2, ROOM_H/2, 0];
-        sceneObjs.push(leftWall);
+        gl.depthFunc(gl.LEQUAL);
+        gl.depthMask(false);
 
-        // right wall
-        let rightWall = createCubeMesh(gl, 0.1, ROOM_H, ROOM_D);
-        rightWall.position= [ROOM_W/2, ROOM_H/2, 0];
-        sceneObjs.push(rightWall);
+        gl.useProgram(skyProgram);
 
-        // floor
-        let floor = createCubeMesh(gl, ROOM_W, 0.1, ROOM_D);
-        floor.position= [0, 0, 0];
-        sceneObjs.push(floor);
+        gl.bindBuffer(gl.ARRAY_BUFFER, skyBuffer);
+        gl.enableVertexAttribArray(skyLocs.a_position);
+        gl.vertexAttribPointer(skyLocs.a_position,3,gl.FLOAT,false,0,0);
 
-        // ceiling
-        let ceiling= createCubeMesh(gl, ROOM_W, 0.1, ROOM_D);
-        ceiling.position= [0, ROOM_H, 0];
-        sceneObjs.push(ceiling);
+        gl.uniformMatrix4fv(skyLocs.u_invViewProj,false,invVP);
+
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyTexture);
+        gl.uniform1i(skyLocs.u_skybox, 0);
+
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        gl.depthMask(true);
+    }
+
+    /**************************************************************
+     * 5. TEXTURE MURI
+     **************************************************************/
+    let wallTexture= gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, wallTexture);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([255,0,255,255]));
+    let wallImg= new Image();
+    wallImg.src= "textures/wall.jpg";
+    wallImg.onload= ()=>{
+      gl.bindTexture(gl.TEXTURE_2D, wallTexture);
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, wallImg);
+      gl.generateMipmap(gl.TEXTURE_2D);
+    };
+
+    /**************************************************************
+     * 6. SCENA (STANZA + OBJ)
+     **************************************************************/
+    let sceneObjs=[];
+
+    function createCubeWithTex(w,h,d){
+      let x= w/2, y= h/2, z= d/2;
+      const positions= new Float32Array([
+        // front
+        -x,-y, z,
+         x,-y, z,
+         x, y, z,
+        -x, y, z,
+        // back
+        -x,-y,-z,
+         x,-y,-z,
+         x, y,-z,
+        -x, y,-z,
+      ]);
+      const texcoords= new Float32Array([
+        0,0, 1,0, 1,1, 0,1,
+        0,0, 1,0, 1,1, 0,1,
+      ]);
+      const indices= new Uint16Array([
+        0,1,2,0,2,3,
+        4,5,6,4,6,7,
+        3,2,6,3,6,7,
+        0,1,5,0,5,4,
+        1,2,6,1,6,5,
+        0,3,7,0,7,4
+      ]);
+
+      let mesh={
+        vbo: gl.createBuffer(),
+        tbo: gl.createBuffer(),
+        ibo: gl.createBuffer(),
+        indexCount: indices.length,
+        position:[0,0,0],
+        rotation:[0,0,0],
+        scale:[1,1,1],
+      };
+      gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, mesh.tbo);
+      gl.bufferData(gl.ARRAY_BUFFER, texcoords, gl.STATIC_DRAW);
+
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ibo);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+
+      return mesh;
+    }
+
+    // Crea stanza come preferisci
+    function createRoom(){
+      // front
+      let front= createCubeWithTex(20,10,0.1);
+      front.position= [0,5,-12.5];
+      sceneObjs.push(front);
+
+      // back
+      let back= createCubeWithTex(20,10,0.1);
+      back.position= [0,5,12.5];
+      sceneObjs.push(back);
+
+      // left
+      let left= createCubeWithTex(0.1,10,25);
+      left.position= [-10,5,0];
+      sceneObjs.push(left);
+
+      // right
+      let right= createCubeWithTex(0.1,10,25);
+      right.position= [10,5,0];
+      sceneObjs.push(right);
+
+      // floor
+      let floor= createCubeWithTex(20,0.1,25);
+      floor.position= [0,0,0];
+      sceneObjs.push(floor);
+
+      // ceiling
+      let ceil= createCubeWithTex(20,0.1,25);
+      ceil.position= [0,10,0];
+      sceneObjs.push(ceil);
     }
     createRoom();
 
-    /**************************************************************
-     * 7. Caricamento OBJ con webgl-obj-loader
-     **************************************************************/
-    function loadObj(url, name, pos=[0,0,0], rot=[0,0,0], sc=[1,1,1]) {
-        fetch(url)
-            .then(resp => {
-                if(!resp.ok) throw new Error("Errore loading OBJ:" + resp.statusText);
-                return resp.text();
-            })
-            .then(data => {
-                const mesh = new OBJ.Mesh(data);
-                // Inizializza i buffer
-                OBJ.initMeshBuffers(gl, mesh);
-                // Salva pos/rot/scale
-                mesh.position= pos;
-                mesh.rotation= rot;
-                mesh.scale   = sc;
-                sceneObjs.push(mesh);
-            })
-            .catch(err => console.error("Errore OBJ:", err));
+    function loadObj(url, pos=[0,0,0], scale=1){
+      fetch(url)
+      .then(r=>{
+         if(!r.ok) throw new Error("OBJ error: " + r.statusText);
+         return r.text();
+      })
+      .then(data=>{
+         let mesh= new OBJ.Mesh(data);
+         OBJ.initMeshBuffers(gl, mesh);
+
+         mesh.position= pos.slice();
+         mesh.rotation= [0,0,0];
+         mesh.scale   = [scale, scale, scale];
+         sceneObjs.push(mesh);
+      })
+      .catch(err=> console.error(err));
     }
 
-    // Esempio: caricamento di un “skull”
-    loadObj('models/skull.obj', 'skull1', [-8, 5, -11], [0,0,0], [0.05,0.05,0.05]);
-    // Esempio: caricamento di una “doll”
-    loadObj('models/doll.obj', 'doll', [2, 0, -5], [0,0,0], [1,1,1]);
+    // Esempio: carichiamo un teschio
+    loadObj('models/skull.obj', [-8,0,-11], 0.02);
 
     /**************************************************************
-     * 8. FUNZIONE DI RENDER (renderMesh)
+     * 7. RENDER
      **************************************************************/
-    function renderMesh(mesh, viewProjectionMatrix) {
-        gl.useProgram(shaderProgram);
+    function drawMesh(mesh, viewProj){
+      gl.useProgram(objProgram);
 
-        // Se è un “cubo” creato da noi
-        if(mesh.vertexBuffer) {
-            gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vertexBuffer);
-            gl.enableVertexAttribArray(aPositionLoc);
-            gl.vertexAttribPointer(aPositionLoc, 3, gl.FLOAT, false, 0, 0);
+      let world= m4.identity();
+      // position
+      world= m4.translate(world, mesh.position[0], mesh.position[1], mesh.position[2]);
+      // scale
+      world= m4.scale(world, mesh.scale[0], mesh.scale[1], mesh.scale[2]);
 
-            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer);
-            // worldMatrix
-            let world = m4.identity();
-            world = m4.translate(world, mesh.position[0], mesh.position[1], mesh.position[2]);
-            // (se vuoi rotazioni e scale)
-            let wvp = m4.multiply(viewProjectionMatrix, world);
+      let wvp= m4.multiply(viewProj, world);
 
-            gl.uniformMatrix4fv(uMatrixLoc, false, wvp);
-            gl.uniform4fv(uColorLoc, [1,0.3,0.3,1]); // un rosso
+      if(mesh.vbo && mesh.tbo){
+        // cubi stanza
+        gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vbo);
+        gl.enableVertexAttribArray(objLocs.a_position);
+        gl.vertexAttribPointer(objLocs.a_position,3,gl.FLOAT,false,0,0);
 
-            gl.drawElements(gl.TRIANGLES, mesh.indexCount, gl.UNSIGNED_SHORT, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, mesh.tbo);
+        gl.enableVertexAttribArray(objLocs.a_texcoord);
+        gl.vertexAttribPointer(objLocs.a_texcoord,2,gl.FLOAT,false,0,0);
 
-        // Se è un “OBJ” mesh caricato da webgl-obj-loader
-        } else if (mesh.vertices) {
-            // i buffer: mesh.vertexBuffer, mesh.normalBuffer, mesh.indexBuffer, etc.
-            gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vertexBuffer);
-            gl.enableVertexAttribArray(aPositionLoc);
-            gl.vertexAttribPointer(aPositionLoc, mesh.vertexBuffer.itemSize, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ibo);
 
-            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer);
+        gl.uniformMatrix4fv(objLocs.u_matrix,false,wvp);
 
-            let world = m4.identity();
-            world = m4.translate(world, mesh.position[0], mesh.position[1], mesh.position[2]);
-            // etc. rotazioni
-            let wvp = m4.multiply(viewProjectionMatrix, world);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, wallTexture);
+        gl.uniform1i(objLocs.u_texture,0);
 
-            gl.uniformMatrix4fv(uMatrixLoc, false, wvp);
-            gl.uniform4fv(uColorLoc, [0.3,1,0.3,1]); // un verde
+        gl.drawElements(gl.TRIANGLES, mesh.indexCount, gl.UNSIGNED_SHORT,0);
 
-            gl.drawElements(gl.TRIANGLES, mesh.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+      } else if(mesh.vertices){
+        // OBJ
+        gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vertexBuffer);
+        gl.enableVertexAttribArray(objLocs.a_position);
+        gl.vertexAttribPointer(objLocs.a_position, mesh.vertexBuffer.itemSize, gl.FLOAT,false,0,0);
+
+        if(mesh.textureBuffer){
+          gl.bindBuffer(gl.ARRAY_BUFFER, mesh.textureBuffer);
+          gl.enableVertexAttribArray(objLocs.a_texcoord);
+          gl.vertexAttribPointer(objLocs.a_texcoord, mesh.textureBuffer.itemSize, gl.FLOAT,false,0,0);
+        } else {
+          gl.disableVertexAttribArray(objLocs.a_texcoord);
         }
-    }
 
-    /**************************************************************
-     * 9. GESTIONE CAMERA e INPUT
-     **************************************************************/
-    // Semplice input per muovere la camera
-    const keyStates = {};
-    document.addEventListener('keydown',(e)=>{ keyStates[e.code]=true; });
-    document.addEventListener('keyup',(e)=>{ keyStates[e.code]=false; });
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer);
 
-    // Pointer lock per controllare la rotazione della camera
-    document.addEventListener('pointerlockchange',()=>{
-        // se usi isPointerLocked = (document.pointerLockElement === canvas)
-    });
-    document.addEventListener('mousemove',(e)=>{
-        if(document.pointerLockElement === canvas) {
-            camera.rotationY -= e.movementX * 0.002;
-            camera.rotationX -= e.movementY * 0.002;
-            // Limita camera.rotationX
-            camera.rotationX = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotationX));
-        }
-    });
+        gl.uniformMatrix4fv(objLocs.u_matrix,false,wvp);
 
-    // Muovi la camera con W,A,S,D
-    function updateCamera(dt) {
-        let speed = 10; // spostamento
-        let forward = [
-            Math.sin(camera.rotationY),
-            0,
-            Math.cos(camera.rotationY)
-        ];
-        let right = [
-            Math.cos(camera.rotationY),
-            0,
-            -Math.sin(camera.rotationY)
-        ];
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, wallTexture);
+        gl.uniform1i(objLocs.u_texture,0);
 
-        if(keyStates['KeyW']) {
-            camera.position[0] += forward[0]*dt*speed;
-            camera.position[2] += forward[2]*dt*speed;
-        }
-        if(keyStates['KeyS']) {
-            camera.position[0] -= forward[0]*dt*speed;
-            camera.position[2] -= forward[2]*dt*speed;
-        }
-        if(keyStates['KeyA']) {
-            camera.position[0] -= right[0]*dt*speed;
-            camera.position[2] -= right[2]*dt*speed;
-        }
-        if(keyStates['KeyD']) {
-            camera.position[0] += right[0]*dt*speed;
-            camera.position[2] += right[2]*dt*speed;
-        }
+        gl.drawElements(gl.TRIANGLES, mesh.indexBuffer.numItems, gl.UNSIGNED_SHORT,0);
+      }
     }
 
     /**************************************************************
-     * 10. DRAW SCENE + ANIMATE
+     * 8. ANIMATE
      **************************************************************/
-    let oldTime = 0;
-    function animate(t) {
-        let dt = (t - oldTime)*0.001;
-        oldTime = t;
-        // update input
-        updateCamera(dt);
+    let oldT=0;
+    function animate(t=0){
+      let dt= (t - oldT)*0.001;
+      oldT= t;
 
-        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        updateProjection();
+      updateCamera(dt);
 
-        // Costruisci cameraMatrix
-        let cam = m4.identity();
-        // rot X
-        cam = m4.xRotate(cam, camera.rotationX);
-        // rot Y
-        cam = m4.yRotate(cam, camera.rotationY);
-        // traslazione inversa
-        cam = m4.translate(cam, -camera.position[0], -camera.position[1], -camera.position[2]);
+      gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
 
-        let viewProj = m4.multiply(camera.projectionMatrix, cam);
+      let viewProj= computeViewProj();
+      drawSkybox(viewProj);
 
-        // Disegno tutti gli oggetti
-        sceneObjs.forEach(obj =>{
-            renderMesh(obj, viewProj);
-        });
+      sceneObjs.forEach(obj => {
+        drawMesh(obj, viewProj);
+      });
 
-        requestAnimationFrame(animate);
+      requestAnimationFrame(animate);
     }
 
     </script>
