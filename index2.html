@@ -52,6 +52,7 @@
         const startButton = document.getElementById('start-button');
         const startMenu = document.getElementById('start-menu');
         const canvas = document.getElementById('canvas');
+        const gl = canvas.getContext('webgl');
         const container = document.getElementById('container');
         const controlPanel = document.getElementById('side-panel');
         const instructions = document.getElementById('instructions');
@@ -133,102 +134,206 @@
     
     
     <script type="module">
-        import * as THREE from 'three';
-        import { Capsule } from 'three/addons/math/Capsule.js';
-        import { Octree } from 'three/addons/math/Octree.js';
-        import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
-        import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
-        import { FBXLoader } from 'three/addons/loaders/FBXLoader.js'; // Import FBXLoader
-        
-        const clock = new THREE.Clock();
-        const scene = new THREE.Scene();
-        
-        // Configurazione della skybox
-        const loader = new THREE.CubeTextureLoader();
-        const texture = loader.load([
-        'textures/skybox/px.png', // Positivo X
-        'textures/skybox/nx.png', // Negativo X
-        'textures/skybox/py.png', // Positivo Y
-        'textures/skybox/ny.png', // Negativo Y
-        'textures/skybox/pz.png', // Positivo Z
-        'textures/skybox/nz.png'  // Negativo Z
-        ]);
-        scene.background = texture;
-        
-        // Configurazione della camera
-        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.rotation.order = 'YXZ';
-        
-        // Aggiunta di una luce emisferica
-        const fillLight1 = new THREE.HemisphereLight(0x8dc1de, 0x00668d, 1.5);
-        fillLight1.position.set(2, 1, 1);
-        scene.add(fillLight1);
-        
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setAnimationLoop(animate);
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Migliore qualità delle ombre
-        renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        container.appendChild(renderer.domElement);
-        
-        // Evento per ridimensionare la finestra
-        window.addEventListener('resize', onWindowResize);
-        
-        let isPointerLocked = false; // Variabile per tracciare lo stato del blocco del puntatore
-        
-        // Funzione per richiedere il blocco del puntatore
-        function requestPointerLock() {
-            if (!isPointerLocked) {
-                canvas.requestPointerLock();
-            }
+        if (!gl) {
+            alert('WebGL non supportato.');
         }
         
-        // Aggiungi evento per rientrare nel "pointer lock" cliccando sul canvas
-        canvas.addEventListener('click', requestPointerLock);
+        // Inizializza il canvas
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.clearColor(0.1, 0.1, 0.1, 1.0);
+        gl.enable(gl.DEPTH_TEST);
         
-        // Quando il gioco inizia, blocca il puntatore e nascondi il mouse
-        startButton.addEventListener('click', () => {
-            stats.domElement.style.display = 'block';  // Mostra il contatore degli FPS
-            startMenu.style.display = 'none';
-            canvas.style.display = 'block';
-            container.style.display = 'block';
-            controlPanel.style.display = 'block';
-            instructions.style.display = 'block';
-            crosshair.style.display = 'block';
-            introMusic.pause();
-            startMusic.play();
+        // Shader di base
+        const vertexShaderObjectSource  = `
+            attribute vec3 a_position;
+            attribute vec3 a_normal;
+            uniform mat4 u_modelMatrix;
+            uniform mat4 u_viewMatrix;
+            uniform mat4 u_projectionMatrix;
+            uniform vec3 u_lightDirection;
+            varying vec3 v_lighting;
+            void main() {
+                gl_Position = u_projectionMatrix * u_viewMatrix * u_modelMatrix * vec4(a_position, 1.0);
+
+                // Calcolo della luce semplice
+                vec3 transformedNormal = mat3(u_modelMatrix) * a_normal;
+                float directional = max(dot(transformedNormal, normalize(u_lightDirection)), 0.0);
+                v_lighting = vec3(0.1, 0.1, 0.2) + directional * vec3(0.8, 0.8, 1.0);
+            }
+        `;
+        
+        const fragmentShaderObjectSource  = `
+            precision mediump float;
+            varying vec3 v_lighting;
+            void main() {
+                gl_FragColor = vec4(v_lighting, 1.0);
+            }
+        `;
+        
+        // Funzione per compilare uno shader
+        function compileShader(gl, source, type) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error(gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
+        }
+        
+        // Compila gli shader e collega il programma
+        const vertexShader = compileShader(gl, vertexShaderObjectSource, gl.VERTEX_SHADER);
+        const fragmentShader = compileShader(gl, fragmentShaderObjectSource, gl.FRAGMENT_SHADER);
+        
+        const program = gl.createProgram();
+        gl.attachShader(program, vertexShader);
+        gl.attachShader(program, fragmentShader);
+        gl.linkProgram(program);
+        
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            console.error(gl.getProgramInfoLog(program));
+        }
+        gl.useProgram(program);
+        
+        // Definizione dei vertici e delle normali per un cubo
+        const vertices = new Float32Array([
+        -1, -1, -1,   0,  0, -1,
+        1, -1, -1,   0,  0, -1,
+        1,  1, -1,   0,  0, -1,
+        -1,  1, -1,   0,  0, -1,
+        // ... Altri vertici e normali per tutte le facce del cubo
+        ]);
+        
+        const indices = new Uint16Array([
+        0, 1, 2,  0, 2, 3, // Faccia posteriore
+        // ... Altri indici per tutte le facce del cubo
+        ]);
+        
+        // Crea buffer per vertici e indici
+        const vertexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+        
+        const indexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+        
+        // Configura attributi e uniform
+        const positionLocation = gl.getAttribLocation(program, 'a_position');
+        const normalLocation = gl.getAttribLocation(program, 'a_normal');
+        
+        gl.enableVertexAttribArray(positionLocation);
+        gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 24, 0);
+        
+        gl.enableVertexAttribArray(normalLocation);
+        gl.vertexAttribPointer(normalLocation, 3, gl.FLOAT, false, 24, 12);
+        
+        const modelMatrixLocation = gl.getUniformLocation(program, 'u_modelMatrix');
+        const viewMatrixLocation = gl.getUniformLocation(program, 'u_viewMatrix');
+        const projectionMatrixLocation = gl.getUniformLocation(program, 'u_projectionMatrix');
+        const lightDirectionLocation = gl.getUniformLocation(program, 'u_lightDirection');
+        
+        // Inizializza matrici e direzione della luce
+        const modelMatrix = glm.mat4.create();
+        const viewMatrix = glm.mat4.lookAt(glm.mat4.create(), [0, 0, 5], [0, 0, 0], [0, 1, 0]);
+        const projectionMatrix = glm.mat4.perspective(glm.mat4.create(), Math.PI / 4, canvas.width / canvas.height, 0.1, 100);
+        const lightDirection = [-1, -1, -1];
+        
+        // Passa i valori iniziali agli shader
+        gl.uniformMatrix4fv(modelMatrixLocation, false, modelMatrix);
+        gl.uniformMatrix4fv(viewMatrixLocation, false, viewMatrix);
+        gl.uniformMatrix4fv(projectionMatrixLocation, false, projectionMatrix);
+        gl.uniform3fv(lightDirectionLocation, lightDirection);
+        
+        // Funzione di animazione
+        function animate() {
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
             
-            // Blocca il puntatore e nascondi il mouse
-            document.body.requestPointerLock();
-            document.body.style.cursor = 'none';
-
-            // Mostra la top bar
-            const topBar = document.getElementById('top-bar');
-            topBar.style.display = 'flex';  // Cambia da 'none' a 'flex' per mostrare la top bar
-
-            // Mostra i comandi
-            showGameControls();
+            // Ruota il cubo
+            glm.mat4.rotateY(modelMatrix, modelMatrix, 0.01);
+            gl.uniformMatrix4fv(modelMatrixLocation, false, modelMatrix);
+            
+            // Disegna il cubo
+            gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+            
+            requestAnimationFrame(animate);
+        }
+        
+        // Evento per ridimensionare la finestra
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            
+            glm.mat4.perspective(projectionMatrix, Math.PI / 4, canvas.width / canvas.height, 0.1, 100);
+            gl.uniformMatrix4fv(projectionMatrixLocation, false, projectionMatrix);
         });
         
+        // Avvia l'animazione
+        animate();        
         
         
+        // Costanti
         const GRAVITY = 30;
         const STEPS_PER_FRAME = 5;
         
-        const worldOctree = new Octree();
+        // Implementazione semplice di un vettore 3D
+        class Vector3 {
+            constructor(x = 0, y = 0, z = 0) {
+                this.x = x;
+                this.y = y;
+                this.z = z;
+            }
+            
+            add(vec) {
+                this.x += vec.x;
+                this.y += vec.y;
+                this.z += vec.z;
+                return this;
+            }
+            
+            subtract(vec) {
+                this.x -= vec.x;
+                this.y -= vec.y;
+                this.z -= vec.z;
+                return this;
+            }
+            
+            multiplyScalar(scalar) {
+                this.x *= scalar;
+                this.y *= scalar;
+                this.z *= scalar;
+                return this;
+            }
+            
+            clone() {
+                return new Vector3(this.x, this.y, this.z);
+            }
+        }
         
-        const playerCollider = new Capsule(new THREE.Vector3(0, 0.35, 0), new THREE.Vector3(0, 4, 0), 0.35);
-        const playerVelocity = new THREE.Vector3();
-        const playerDirection = new THREE.Vector3();
+        // Oggetti per collisioni e movimento
+        let playerCollider = {
+            position: new Vector3(0, 0.35, 0),
+            velocity: new Vector3(),
+            radius: 0.35,
+            onFloor: false,
+            translate(offset) {
+                this.position.add(offset);
+            },
+        };
         
-        let playerOnFloor = false;
-        let canToggleLight = true; // Variabile per controllare il toggle
-        let isFlickering = false;  // Controlla se la luce sta sfarfallando
+        let playerDirection = new Vector3();
         
+        // Stati del gioco
+        let canToggleLight = true;
+        let isFlickering = false;
         const keyStates = {};
         
+        // Eventi per i tasti
         document.addEventListener('keydown', (event) => {
             keyStates[event.code] = true;
         });
@@ -236,78 +341,86 @@
         document.addEventListener('keyup', (event) => {
             keyStates[event.code] = false;
             if (event.code === 'KeyF') {
-                canToggleLight = true;  // Reset della possibilità di togglare la luce
+                canToggleLight = true;
             }
         });
         
-        container.addEventListener('mousedown', () => {
-            canvas.requestPointerLock();  // Richiedi il blocco del puntatore sul canvas
-            document.getElementById('crosshair').style.display = 'block'; // Mostra il crosshair
-        });
+        // Controlli di movimento del giocatore
+        function controls(deltaTime) {
+            const speed = playerCollider.onFloor ? 8 : 2;
+            const movement = new Vector3();
+            
+            if (keyStates['KeyW']) movement.z -= speed * deltaTime;
+            if (keyStates['KeyS']) movement.z += speed * deltaTime;
+            if (keyStates['KeyA']) movement.x -= speed * deltaTime;
+            if (keyStates['KeyD']) movement.x += speed * deltaTime;
+            
+            playerCollider.velocity.add(movement);
+        }
         
-        // Seleziona il pannello laterale e il contatore FPS
-        const sidePanel = document.getElementById('side-panel');
-        const fpsCounter = document.getElementById('fps-counter');
-        const panelInstructions = document.getElementById('panel-instructions');
-        
-        // Variabili per tracciare gli stati
-        let isPanelOpen = false;
-        let showShadows = true;
-        let showReflections = true;
-        
-        // Funzione per aprire/chiudere il pannello e sganciare il mouse
-        document.addEventListener('keydown', (event) => {
-            if (event.code === 'KeyP') {
-                if (!isPanelOpen) {
-                    // Mostra il pannello e sgancia il mouse
-                    sidePanel.classList.remove('hidden');
-                    sidePanel.classList.add('visible');
-                    document.exitPointerLock();  // Sgancia il puntatore
-                    isPanelOpen = true;
-                    document.body.style.cursor = 'default';  // Mostra il cursore
-                } else {
-                    // Chiudi il pannello e blocca nuovamente il mouse
-                    sidePanel.classList.remove('visible');
-                    sidePanel.classList.add('hidden');
-                    canvas.requestPointerLock();  // Riaggancia il puntatore
-                    isPanelOpen = false;
-                    document.body.style.cursor = 'none';  // Nascondi il cursore
-                }
+        // Aggiornamento del giocatore
+        function updatePlayer(deltaTime) {
+            if (!playerCollider.onFloor) {
+                playerCollider.velocity.y -= GRAVITY * deltaTime;
             }
-        });
-        
-        document.getElementById('toggleShadows').addEventListener('click', () => {
-            showShadows = !showShadows;
-            renderer.shadowMap.enabled = showShadows;  // Attiva o disattiva le ombre
-            scene.traverse((object) => {
-                if (object.isMesh) {
-                    object.castShadow = showShadows;  // Abilita o disabilita le ombre per ogni mesh
-                    object.receiveShadow = showShadows;
-                }
-            });
-        });
-        
-        document.getElementById('toggleReflections').addEventListener('click', () => {
-            showReflections = !showReflections;
-            if (showReflections) {
-                // Attiva le riflessioni avanzate
-                renderer.toneMapping = THREE.ACESFilmicToneMapping;  
+            
+            // Simula un attrito
+            playerCollider.velocity.multiplyScalar(0.98);
+            
+            // Aggiorna posizione
+            playerCollider.position.add(playerCollider.velocity.clone().multiplyScalar(deltaTime));
+            
+            // Controlla collisioni semplificate con il pavimento
+            if (playerCollider.position.y <= 0.35) {
+                playerCollider.onFloor = true;
+                playerCollider.position.y = 0.35;
+                playerCollider.velocity.y = 0;
             } else {
-                // Disattiva solo le riflessioni avanzate senza toccare le ombre
-                renderer.toneMapping = THREE.LinearToneMapping;  
+                playerCollider.onFloor = false;
             }
+        }
+        
+        // Funzione per bloccare il mouse
+        container.addEventListener('mousedown', () => {
+            canvas.requestPointerLock();
+            document.getElementById('crosshair').style.display = 'block';
         });
         
-        // Aggiorna il contatore FPS a ogni frame
+        // Animazione principale
         function animate() {
-            const deltaTime = Math.min(0.05, clock.getDelta()) / STEPS_PER_FRAME;
+            const deltaTime = 1 / 60; // Supponendo 60 FPS
+            
             for (let i = 0; i < STEPS_PER_FRAME; i++) {
                 controls(deltaTime);
                 updatePlayer(deltaTime);
-                teleportPlayerIfOob();
             }
-            renderer.render(scene, camera);
+            
+            // Rendering personalizzato (es. `canvas`)
+            renderer.render(); // Sostituire con il tuo sistema di rendering
         }
+        
+        // Altri eventi
+        document.addEventListener('keydown', (event) => {
+            if (event.code === 'KeyP') {
+                const sidePanel = document.getElementById('side-panel');
+                const isPanelOpen = sidePanel.classList.contains('visible');
+                if (isPanelOpen) {
+                    sidePanel.classList.remove('visible');
+                    sidePanel.classList.add('hidden');
+                    canvas.requestPointerLock();
+                } else {
+                    sidePanel.classList.remove('hidden');
+                    sidePanel.classList.add('visible');
+                    document.exitPointerLock();
+                }
+            }
+        });
+        
+        const renderingSettings = {
+            antialias: false,
+            shadowQuality: "medium",
+            lightingMode: "standard",
+        };
         
         // Variabile per tracciare lo stato del rendering avanzato
         let advancedRenderingEnabled = false;
@@ -317,686 +430,799 @@
             advancedRenderingEnabled = !advancedRenderingEnabled;
             
             if (advancedRenderingEnabled) {
-                // Abilita funzionalità di rendering avanzato
-                renderer.antialias = true;
-                renderer.toneMapping = THREE.ACESFilmicToneMapping;
-                renderer.shadowMap.enabled = true;
-                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-                // Aggiungi eventuali altre funzionalità avanzate
                 console.log("Rendering avanzato abilitato");
+                // Configurazione avanzata manuale
+                enableAdvancedRendering();
             } else {
-                // Disabilita funzionalità di rendering avanzato e ritorna ai valori di default
-                renderer.antialias = false;
-                renderer.toneMapping = THREE.LinearToneMapping;
-                renderer.shadowMap.enabled = true; // Manteniamo le ombre abilitate
-                renderer.shadowMap.type = THREE.PCFShadowMap; // Ritorniamo a ombre di qualità standard
                 console.log("Rendering avanzato disabilitato");
+                // Configurazione base
+                disableAdvancedRendering();
             }
-            
-            // Reimposta le dimensioni del renderer per evitare problemi
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.render(scene, camera);
         });
         
-        // Avvia l'animazione
-        renderer.setAnimationLoop(animate);
+        // Funzioni per attivare/disattivare rendering avanzato
+        function enableAdvancedRendering() {
+            renderingSettings.antialias = true;
+            renderingSettings.shadowQuality = "high";
+            renderingSettings.lightingMode = "filmic";
+            
+            console.log("Rendering avanzato abilitato con impostazioni:", renderingSettings);
+        }
         
-        // Gestisci il cambiamento dello stato del pointer lock
+        function disableAdvancedRendering() {
+            renderingSettings.antialias = false;
+            renderingSettings.shadowQuality = "low";
+            renderingSettings.lightingMode = "linear";
+            
+            console.log("Rendering avanzato disabilitato con impostazioni:", renderingSettings);
+        }
+        
+        // Listener per il blocco del puntatore
         document.addEventListener('pointerlockchange', () => {
-            if (document.pointerLockElement === canvas) {
-                isPointerLocked = true;
-            } else {
-                isPointerLocked = false;
-            }
+            isPointerLocked = (document.pointerLockElement === canvas);
         });
         
-        // Evento mousemove per muovere la camera solo se il puntatore è bloccato sul canvas
+        // Movimento della camera
         document.addEventListener('mousemove', (event) => {
-            if (document.pointerLockElement === canvas) {  // Controlla se il puntatore è bloccato sul canvas
-                camera.rotation.y -= event.movementX / 500;
-                camera.rotation.x -= event.movementY / 500;
-                camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));  // Limita il pitch della camera
+            if (isPointerLocked) {
+                const sensitivity = 0.002;
+                cameraRotation.y -= event.movementX * sensitivity;
+                cameraRotation.x -= event.movementY * sensitivity;
+                cameraRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, cameraRotation.x)); // Limita il pitch
             }
         });
         
-        // Clicca sul canvas per riagganciare il mouse se è sganciato
-        canvas.addEventListener('click', () => {
-            if (!isPointerLocked) {
-                canvas.requestPointerLock();  // Riaggancia il puntatore
-                isPointerLocked = true;
-                document.body.style.cursor = 'none';  // Nascondi il cursore
+        // Rotazione touch (per dispositivi mobili)
+        let initialTouch = { x: 0, y: 0 };
+        const swipeSensitivity = 0.005;
+        
+        canvas.addEventListener('touchstart', (event) => {
+            if (event.touches.length === 1) {
+                initialTouch.x = event.touches[0].clientX;
+                initialTouch.y = event.touches[0].clientY;
             }
         });
         
-        let initialTouchX = 0, initialTouchY = 0;
-        let swipeSensitivity = 0.005; // Sensibilità del movimento
-        
-        canvas.addEventListener('touchstart', function(event) {
-            // Memorizza le coordinate del primo tocco
-            initialTouchX = event.touches[0].clientX;
-            initialTouchY = event.touches[0].clientY;
-        });
-        
-        canvas.addEventListener('touchmove', function(event) {
-            if (event.touches.length == 1) { // Un solo dito in movimento
-                let touchX = event.touches[0].clientX;
-                let touchY = event.touches[0].clientY;
+        canvas.addEventListener('touchmove', (event) => {
+            if (event.touches.length === 1) {
+                const deltaX = (event.touches[0].clientX - initialTouch.x) * swipeSensitivity;
+                const deltaY = (event.touches[0].clientY - initialTouch.y) * swipeSensitivity;
                 
-                // Calcola il movimento relativo
-                let deltaX = (touchX - initialTouchX) * swipeSensitivity;
-                let deltaY = (touchY - initialTouchY) * swipeSensitivity;
+                cameraRotation.y -= deltaX;
+                cameraRotation.x -= deltaY;
+                cameraRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, cameraRotation.x)); // Limita il pitch
                 
-                // Aggiorna la rotazione della camera
-                camera.rotation.y -= deltaX; // Movimento orizzontale
-                camera.rotation.x -= deltaY; // Movimento verticale
-                camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x)); // Limita il pitch della camera
-                
-                // Aggiorna le coordinate del tocco
-                initialTouchX = touchX;
-                initialTouchY = touchY;
+                initialTouch.x = event.touches[0].clientX;
+                initialTouch.y = event.touches[0].clientY;
             }
         });
         
-        canvas.addEventListener('touchstart', function(event) {
-            // Usa le coordinate del tocco per verificare se il giocatore è vicino all'interruttore
-            let playerPosition = playerCollider.end;
-            let distanceToSwitch = playerPosition.distanceTo(switchPosition);
+        // Interazione con l'interruttore
+        canvas.addEventListener('touchstart', (event) => {
+            const playerPosition = playerCollider.position; // Usare posizione corrente
+            const distanceToSwitch = getDistance(playerPosition, switchPosition);
             
-            if (distanceToSwitch < 7) {  // Se il giocatore è vicino all'interruttore
-            pointLight.visible = !pointLight.visible; // Accendi/spegni la luce
+            if (distanceToSwitch < 7) { // Se il giocatore è vicino
+                toggleLight();
+            }
+        });
+        
+        // Funzione per calcolare la distanza
+        function getDistance(pos1, pos2) {
+            return Math.sqrt(
+            (pos1.x - pos2.x) ** 2 +
+            (pos1.y - pos2.y) ** 2 +
+            (pos1.z - pos2.z) ** 2
+            );
+        }
+        
+        // Funzione per accendere/spegnere la luce
+        function toggleLight() {
+            pointLight.visible = !pointLight.visible;
             if (pointLight.visible) {
-                flickerLight(pointLight, 500); // Aggiungi effetto sfarfallio
+                flickerLight(pointLight, 500); // Aggiungere effetto sfarfallio
             }
         }
-    });
-    
-    let initialDistance = 0;
-    
-    canvas.addEventListener('touchmove', function(event) {
-        if (event.touches.length == 2) { // Pinch-to-zoom con due dita
-            let dx = event.touches[0].clientX - event.touches[1].clientX;
-            let dy = event.touches[0].clientY - event.touches[1].clientY;
-            let distance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (initialDistance == 0) {
-                initialDistance = distance;
+        
+        // Effetto sfarfallio della luce
+        function flickerLight(light, duration) {
+            let flickerCount = Math.floor(Math.random() * 5) + 3; // Numero casuale di sfarfallii
+            const interval = setInterval(() => {
+                light.visible = !light.visible;
+                flickerCount--;
+                if (flickerCount <= 0) {
+                    clearInterval(interval);
+                    light.visible = true; // Alla fine, lascia la luce accesa
+                }
+            }, duration / flickerCount);
+        }
+        
+        
+        let initialDistance = 0;
+        
+        // Listener per il movimento con due dita (pinch-to-zoom)
+        canvas.addEventListener('touchmove', function(event) {
+            if (event.touches.length === 2) { // Pinch con due dita
+                let dx = event.touches[0].clientX - event.touches[1].clientX;
+                let dy = event.touches[0].clientY - event.touches[1].clientY;
+                let distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (initialDistance === 0) {
+                    initialDistance = distance; // Memorizza la distanza iniziale
+                }
+                
+                // Calcola il cambiamento nello zoom
+                let zoomChange = (initialDistance - distance) * 0.05; // Modifica proporzionale
+                currentFOV = Math.max(30, Math.min(90, currentFOV + zoomChange)); // Limita il FOV
+                updateProjectionMatrix(); // Aggiorna la matrice di proiezione
+                
+                initialDistance = distance; // Aggiorna la distanza
             }
+        });
+        
+        // Listener per terminare il pinch-to-zoom
+        canvas.addEventListener('touchend', function(event) {
+            if (event.touches.length < 2) {
+                initialDistance = 0; // Reset della distanza iniziale
+            }
+        });
+        
+        // Funzione per aggiornare la matrice di proiezione
+        function updateProjectionMatrix() {
+            const fovRadians = (Math.PI / 180) * currentFOV;
+            const aspectRatio = canvas.width / canvas.height;
+            const near = 0.1;
+            const far = 1000;
             
-            // Cambia il field of view (zoom) della camera in base alla distanza delle dita
-            camera.fov += (initialDistance - distance) * 0.05;
-            camera.fov = Math.max(30, Math.min(90, camera.fov)); // Limita lo zoom
+            mat4.perspective(projectionMatrix, fovRadians, aspectRatio, near, far);
+            gl.uniformMatrix4fv(uProjectionMatrixLocation, false, projectionMatrix);
+        }
+        
+        
+        // Listener per ridimensionare la finestra
+        window.addEventListener('resize', () => {
+            const topBar = document.getElementById('top-bar');
+            topBar.style.left = '50%'; // Posiziona sempre al centro
+            topBar.style.transform = 'translateX(-50%)'; // Corregge lo spostamento
+            resizeCanvas(); // Adatta il canvas alle nuove dimensioni
+        });
+        
+        // Funzione per adattare il canvas alla finestra
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            updateProjectionMatrix(); // Aggiorna la proiezione con le nuove dimensioni
+        }
+        
+        function onWindowResize() {
+            // Aggiorna l'aspetto della camera in base alle nuove dimensioni della finestra
+            camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             
-            initialDistance = distance;
+            // Aggiorna la dimensione del renderer in base alla nuova finestra
+            renderer.setSize(window.innerWidth, window.innerHeight);
         }
-    });
-    
-    canvas.addEventListener('touchend', function(event) {
-        if (event.touches.length < 2) {
-            initialDistance = 0; // Reset al termine del pinch
-        }
-    });
-    
-    window.addEventListener('resize', () => {
-    const topBar = document.getElementById('top-bar');
-    topBar.style.left = '50%'; // Posiziona sempre al centro
-    topBar.style.transform = 'translateX(-50%)'; // Corregge lo spostamento di metà della larghezza
-});
-    
-    
-    function onWindowResize() {
-        // Aggiorna l'aspetto della camera in base alle nuove dimensioni della finestra
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
         
-        // Aggiorna la dimensione del renderer in base alla nuova finestra
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        // Dimensioni della stanza
+        const roomWidth = 20;
+        const roomHeight = 10;
+        const roomDepth = 25;
+        
+        const wallThickness = 0.1;
+        const windowWidth = 6;
+        const windowHeight = 4;
+        const doorWidth = 4;
+        const doorHeight = 8;
+        
+        // Shader per le pareti, il pavimento e il soffitto
+        const vertexShaderWallSource  = `
+    attribute vec3 aPosition;
+    attribute vec2 aTexCoord;
+    uniform mat4 uModelViewMatrix;
+    uniform mat4 uProjectionMatrix;
+    varying vec2 vTexCoord;
+    void main() {
+        gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(aPosition, 1.0);
+        vTexCoord = aTexCoord;
     }
-    // Creazione della stanza
-    const roomWidth = 20;
-    const roomHeight = 10;
-    const roomDepth = 25;
-    
-    const wallThickness = 0.1;
-    const windowWidth = 6;
-    const windowHeight = 4;
-    const doorWidth = 4;
-    const doorHeight = 8;
-    
-    const textureLoader = new THREE.TextureLoader();
-    const wallTexture = textureLoader.load('textures/wall.jpg');
-    const floorTexture = textureLoader.load('textures/wood.jpg');
-    const doorTexture = textureLoader.load('textures/door.png');
-    
-    // Materiali aggiornati
-    const wallMaterial = new THREE.MeshStandardMaterial({ map: wallTexture });
-    const floorMaterial = new THREE.MeshStandardMaterial({ map: floorTexture });
-    const glassMaterial = new THREE.MeshStandardMaterial({ color: 0x88ccee, opacity: 0.3, transparent: true, side: THREE.DoubleSide });
-    const doorMaterial = new THREE.MeshStandardMaterial({ map: doorTexture });
-    
-    function createWallWithWindowAndDoor() {
-        const frontWallTop = new THREE.Mesh(
-        new THREE.BoxGeometry(windowWidth, (roomHeight - windowHeight) / 2, wallThickness), wallMaterial);
-        frontWallTop.position.set(0, roomHeight - (roomHeight - windowHeight) / 4, -roomDepth / 2);
-        frontWallTop.castShadow = true; // Abilita le ombre per le pareti
-        frontWallTop.receiveShadow = true; // Permette alle pareti di ricevere le ombre
-        scene.add(frontWallTop);
+`;
         
-        const frontWallBottom = new THREE.Mesh(new THREE.BoxGeometry(windowWidth, (roomHeight - windowHeight) / 2, wallThickness), wallMaterial);
-        frontWallBottom.position.set(0, (roomHeight - windowHeight) / 4, -roomDepth / 2);
-        frontWallBottom.castShadow = true;
-        frontWallBottom.receiveShadow = true;
-        scene.add(frontWallBottom);
-        
-        const frontWallLeft = new THREE.Mesh(new THREE.BoxGeometry((roomWidth - windowWidth) / 2, roomHeight, wallThickness), wallMaterial);
-        frontWallLeft.position.set(-((roomWidth - windowWidth) / 4 + windowWidth / 2), roomHeight / 2, -roomDepth / 2);
-        frontWallLeft.castShadow = true;
-        frontWallLeft.receiveShadow = true;
-        scene.add(frontWallLeft);
-        
-        const frontWallRight = new THREE.Mesh(new THREE.BoxGeometry((roomWidth - windowWidth) / 2, roomHeight, wallThickness), wallMaterial);
-        frontWallRight.position.set(((roomWidth - windowWidth) / 4 + windowWidth / 2), roomHeight / 2, -roomDepth / 2);
-        frontWallRight.castShadow = true;
-        frontWallRight.receiveShadow = true;
-        scene.add(frontWallRight);
-        
-        const frontWindow = new THREE.Mesh(new THREE.PlaneGeometry(windowWidth, windowHeight), glassMaterial);
-        frontWindow.position.set(0, roomHeight / 2, -roomDepth / 2 + wallThickness / 2);
-        frontWindow.castShadow = true;
-        frontWindow.receiveShadow = true;
-        scene.add(frontWindow);
-        
-        const backWallTop = new THREE.Mesh(
-        new THREE.BoxGeometry(windowWidth, (roomHeight - windowHeight) / 2, wallThickness), wallMaterial);
-        backWallTop.position.set(0, roomHeight - (roomHeight - windowHeight) / 4, roomDepth / 2);
-        backWallTop.castShadow = true;
-        backWallTop.receiveShadow = true;
-        scene.add(backWallTop);
-        
-        const backWallBottom = new THREE.Mesh(new THREE.BoxGeometry(windowWidth, (roomHeight - windowHeight) / 2, wallThickness), wallMaterial);
-        backWallBottom.position.set(0, (roomHeight - windowHeight) / 4, roomDepth / 2);
-        backWallBottom.castShadow = true;
-        backWallBottom.receiveShadow = true;
-        scene.add(backWallBottom);
-        
-        const backWallLeft = new THREE.Mesh(new THREE.BoxGeometry((roomWidth - windowWidth) / 2, roomHeight, wallThickness), wallMaterial);
-        backWallLeft.position.set(-((roomWidth - windowWidth) / 4 + windowWidth / 2), roomHeight / 2, roomDepth / 2);
-        backWallLeft.castShadow = true;
-        backWallLeft.receiveShadow = true;
-        scene.add(backWallLeft);
-        
-        const backWallRight = new THREE.Mesh(new THREE.BoxGeometry((roomWidth - windowWidth) / 2, roomHeight, wallThickness), wallMaterial);
-        backWallRight.position.set(((roomWidth - windowWidth) / 4 + windowWidth / 2), roomHeight / 2, roomDepth / 2);
-        backWallRight.castShadow = true;
-        backWallRight.receiveShadow = true;
-        scene.add(backWallRight);
-        
-        const backWindow = new THREE.Mesh(new THREE.PlaneGeometry(windowWidth, windowHeight), glassMaterial);
-        backWindow.position.set(0, roomHeight / 2, roomDepth / 2 + wallThickness / 2);
-        backWindow.castShadow = true;
-        backWindow.receiveShadow = true;
-        scene.add(backWindow);
-        
-        const leftWallTop = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight - doorHeight, doorWidth), wallMaterial);
-        leftWallTop.position.set(-roomWidth / 2, roomHeight - (roomHeight - doorHeight) / 2, 0);
-        leftWallTop.castShadow = true;
-        leftWallTop.receiveShadow = true;
-        scene.add(leftWallTop);
-        
-        const leftWallLeft = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight, (roomDepth - doorWidth) / 2), wallMaterial);
-        leftWallLeft.position.set(-roomWidth / 2, roomHeight / 2, (roomDepth - doorWidth) / 4 + doorWidth / 2);
-        leftWallLeft.castShadow = true;
-        leftWallLeft.receiveShadow = true;
-        scene.add(leftWallLeft);
-        
-        const leftWallRight = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight, (roomDepth - doorWidth) / 2), wallMaterial);
-        leftWallRight.position.set(-roomWidth / 2, roomHeight / 2, -(roomDepth - doorWidth) / 4 - doorWidth / 2);
-        leftWallRight.castShadow = true;
-        leftWallRight.receiveShadow = true;
-        scene.add(leftWallRight);
-        
-        const door = new THREE.Mesh(new THREE.PlaneGeometry(doorWidth, doorHeight), doorMaterial);
-        door.position.set(-roomWidth / 2 + wallThickness / 2, doorHeight / 2, 0);
-        door.rotation.y = Math.PI / 2;
-        door.castShadow = true;
-        door.receiveShadow = true;
-        scene.add(door);
-        
-        const rightWallTop = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, (roomHeight - windowHeight) / 2, windowWidth), wallMaterial);
-        rightWallTop.position.set(roomWidth / 2, roomHeight - (roomHeight - windowHeight) / 4, 0);
-        rightWallTop.castShadow = true;
-        rightWallTop.receiveShadow = true;
-        scene.add(rightWallTop);
-        
-        const rightWallBottom = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, (roomHeight - windowHeight) / 2, windowWidth), wallMaterial);
-        rightWallBottom.position.set(roomWidth / 2, (roomHeight - windowHeight) / 4, 0);
-        rightWallBottom.castShadow = true;
-        rightWallBottom.receiveShadow = true;
-        scene.add(rightWallBottom);
-        
-        const rightWallLeft = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight, (roomDepth - windowWidth) / 2), wallMaterial);
-        rightWallLeft.position.set(roomWidth / 2, roomHeight / 2, (roomDepth - windowWidth) / 4 + windowWidth / 2);
-        rightWallLeft.castShadow = true;
-        rightWallLeft.receiveShadow = true;
-        scene.add(rightWallLeft);
-        
-        const rightWallRight = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight, (roomDepth - windowWidth) / 2), wallMaterial);
-        rightWallRight.position.set(roomWidth / 2, roomHeight / 2, -(roomDepth - windowWidth) / 4 - windowWidth / 2);
-        rightWallRight.castShadow = true;
-        rightWallRight.receiveShadow = true;
-        scene.add(rightWallRight);
-        
-        const rightWindow = new THREE.Mesh(new THREE.PlaneGeometry(windowWidth, windowHeight), glassMaterial);
-        rightWindow.position.set(roomWidth / 2 + wallThickness / 2, roomHeight / 2, 0);
-        rightWindow.rotation.y = -Math.PI / 2;
-        rightWindow.castShadow = true;
-        rightWindow.receiveShadow = true;
-        scene.add(rightWindow);
+        const fragmentShaderWallSource  = `
+    precision mediump float;
+    varying vec2 vTexCoord;
+    uniform sampler2D uTexture;
+    void main() {
+        gl_FragColor = texture2D(uTexture, vTexCoord);
     }
-    
-    createWallWithWindowAndDoor();
-    
-    // Pavimento
-    const floor = new THREE.Mesh(new THREE.BoxGeometry(roomWidth, 0.1, roomDepth), floorMaterial);
-    floor.position.set(0, 0, 0);
-    floor.receiveShadow = true; // Permette al pavimento di ricevere le ombre
-    scene.add(floor);
-    
-    // Soffitto
-    const ceiling = floor.clone();
-    ceiling.position.set(0, roomHeight, 0);
-    ceiling.receiveShadow = true;
-    scene.add(ceiling);
-    
-    // Caricamento del modello OBJ con MTL
-    const mtlLoader = new MTLLoader();
-    const objLoader = new OBJLoader();
-    
-    // Aggiunta di una luce puntuale per simulare un lampadario al centro della stanza
-    const pointLight = new THREE.PointLight(0xffd700, 100, 50); // Luce calda e più intensa
-    pointLight.position.set(0, 9, 0); // Posizionata vicino al soffitto, al centro della stanza
-    pointLight.castShadow = true; // Abilita le ombre
-    pointLight.shadow.mapSize.width = 1024; // Risoluzione delle ombre
-    pointLight.shadow.mapSize.height = 1024;
-    pointLight.shadow.camera.near = 0.5;
-    pointLight.shadow.camera.far = 150;
-    scene.add(pointLight);
-    
-    mtlLoader.load('models/lamp.mtl', (materials) => {
-        materials.preload();
-        objLoader.setMaterials(materials);
-        objLoader.load('models/lamp.obj', (object) => {
-            object.position.set(0, roomHeight, 0);
-            object.rotation.set(Math.PI / 2, 0, 0);
-            object.scale.set(2.5, 2.5, 2.5);
-            object.castShadow = true;
-            object.receiveShadow = true;
-            scene.add(object);
-        });
-    });
-    
-    // Caricamento del modello OBJ dell'orologio
-    const clockTexture = textureLoader.load('models/orologio-horror_baseColor.jpg');
-    
-    mtlLoader.load('models/pendent-clock.mtl', (materials) => {
-        materials.preload();
-        objLoader.setMaterials(materials);
-        objLoader.load('models/pendent-clock.obj', (object) => {
-            object.traverse((child) => {
-                if (child.isMesh) {
-                    child.material.map = clockTexture;
-                    child.material.needsUpdate = true;
-                    child.material.side = THREE.DoubleSide;
-                    child.castShadow = true;
-                    child.receiveShadow = true;
-                }
-            });
-            object.position.set(-5, -0.75, -11.2);
-            object.rotation.set(-Math.PI, - Math.PI / 2, Math.PI);
-            object.scale.set(1, 1, 1);
+`;
+        
+        // Funzione per creare una parete
+        function createWall(gl, width, height, texture) {
+            const positions = [
+            -width / 2, -height / 2, 0.0,
+            width / 2, -height / 2, 0.0,
+            width / 2,  height / 2, 0.0,
+            -width / 2,  height / 2, 0.0,
+            ];
             
-            scene.add(object);
-        });
-    });
-    
-    // Aggiunta delle texture per il materiale dell'interruttore
-    const baseColor = textureLoader.load('textures/DefaultMaterial_Base_color.png');
-    const normalMap = textureLoader.load('textures/DefaultMaterial_Normal.png');
-    const roughnessMap = textureLoader.load('textures/DefaultMaterial_Roughness.png');
-    const metalnessMap = textureLoader.load('textures/DefaultMaterial_Metallic.png');
-    const aoMap = textureLoader.load('textures/DefaultMaterial_Mixed_AO.png');
-    
-    // Creazione del materiale per l'interruttore
-    const switchMaterial = new THREE.MeshStandardMaterial({
-        map: baseColor,
-        normalMap: normalMap,
-        roughnessMap: roughnessMap,
-        metalnessMap: metalnessMap,
-        aoMap: aoMap
-    });
-    
-    // Inizializza la posizione dell'interruttore
-    let switchPosition = new THREE.Vector3(-roomWidth / 2 + 0.1, doorHeight / 2, doorWidth / 2 + 0.5);  // Posizione dell'interruttore
-    
-    // Caricamento dell'interruttore
-    const fbxLoader = new FBXLoader();
-    fbxLoader.load('models/Switch.fbx', (object) => {
-        object.traverse((child) => {
-            if (child.isMesh) {
-                child.material = switchMaterial;
-                child.castShadow = true;
-                child.receiveShadow = true;
-            }
-        });
-        
-        // Posizionamento dell'interruttore accanto alla porta d'ingresso
-        object.rotation.set(0, Math.PI / 2, 0);
-        object.position.copy(switchPosition);
-        object.scale.set(0.05, 0.05, 0.05); // Scala corretta per l'interruttore
-        scene.add(object);
-    });
-    
-    // Caricamento del modello OBJ della bambola
-    const dollTexture = textureLoader.load('models/Doll_Doll_BaseColor.png');
-    
-    objLoader.load('models/doll.obj', (object) => {
-        object.traverse((child) => {
-            if (child.isMesh) {
-                child.material.map = dollTexture; 
-                child.material.needsUpdate = true;
-                child.castShadow = true;
-                child.receiveShadow = true;
-            }
-        });
-        
-        object.position.set((Math.random() - 0.5) * roomWidth, 0, (Math.random() - 0.5) * roomDepth);
-        object.scale.set(1, 1, 1);
-        scene.add(object);
-    });
-    
-    // Caricamento del modello OBJ della carrozzina 1
-    const wheelchair1Texture = textureLoader.load('models/Doll_Doll_BaseColor.png');
-    
-    objLoader.load('models/kurumaisu.unity_1.obj', (object) => {
-        object.traverse((child) => {
-            if (child.isMesh) {
-                child.material.map = wheelchair1Texture; 
-                child.material.needsUpdate = true;
-                child.castShadow = true;
-                child.receiveShadow = true;
-            }
-        });
-        
-        // Posizionamento vicino al bordo sinistro della stanza
-        object.position.set(-roomWidth + 10.5, -2.7, -roomDepth / 2 + 8);
-        object.rotation.set(0, -Math.PI / 2, 0);
-        object.scale.set(0.2, 0.2, 0.2);
-        scene.add(object);
-    });
-    
-    // Caricamento del modello OBJ della carrozzina 2
-    const wheelchair2Texture = textureLoader.load('models/Doll_Doll_BaseColor.png');
-    
-    objLoader.load('models/UnsavedScene_1.obj', (object) => {
-        object.traverse((child) => {
-            if (child.isMesh) {
-                child.material.map = wheelchair2Texture; 
-                child.material.needsUpdate = true;
-                child.castShadow = true;
-                child.receiveShadow = true;
-            }
-        });
-        
-        object.position.set(-roomWidth / 2 + 20, -2.1, -roomDepth / 2 + 8);
-        object.rotation.set(0, Math.PI / 2, 0);
-        object.scale.set(0.2, 0.2, 0.2);
-        scene.add(object);
-    });
-    
-    // Aggiunta di teschi posizionati lungo le pareti della stanza
-    function addSkull(position, rotation, scale) {
-        mtlLoader.load('models/12140_Skull_v3_L2.mtl', (materials) => {
-            materials.preload();
-            objLoader.setMaterials(materials);
+            const indices = [
+            0, 1, 2,
+            0, 2, 3,
+            ];
             
-            objLoader.load('models/12140_Skull_v3_L2.obj', (object) => {
-                object.position.set(position.x, position.y, position.z);
-                object.scale.set(scale, scale, scale);
-                object.rotation.set(rotation.x, rotation.y, rotation.z);
-                object.castShadow = true;
-                object.receiveShadow = true;
-                scene.add(object);
-            });
-        });
-    }
-    
-    // Teschio sul muro frontale sinistro
-    addSkull(
-    { x: -8, y: 0, z: -11.0 },
-    { x: -Math.PI / 2, y: 0, z: 0 },
-    0.05
-    );
-    addSkull(
-    { x: -8, y: 1.5, z: -10.8 },
-    { x: -Math.PI / 2 + 0.4, y: 0.2, z: 0.5 },
-    0.06
-    );
-    addSkull(
-    { x: -8, y: 3.3, z: -10.9 },
-    { x: -Math.PI / 2 + 0.2, y: 1.3, z: -0.15 },
-    0.05
-    );
-    
-    // Teschio sul muro frontale destro
-    addSkull(
-    { x: 8, y: 0.2, z: -10.9 },
-    { x: -Math.PI / 2 + 0.1, y: 0, z: 0 },
-    0.06
-    );
-    addSkull(
-    { x: 8, y: 1.8, z: -10.6 },
-    { x: -Math.PI / 2 + 0.3, y: 0, z: -0.3 },
-    0.07
-    );
-    
-    // Teschio sulla parete posteriore sinistra
-    addSkull(
-    { x: -8, y: 0, z: 11.3 },
-    { x: Math.PI / 2, y: Math.PI, z: 0 },
-    0.08
-    );
-    addSkull(
-    { x: -8, y: 2, z: 11.3 },
-    { x: Math.PI / 2 + 0.1, y: Math.PI, z: 0.2 },
-    0.07
-    );
-    
-    // Teschio sulla parete posteriore destra
-    addSkull(
-    { x: 7.7, y: 0, z: 11.3 },
-    { x: Math.PI / 2, y: Math.PI, z: 0 },
-    0.06
-    );
-    addSkull(
-    { x: 8, y: 1.4, z: 11.3 },
-    { x: Math.PI / 2 + 0.3, y: Math.PI, z: 0 },
-    0.07
-    );
-    addSkull(
-    { x: 7.8, y: 2.8, z: 11.3 },
-    { x: Math.PI / 2 + 0.3, y: Math.PI, z: 0.1 },
-    0.07
-    );
-    
-    // Teschio sul muro laterale sinistro, sopra la porta
-    addSkull(
-    { x: -10, y: doorHeight + 0.5, z: 0 },
-    { x: -Math.PI / 2, y: Math.PI / 2, z: 0 },
-    0.05
-    );
-    
-    // Teschio sul muro laterale destro
-    addSkull(
-    { x: 10, y: 0.7, z: 4 },
-    { x: -Math.PI / 2, y: -Math.PI / 2 - 0.1, z: 2 },
-    0.05
-    );
-    
-    // Aggiunta delle pareti e del pavimento all'Octree per le collisioni
-    worldOctree.fromGraphNode(scene);
-    
-    function playerCollisions() {
-        const result = worldOctree.capsuleIntersect(playerCollider);
-        playerOnFloor = false;
-        if (result) {
-            playerOnFloor = result.normal.y > 0;
-            if (!playerOnFloor) {
-                playerVelocity.addScaledVector(result.normal, -result.normal.dot(playerVelocity));
-            }
-            if (result.depth >= 1e-10) {
-                playerCollider.translate(result.normal.multiplyScalar(result.depth));
-            }
-        }
-    }
-    
-    function updatePlayer(deltaTime) {
-        let damping = Math.exp(-4 * deltaTime) - 1;
-        if (!playerOnFloor) {
-            playerVelocity.y -= GRAVITY * deltaTime;
-            damping *= 0.1;
-        }
-        playerVelocity.addScaledVector(playerVelocity, damping);
-        const deltaPosition = playerVelocity.clone().multiplyScalar(deltaTime);
-        playerCollider.translate(deltaPosition);
-        playerCollisions();
-        camera.position.copy(playerCollider.end);
-    }
-    
-    function getForwardVector() {
-        camera.getWorldDirection(playerDirection);
-        playerDirection.y = 0;
-        playerDirection.normalize();
-        return playerDirection;
-    }
-    
-    function getSideVector() {
-        camera.getWorldDirection(playerDirection);
-        playerDirection.y = 0;
-        playerDirection.normalize();
-        playerDirection.cross(camera.up);
-        return playerDirection;
-    }
-    
-    // Funzione per gestire lo sfarfallio della luce
-    function flickerLight(light, duration) {
-        let flickerCount = Math.floor(Math.random() * 5) + 3; // Numero casuale di sfarfallii tra 3 e 7
-        let flickerInterval = setInterval(() => {
-            light.visible = !light.visible;
-            flickerCount--;
-            if (flickerCount <= 0) {
-                clearInterval(flickerInterval);
-                light.visible = true; // Assicurati che la luce rimanga accesa alla fine
-            }
-        }, duration / flickerCount);
-    }
-    
-    // Controllo e aggiornamento della posizione e dell'interazione del giocatore
-    // Posizione della bambola (aggiorna con la posizione effettiva della tua bambola)
-    const dollPosition = new THREE.Vector3((Math.random() - 0.5) * roomWidth, 0, (Math.random() - 0.5) * roomDepth);
-    
-    // Raggio entro il quale il suono viene attivato
-    const proximityRadius = 5; // Imposta il raggio di prossimità alla bambola
-    
-    // Funzione per riprodurre casualmente uno dei due suoni solo se la luce è spenta
-    function playRandomDollSound() {
-        if (!pointLight.visible) {  // Controlla se la luce è spenta
-            const randomSound = Math.random() < 0.5 ? laLaLaSound : demonLaughSound; // 50% di probabilità per ogni suono
-            if (!randomSound.playing) {  // Controlla che il suono non sia già in esecuzione
-                randomSound.play();
-                randomSound.playing = true;
-                randomSound.onended = () => {
-                    randomSound.playing = false;  // Reimposta lo stato dopo che il suono è terminato
-                };
-            }
-        }
-    }
-    
-    // Aggiorna la funzione `controls` per includere il controllo di prossimità alla bambola
-    function controls(deltaTime) {
-        const speedDelta = deltaTime * (playerOnFloor ? 25 : 8);
-        if (keyStates['KeyW']) {
-            playerVelocity.add(getForwardVector().multiplyScalar(speedDelta));
-        }
-        if (keyStates['KeyS']) {
-            playerVelocity.add(getForwardVector().multiplyScalar(-speedDelta));
-        }
-        if (keyStates['KeyA']) {
-            playerVelocity.add(getSideVector().multiplyScalar(-speedDelta));
-        }
-        if (keyStates['KeyD']) {
-            playerVelocity.add(getSideVector().multiplyScalar(speedDelta));
-        }
-        if (playerOnFloor && keyStates['Space']) {
-            playerVelocity.y = 10;
-        }
-        
-        const playerPosition = playerCollider.end;
-        
-        // Controlla la distanza tra il giocatore e la bambola
-        const distanceToDoll = playerPosition.distanceTo(dollPosition);
-        
-        // Se il giocatore è vicino alla bambola e la luce è spenta, avvia un suono casuale
-        if (distanceToDoll < proximityRadius) {
-            playRandomDollSound();
-        }
-        
-        const distanceToSwitch = playerPosition.distanceTo(switchPosition);
-        if (distanceToSwitch < 7) {  // Se il giocatore è vicino all'interruttore
-        instructions.style.visibility = 'visible';
-        crosshair.style.backgroundImage = "url('images/crosshair-selection.png')"; // Cambia il colore del crosshair
-        
-        if (keyStates['KeyF'] && canToggleLight && !isFlickering) {
-            pointLight.visible = !pointLight.visible; // Accendi/spegni la luce
-            canToggleLight = false;  // Evita il toggling continuo mentre il tasto è premuto
-            if (pointLight.visible) {
-                flickerLight(pointLight, 500); // Aggiungi l'effetto di sfarfallio
-            }
-        }
-    } else {
-        instructions.style.visibility = 'hidden';
-        crosshair.style.backgroundImage = "url('images/crosshair.png')"; // Torna al crosshair originale
-    }
-}
-
-function teleportPlayerIfOob() {
-    if (camera.position.y <= -20) {
-        playerCollider.start.set(0, 0.35, 0);
-        playerCollider.end.set(0, 4, 0);
-        playerCollider.radius = 0.35;
-        camera.position.copy(playerCollider.end);
-        camera.rotation.set(0, 0, 0);
-    }
-}
-
-// Funzione per gestire l'interazione con la bambola
-function interactWithDoll() {
-    if (!playerCollider || !dollPosition) return;
-    
-    const playerPosition = playerCollider.end;
-    const distanceToDoll = playerPosition.distanceTo(dollPosition);
-    
-    if (distanceToDoll < 10) {
-        const randomSound = Math.random() < 0.5 ? laLaLaSound : demonLaughSound;
-        
-        if (!randomSound.playing) {
-            randomSound.play();
-            randomSound.playing = true;
-            randomSound.onended = () => {
-                randomSound.playing = false;
+            const texCoords = [
+            0.0, 0.0,
+            1.0, 0.0,
+            1.0, 1.0,
+            0.0, 1.0,
+            ];
+            
+            // Buffer per posizioni
+            const positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+            
+            // Buffer per coordinate texture
+            const texCoordBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(texCoords), gl.STATIC_DRAW);
+            
+            // Buffer per indici
+            const indexBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+            
+            return {
+                positionBuffer,
+                texCoordBuffer,
+                indexBuffer,
+                vertexCount: indices.length,
+                texture,
             };
         }
-    }
-}
-</script>
+        
+        // Funzione per caricare una texture
+        function loadTexture(gl, url) {
+            const texture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            
+            // Placeholder iniziale
+            const placeholder = new Uint8Array([255, 255, 255, 255]);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, placeholder);
+            
+            const image = new Image();
+            image.onload = () => {
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+                gl.generateMipmap(gl.TEXTURE_2D);
+            };
+            image.src = url;
+            
+            return texture;
+        }
+        
+        
+        // Carica texture per pareti e pavimento
+        const wallTexture = loadTexture(gl, 'textures/wall.jpg');
+        const floorTexture = loadTexture(gl, 'textures/wood.jpg');
+        
+        // Crea le pareti
+        const walls = [
+        createWall(gl, roomWidth, roomHeight, wallTexture),  // Parete frontale
+        createWall(gl, roomWidth, roomHeight, wallTexture),  // Parete posteriore
+        createWall(gl, roomDepth, roomHeight, wallTexture),  // Parete sinistra
+        createWall(gl, roomDepth, roomHeight, wallTexture),  // Parete destra
+        ];
+        
+        // Crea il pavimento
+        const floor = createWall(gl, roomWidth, roomDepth, floorTexture);
+        
+        // Funzione per disegnare una parete
+        function drawWall(gl, programInfo, wall, modelViewMatrix) {
+            gl.bindBuffer(gl.ARRAY_BUFFER, wall.positionBuffer);
+            gl.vertexAttribPointer(programInfo.attribLocations.aPosition, 3, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(programInfo.attribLocations.aPosition);
+            
+            gl.bindBuffer(gl.ARRAY_BUFFER, wall.texCoordBuffer);
+            gl.vertexAttribPointer(programInfo.attribLocations.aTexCoord, 2, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(programInfo.attribLocations.aTexCoord);
+            
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wall.indexBuffer);
+            
+            gl.uniformMatrix4fv(programInfo.uniformLocations.uModelViewMatrix, false, modelViewMatrix);
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, wall.texture);
+            gl.uniform1i(programInfo.uniformLocations.uTexture, 0);
+            
+            gl.drawElements(gl.TRIANGLES, wall.vertexCount, gl.UNSIGNED_SHORT, 0);
+        }
+        
+        // Disegna tutte le pareti e il pavimento
+        function drawScene(gl, programInfo, projectionMatrix, viewMatrix) {
+            walls.forEach((wall, index) => {
+                const modelViewMatrix = mat4.create();
+                // Posiziona le pareti nel posto corretto
+                switch (index) {
+                    case 0: mat4.translate(modelViewMatrix, viewMatrix, [0, roomHeight / 2, -roomDepth / 2]); break;
+                    case 1: mat4.translate(modelViewMatrix, viewMatrix, [0, roomHeight / 2, roomDepth / 2]); break;
+                    case 2: mat4.translate(modelViewMatrix, viewMatrix, [-roomWidth / 2, roomHeight / 2, 0]); break;
+                    case 3: mat4.translate(modelViewMatrix, viewMatrix, [roomWidth / 2, roomHeight / 2, 0]); break;
+                }
+                drawWall(gl, programInfo, wall, modelViewMatrix);
+            });
+            
+            // Disegna il pavimento
+            const floorModelViewMatrix = mat4.create();
+            mat4.translate(floorModelViewMatrix, viewMatrix, [0, 0, 0]);
+            drawWall(gl, programInfo, floor, floorModelViewMatrix);
+        }
+        
+        // Pavimento
+        function createFloor(gl, width, depth, height, texture) {
+            const positions = [
+            -width / 2, 0, -depth / 2,
+            width / 2, 0, -depth / 2,
+            width / 2, 0,  depth / 2,
+            -width / 2, 0,  depth / 2,
+            ];
+            
+            const texCoords = [
+            0.0, 0.0,
+            1.0, 0.0,
+            1.0, 1.0,
+            0.0, 1.0,
+            ];
+            
+            const indices = [
+            0, 1, 2,
+            0, 2, 3,
+            ];
+            
+            const positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+            
+            const texCoordBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(texCoords), gl.STATIC_DRAW);
+            
+            const indexBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+            
+            return {
+                positionBuffer,
+                texCoordBuffer,
+                indexBuffer,
+                vertexCount: indices.length,
+                texture,
+            };
+        }
+        
+        const floorTexture = loadTexture(gl, 'textures/wood.jpg');
+        const floor = createFloor(gl, roomWidth, roomDepth, 0.1, floorTexture);
+        
+        // Disegna il pavimento
+        function drawFloor(gl, programInfo, floor, modelViewMatrix) {
+            gl.bindBuffer(gl.ARRAY_BUFFER, floor.positionBuffer);
+            gl.vertexAttribPointer(programInfo.attribLocations.aPosition, 3, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(programInfo.attribLocations.aPosition);
+            
+            gl.bindBuffer(gl.ARRAY_BUFFER, floor.texCoordBuffer);
+            gl.vertexAttribPointer(programInfo.attribLocations.aTexCoord, 2, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(programInfo.attribLocations.aTexCoord);
+            
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, floor.indexBuffer);
+            
+            gl.uniformMatrix4fv(programInfo.uniformLocations.uModelViewMatrix, false, modelViewMatrix);
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, floor.texture);
+            gl.uniform1i(programInfo.uniformLocations.uTexture, 0);
+            
+            gl.drawElements(gl.TRIANGLES, floor.vertexCount, gl.UNSIGNED_SHORT, 0);
+        }
+        
+        // Soffitto
+        const ceilingTexture = floorTexture; // Riutilizziamo la texture del pavimento
+        const ceiling = createFloor(gl, roomWidth, roomDepth, 0.1, ceilingTexture);
+        
+        // Luce puntuale (simulata)
+        const pointLightPosition = [0, roomHeight - 1, 0]; // Posizione della luce
+        const pointLightColor = [1.0, 0.84, 0.0]; // Colore caldo per la luce
+        
+        function applyLighting(gl, programInfo) {
+            gl.uniform3fv(programInfo.uniformLocations.uLightPosition, pointLightPosition);
+            gl.uniform3fv(programInfo.uniformLocations.uLightColor, pointLightColor);
+        }
+        
+        // Caricamento di un modello OBJ con texture (lampadario)
+        function loadLamp(gl, modelUrl, textureUrl, position, scale) {
+            const texture = loadTexture(gl, textureUrl);
+            fetch(modelUrl)
+            .then((response) => response.text())
+            .then((objData) => {
+                const model = parseOBJ(objData); // Funzione di parsing per il formato OBJ
+                const lamp = createModel(gl, model, texture);
+                lamp.position = position;
+                lamp.scale = scale;
+                drawModel(gl, lamp);
+            });
+        }
+        
+        loadLamp(gl, 'models/lamp.obj', 'textures/lamp_texture.jpg', [0, roomHeight, 0], [2.5, 2.5, 2.5]);
+        
+        // Funzione per disegnare il pavimento e il soffitto
+        function drawRoomElements(gl, programInfo, projectionMatrix, viewMatrix) {
+            const floorModelViewMatrix = mat4.create();
+            mat4.translate(floorModelViewMatrix, viewMatrix, [0, 0, 0]);
+            drawFloor(gl, programInfo, floor, floorModelViewMatrix);
+            
+            const ceilingModelViewMatrix = mat4.create();
+            mat4.translate(ceilingModelViewMatrix, viewMatrix, [0, roomHeight, 0]);
+            drawFloor(gl, programInfo, ceiling, ceilingModelViewMatrix);
+        }
+        
+        // Funzione per caricare un modello OBJ
+        function loadOBJ(gl, objUrl, textureUrl, position, rotation, scale) {
+            fetch(objUrl)
+            .then((response) => response.text())
+            .then((objData) => {
+                const model = parseOBJ(objData); // Funzione di parsing per il formato OBJ
+                const texture = loadTexture(gl, textureUrl);
+                
+                const modelBuffers = createModelBuffers(gl, model);
+                
+                drawModel(gl, modelBuffers, texture, position, rotation, scale);
+            });
+        }
+        
+        // Funzione per creare i buffer per un modello
+        function createModelBuffers(gl, model) {
+            const buffers = {
+                position: createBuffer(gl, gl.ARRAY_BUFFER, new Float32Array(model.vertices)),
+                normal: createBuffer(gl, gl.ARRAY_BUFFER, new Float32Array(model.normals)),
+                texCoord: createBuffer(gl, gl.ARRAY_BUFFER, new Float32Array(model.textureCoords)),
+                index: createBuffer(gl, gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(model.indices)),
+            };
+            return buffers;
+        }
+        
+        // Funzione per disegnare un modello
+        function drawModel(gl, buffers, texture, modelMatrix) {
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
+            gl.vertexAttribPointer(programInfo.attribLocations.aPosition, 3, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(programInfo.attribLocations.aPosition);
+            
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.texCoord);
+            gl.vertexAttribPointer(programInfo.attribLocations.aTexCoord, 2, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(programInfo.attribLocations.aTexCoord);
+            
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.index);
+            gl.uniformMatrix4fv(programInfo.uniformLocations.uModelMatrix, false, modelMatrix);
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.uniform1i(programInfo.uniformLocations.uTexture, 0);
+            
+            gl.drawElements(gl.TRIANGLES, buffers.indexCount, gl.UNSIGNED_SHORT, 0);
+        }
+        
+        // Caricamento e rendering dell'orologio
+        loadOBJ(
+        gl,
+        'models/pendent-clock.obj',
+        'models/orologio-horror_baseColor.jpg',
+        [-5, -0.75, -11.2],  // Posizione
+        [-Math.PI, -Math.PI / 2, Math.PI],  // Rotazione
+        [1, 1, 1]  // Scala
+        );
+        
+        // Funzione per creare un materiale personalizzato
+        function createMaterial(gl, textures) {
+            return {
+                baseColor: loadTexture(gl, textures.baseColor),
+                normalMap: loadTexture(gl, textures.normalMap),
+                roughnessMap: loadTexture(gl, textures.roughnessMap),
+                metalnessMap: loadTexture(gl, textures.metalnessMap),
+                aoMap: loadTexture(gl, textures.aoMap),
+            };
+        }
+        
+        // Caricamento delle texture per il materiale dell'interruttore
+        const switchMaterial = createMaterial(gl, {
+            baseColor: 'textures/DefaultMaterial_Base_color.png',
+            normalMap: 'textures/DefaultMaterial_Normal.png',
+            roughnessMap: 'textures/DefaultMaterial_Roughness.png',
+            metalnessMap: 'textures/DefaultMaterial_Metallic.png',
+            aoMap: 'textures/DefaultMaterial_Mixed_AO.png',
+        });
+        
+        // Posizione dell'interruttore
+        const switchPosition = [-roomWidth / 2 + 0.1, doorHeight / 2, doorWidth / 2 + 0.5];
+        
+        // Funzione per caricare e posizionare l'interruttore
+        function loadSwitch(gl, objUrl, material, position, rotation, scale) {
+            fetch(objUrl)
+            .then((response) => response.text())
+            .then((objData) => {
+                const model = parseOBJ(objData); // Funzione per parsare il modello OBJ
+                const modelBuffers = createModelBuffers(gl, model);
+                
+                drawModel(gl, modelBuffers, material, position, rotation, scale);
+            });
+        }
+        
+        // Caricamento del modello interruttore
+        loadSwitch(
+        gl,
+        'models/Switch.obj',
+        switchMaterial,
+        switchPosition,
+        [0, Math.PI / 2, 0], // Rotazione
+        [0.05, 0.05, 0.05] // Scala
+        );
+        
+        // Texture per la bambola
+        const dollTexture = loadTexture(gl, 'models/Doll_Doll_BaseColor.png');
+        
+        // Funzione per caricare e aggiungere un modello alla scena
+        function loadModel(gl, objUrl, texture, position, rotation, scale) {
+            fetch(objUrl)
+            .then((response) => response.text())
+            .then((objData) => {
+                const model = parseOBJ(objData); // Funzione personalizzata per parsare il modello OBJ
+                const modelBuffers = createModelBuffers(gl, model);
+                
+                drawModel(gl, modelBuffers, texture, position, rotation, scale);
+            });
+        }
+        
+        // Caricamento del modello della bambola
+        loadModel(
+        gl,
+        'models/doll.obj',
+        dollTexture,
+        [(Math.random() - 0.5) * roomWidth, 0, (Math.random() - 0.5) * roomDepth],
+        [0, 0, 0], // Nessuna rotazione iniziale
+        [1, 1, 1] // Scala normale
+        );
+        
+        // Caricamento del modello della carrozzina 1
+        loadModel(
+        gl,
+        'models/kurumaisu.unity_1.obj',
+        dollTexture,
+        [-roomWidth + 10.5, -2.7, -roomDepth / 2 + 8], // Posizione specifica
+        [0, -Math.PI / 2, 0], // Rotazione orizzontale di 90°
+        [0.2, 0.2, 0.2] // Scala ridotta
+        );
+        
+        
+        // Caricamento della carrozzina 2
+        loadModel(
+        gl,
+        'models/UnsavedScene_1.obj',
+        wheelchair2Texture,
+        [-roomWidth / 2 + 20, -2.1, -roomDepth / 2 + 8], // Posizione
+        [0, Math.PI / 2, 0], // Rotazione
+        [0.2, 0.2, 0.2] // Scala
+        );
+        
+        // Funzione per aggiungere un teschio alla scena
+        function addSkull(position, rotation, scale) {
+            loadModel(
+            gl,
+            'models/12140_Skull_v3_L2.obj',
+            skullTexture,
+            [position.x, position.y, position.z],
+            [rotation.x, rotation.y, rotation.z],
+            [scale, scale, scale]
+            );
+        }
+        
+        // Aggiunta dei teschi lungo le pareti della stanza
+        addSkull({ x: -8, y: 0, z: -11.0 }, { x: -Math.PI / 2, y: 0, z: 0 }, 0.05);
+        addSkull({ x: -8, y: 1.5, z: -10.8 }, { x: -Math.PI / 2 + 0.4, y: 0.2, z: 0.5 }, 0.06);
+        addSkull({ x: -8, y: 3.3, z: -10.9 }, { x: -Math.PI / 2 + 0.2, y: 1.3, z: -0.15 }, 0.05);
+        
+        addSkull({ x: 8, y: 0.2, z: -10.9 }, { x: -Math.PI / 2 + 0.1, y: 0, z: 0 }, 0.06);
+        addSkull({ x: 8, y: 1.8, z: -10.6 }, { x: -Math.PI / 2 + 0.3, y: 0, z: -0.3 }, 0.07);
+        
+        addSkull({ x: -8, y: 0, z: 11.3 }, { x: Math.PI / 2, y: Math.PI, z: 0 }, 0.08);
+        addSkull({ x: -8, y: 2, z: 11.3 }, { x: Math.PI / 2 + 0.1, y: Math.PI, z: 0.2 }, 0.07);
+        
+        addSkull({ x: 7.7, y: 0, z: 11.3 }, { x: Math.PI / 2, y: Math.PI, z: 0 }, 0.06);
+        addSkull({ x: 8, y: 1.4, z: 11.3 }, { x: Math.PI / 2 + 0.3, y: Math.PI, z: 0 }, 0.07);
+        addSkull({ x: 7.8, y: 2.8, z: 11.3 }, { x: Math.PI / 2 + 0.3, y: Math.PI, z: 0.1 }, 0.07);
+        
+        addSkull({ x: -10, y: doorHeight + 0.5, z: 0 }, { x: -Math.PI / 2, y: Math.PI / 2, z: 0 }, 0.05);
+        addSkull({ x: 10, y: 0.7, z: 4 }, { x: -Math.PI / 2, y: -Math.PI / 2 - 0.1, z: 2 }, 0.05);
+        
+        
+        // Aggiunta di pareti e pavimento per gestire le collisioni
+        const collisionObjects = [];
+        scene.traverse((child) => {
+            if (child.isMesh) {
+                collisionObjects.push(child);
+            }
+        });
+        
+        function playerCollisions() {
+            playerOnFloor = false;
+            
+            collisionObjects.forEach((object) => {
+                const boundingBox = new THREE.Box3().setFromObject(object);
+                const capsuleBox = new THREE.Box3(
+                new THREE.Vector3(
+                playerCollider.start.x - playerCollider.radius,
+                playerCollider.start.y - playerCollider.radius,
+                playerCollider.start.z - playerCollider.radius
+                ),
+                new THREE.Vector3(
+                playerCollider.end.x + playerCollider.radius,
+                playerCollider.end.y + playerCollider.radius,
+                playerCollider.end.z + playerCollider.radius
+                )
+                );
+                
+                if (boundingBox.intersectsBox(capsuleBox)) {
+                    const collisionNormal = boundingBox.getCenter(new THREE.Vector3()).sub(playerCollider.end).normalize();
+                    playerOnFloor = collisionNormal.y > 0;
+                    
+                    if (!playerOnFloor) {
+                        playerVelocity.addScaledVector(collisionNormal, -collisionNormal.dot(playerVelocity));
+                    }
+                    
+                    const depth = boundingBox.distanceToPoint(playerCollider.end);
+                    if (depth > 0) {
+                        playerCollider.translate(collisionNormal.multiplyScalar(depth));
+                    }
+                }
+            });
+        }
+        
+        function updatePlayer(deltaTime) {
+            let damping = Math.exp(-4 * deltaTime) - 1;
+            if (!playerOnFloor) {
+                playerVelocity.y -= GRAVITY * deltaTime;
+                damping *= 0.1;
+            }
+            playerVelocity.addScaledVector(playerVelocity, damping);
+            
+            const deltaPosition = playerVelocity.clone().multiplyScalar(deltaTime);
+            playerCollider.translate(deltaPosition);
+            
+            playerCollisions();
+            camera.position.copy(playerCollider.end);
+        }
+        
+        function getForwardVector() {
+            camera.getWorldDirection(playerDirection);
+            playerDirection.y = 0;
+            playerDirection.normalize();
+            return playerDirection;
+        }
+        
+        function getSideVector() {
+            camera.getWorldDirection(playerDirection);
+            playerDirection.y = 0;
+            playerDirection.normalize();
+            playerDirection.cross(camera.up);
+            return playerDirection;
+        }
+        
+        // Funzione per gestire lo sfarfallio della luce
+        function flickerLight(light, duration) {
+            let flickerCount = Math.floor(Math.random() * 5) + 3; // Numero casuale di sfarfallii tra 3 e 7
+            let flickerInterval = setInterval(() => {
+                light.visible = !light.visible;
+                flickerCount--;
+                if (flickerCount <= 0) {
+                    clearInterval(flickerInterval);
+                    light.visible = true; // Assicurati che la luce rimanga accesa alla fine
+                }
+            }, duration / flickerCount);
+        }
+        
+        // Controllo e aggiornamento della posizione e dell'interazione del giocatore
+        const dollPosition = new THREE.Vector3((Math.random() - 0.5) * roomWidth, 0, (Math.random() - 0.5) * roomDepth);
+        const proximityRadius = 5; // Raggio di prossimità alla bambola
+        
+        // Funzione per riprodurre casualmente uno dei due suoni solo se la luce è spenta
+        function playRandomDollSound() {
+            if (!pointLight.visible) { // Controlla se la luce è spenta
+                const randomSound = Math.random() < 0.5 ? laLaLaSound : demonLaughSound; // 50% di probabilità per ogni suono
+                if (!randomSound.playing) { // Controlla che il suono non sia già in esecuzione
+                    randomSound.play();
+                    randomSound.playing = true;
+                    randomSound.onended = () => {
+                        randomSound.playing = false; // Reimposta lo stato dopo che il suono è terminato
+                    };
+                }
+            }
+        }
+        
+        // Funzione aggiornata `controls` con il controllo di prossimità alla bambola
+        function controls(deltaTime) {
+            const speedDelta = deltaTime * (playerOnFloor ? 25 : 8);
+            
+            if (keyStates['KeyW']) {
+                playerVelocity.add(getForwardVector().multiplyScalar(speedDelta));
+            }
+            if (keyStates['KeyS']) {
+                playerVelocity.add(getForwardVector().multiplyScalar(-speedDelta));
+            }
+            if (keyStates['KeyA']) {
+                playerVelocity.add(getSideVector().multiplyScalar(-speedDelta));
+            }
+            if (keyStates['KeyD']) {
+                playerVelocity.add(getSideVector().multiplyScalar(speedDelta));
+            }
+            if (playerOnFloor && keyStates['Space']) {
+                playerVelocity.y = 10; // Salto
+            }
+            
+            const playerPosition = playerCollider.end;
+            
+            // Controlla la distanza tra il giocatore e la bambola
+            const distanceToDoll = playerPosition.distanceTo(dollPosition);
+            
+            if (distanceToDoll < proximityRadius) {
+                playRandomDollSound();
+            }
+            
+            // Controllo della prossimità all'interruttore
+            const distanceToSwitch = playerPosition.distanceTo(switchPosition);
+            
+            if (distanceToSwitch < 7) {
+                instructions.style.visibility = 'visible';
+                crosshair.style.backgroundImage = "url('images/crosshair-selection.png')"; // Cambia il colore del crosshair
+                
+                if (keyStates['KeyF'] && canToggleLight && !isFlickering) {
+                    pointLight.visible = !pointLight.visible; // Accendi/spegni la luce
+                    canToggleLight = false;
+                    
+                    if (pointLight.visible) {
+                        flickerLight(pointLight, 500); // Effetto di sfarfallio
+                    }
+                }
+            } else {
+                instructions.style.visibility = 'hidden';
+                crosshair.style.backgroundImage = "url('images/crosshair.png')"; // Crosshair originale
+            }
+        }
+        
+        // Funzione per riportare il giocatore nell'area se esce fuori dai limiti
+        function teleportPlayerIfOob() {
+            if (camera.position.y <= -20) {
+                playerCollider.start.set(0, 0.35, 0);
+                playerCollider.end.set(0, 4, 0);
+                playerCollider.radius = 0.35;
+                camera.position.copy(playerCollider.end);
+                camera.rotation.set(0, 0, 0);
+            }
+        }
+        
+        // Funzione per gestire l'interazione con la bambola
+        function interactWithDoll() {
+            const playerPosition = playerCollider.end;
+            
+            // Controlla la distanza tra il giocatore e la bambola
+            const distanceToDoll = playerPosition.distanceTo(dollPosition);
+            
+            if (distanceToDoll < 10) {
+                const randomSound = Math.random() < 0.5 ? laLaLaSound : demonLaughSound;
+                
+                if (!randomSound.playing) {
+                    randomSound.play();
+                    randomSound.playing = true;
+                    
+                    randomSound.onended = () => {
+                        randomSound.playing = false;
+                    };
+                }
+            }
+        }
+    </script>
 </body>
 </html>

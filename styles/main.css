@@ -13,7 +13,7 @@ body {
     left: 0;
     width: 100vw;
     height: 100vh;
-    display: inline-block; /* Usa inline-block per evitare problemi con block */
+    display: inline-block;
 }
 
 #top-bar {
@@ -34,20 +34,19 @@ body {
 
 @media (max-width: 768px) {
     #top-bar {
-        height: 40px; /* Riduci l'altezza della barra */
-        font-size: 14px; /* Riduci la dimensione del font */
-        padding: 5px; /* Meno padding */
-        justify-content: space-between; /* Riduci gli spazi tra gli elementi */
+        height: 40px;
+        font-size: 14px;
+        padding: 5px;
     }
 }
 
 @media (max-width: 480px) {
     #top-bar {
-        display: none; /* Nascondi la barra sui dispositivi molto piccoli */
+        display: none;
     }
 }
 
-/* Stile per il menu iniziale con trasparenza e overlay */
+/* Stile per il menu iniziale */
 #start-menu {
     position: absolute;
     top: 0;
@@ -59,7 +58,7 @@ body {
     justify-content: center;
     align-items: center;
     background: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), 
-                url('images/background.png') no-repeat center center;
+                url('../images/background.png') no-repeat center center;
     background-size: cover;
     backdrop-filter: blur(5px);
 }
@@ -89,10 +88,7 @@ body {
     transform: scale(1.1);
 }
 
-body.no-cursor {
-    cursor: none;
-}
-
+/* Crosshair */
 #crosshair {
     position: absolute;
     top: 50%;
@@ -121,6 +117,7 @@ body.no-cursor {
     color: yellow;
 }
 
+/* Side Panel */
 #side-panel {
     position: absolute;
     right: 0;
@@ -143,38 +140,7 @@ body.no-cursor {
     display: none;
 }
 
-#fps-counter {
-    font-family: 'Creepster', cursive;
-    color: white;
-}
-
-#panel-instructions {
-    font-style: italic;
-    opacity: 0.8;
-}
-
-#side-panel {
-    position: absolute;
-    right: 0;
-    top: 0;
-    width: 250px;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.85);
-    padding: 20px;
-    color: white;
-    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.7);
-    transform: translateX(100%);
-    transition: transform 0.3s ease;
-}
-
-#side-panel.visible {
-    transform: translateX(0);
-}
-
-.hidden {
-    display: none;
-}
-
+/* Game Controls */
 #game-controls {
     color: white;
     font-family: 'Creepster', sans-serif;
