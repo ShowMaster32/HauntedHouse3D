@@ -3,15 +3,10 @@
 <head>
     <title>Progetto CG A.A.2023/2024</title>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, minimum-scale=1.0, maximum-scale=1.0">
-    <link rel="icon" type="image/x-icon" href="images/favicon.ico">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
     <link href="https://fonts.googleapis.com/css2?family=Creepster&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="main.css">
-
-    <!-- Librerie del corso -->
-    <script src="./libs/webgl-utils.js"></script>
-    <script src="./libs/m4.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/webgl-obj-loader@2.0.3/dist/webgl-obj-loader.min.js"></script>
+    <link type="text/css" rel="stylesheet" href="main.css">
 </head>
 <body>
     <!-- Start Menu -->
@@ -19,551 +14,989 @@
         <h1>Welcome to HauntedHouse</h1>
         <button id="start-button">START</button>
     </div>
-    <!-- Canvas -->
-    <canvas id="canvas" style="display: none;"></canvas>
-    <!-- Eventuali div/hud -->
+    
+    <!-- Canvas per il rendering -->
+    <canvas id="canvas" style="display: none;"></canvas> <!-- Nascondi il canvas all'inizio -->
+    
+    <!-- Contenitore del gioco -->
     <div id="container" style="display: none;"></div>
-
-    <!-- SHADER OGGETTI (VERTEX) -->
-    <script id="obj-vertex-shader" type="x-shader/x-vertex">
-    attribute vec4 a_position;
-    attribute vec2 a_texcoord;
-
-    uniform mat4 u_matrix;
-
-    varying vec2 v_texcoord;
-
-    void main() {
-        gl_Position = u_matrix * a_position;
-        v_texcoord  = a_texcoord;
-    }
+    
+    <!-- Istruzioni -->
+    <div id="instructions" style="visibility: hidden;">Press <span>F</span> to turn on the light</div>
+    
+    <!-- Crosshair per mirare -->
+    <div id="crosshair" style="display: none;"></div>
+    
+    <!-- Barra in alto -->
+    <div id="top-bar" style="display: none;">
+        <span id="panel-instructions">Press P to open control panel</span>
+        <span id="game-controls" style="margin-left: 20px;"></span> <!-- Legenda dei comandi -->
+    </div>
+    
+    <!-- Pannello laterale nascosto all'inizio -->
+    <div id="side-panel" class="hidden">
+        <h2>Control Panel</h2>
+        <button id="toggleShadows">Toggle Shadows</button>
+        <button id="toggleReflections">Toggle Reflections</button>
+        <button id="advancedRendering">Toggle Advanced Rendering</button>
+    </div>
+    
+    <!-- Gestione della musica -->
+    <audio id="intro-music" src="./sounds/intro.mp3"></audio>
+    <audio id="start-music" src="./sounds/start-game.mp3"></audio>
+    <audio id="random-ghost" src="./sounds/random-ghost.mp3"></audio>
+    <audio id="la-la-la" src="./sounds/la-la-la.mp3"></audio>
+    <audio id="demon-laugh" src="./sounds/demon-laugh.mp3"></audio>
+    
+    <script>
+        const startButton = document.getElementById('start-button');
+        const startMenu = document.getElementById('start-menu');
+        const canvas = document.getElementById('canvas');
+        const container = document.getElementById('container');
+        const controlPanel = document.getElementById('side-panel');
+        const instructions = document.getElementById('instructions');
+        const crosshair = document.getElementById('crosshair');
+        const introMusic = document.getElementById('intro-music');
+        const startMusic = document.getElementById('start-music');
+        const randomGhostSound = document.getElementById('random-ghost');
+        const laLaLaSound = document.getElementById('la-la-la');
+        const demonLaughSound = document.getElementById('demon-laugh');
+        
+        // Avvia la musica dell'intro quando viene caricata la pagina
+        window.onload = () => {
+            introMusic.play();
+        };
+        
+        // Definizione della funzione per avviare la riproduzione del suono random ghost a intervalli casuali
+        function playRandomGhostSound() {
+            const randomDelay = Math.random() * (30000 - 10000) + 10000; // Intervallo casuale tra 10s e 30s
+            setTimeout(() => {
+                randomGhostSound.play(); // Riproduci il suono
+                playRandomGhostSound();  // Richiama la funzione per continuare a riprodurre il suono a intervalli casuali
+            }, randomDelay);
+        }
+        
+        function showGameControls() {
+            const gameControls = document.getElementById('game-controls');
+            gameControls.innerHTML = `
+                W: Move Forward | 
+                S: Move Backward | 
+                A: Move Left | 
+                D: Move Right | 
+                F: Toggle Light | 
+                P: Open/Close Control Panel
+            `;
+        }
+        
+        // Evento click per avviare il gioco
+        startButton.addEventListener('click', () => {
+            // Nascondi il menu di avvio e avvia la musica di gioco
+            introMusic.pause();
+            startMusic.play();
+            
+            // Nascondi il menu e mostra gli elementi di gioco
+            startMenu.style.display = 'none';
+            canvas.style.display = 'block';
+            container.style.display = 'block';
+            controlPanel.style.display = 'block';
+            instructions.style.display = 'block';
+            crosshair.style.display = 'block';
+            
+            // Mostra la barra superiore con la legenda dei comandi
+            const topBar = document.getElementById('top-bar');
+            topBar.style.display = 'flex';  // Mostra la top bar come flex
+            showGameControls();  // Mostra la legenda dei comandi
+            
+            // Avvia l'audio a intervalli casuali
+            playRandomGhostSound();
+            
+            // Richiedi il blocco del puntatore con un piccolo ritardo
+            setTimeout(() => {
+                canvas.requestPointerLock();
+            }, 100);  // 100 millisecondi di ritardo per permettere al browser di aggiornare lo stato
+            
+            document.body.style.cursor = 'none';  // Nascondi il mouse
+            
+            // Inizia il ciclo di animazione DOPO che renderer è definito
+            if (typeof renderer !== 'undefined') {
+                renderer.setAnimationLoop(animate);
+            }
+        });
     </script>
-
-    <!-- SHADER OGGETTI (FRAGMENT) -->
-    <script id="obj-fragment-shader" type="x-shader/x-fragment">
-    precision mediump float;
-
-    varying vec2 v_texcoord;
-    uniform sampler2D u_texture;
-
-    void main() {
-        gl_FragColor = texture2D(u_texture, v_texcoord);
-    }
-    </script>
-
-    <!-- SHADER SKYBOX (VERTEX) -->
-    <script id="sky-vertex-shader" type="x-shader/x-vertex">
-    attribute vec4 a_position;
-    varying vec4 v_position;
-
-    void main() {
-        v_position = a_position;
-        gl_Position = a_position;
-    }
-    </script>
-
-    <!-- SHADER SKYBOX (FRAGMENT) -->
-    <script id="sky-fragment-shader" type="x-shader/x-fragment">
-    precision mediump float;
-
-    uniform mat4 u_invViewProj;
-    uniform samplerCube u_skybox;
-
-    varying vec4 v_position;
-
-    void main() {
-        vec4 t = u_invViewProj * v_position;
-        vec3 dir = normalize(t.xyz / t.w);
-        gl_FragColor = textureCube(u_skybox, dir);
-    }
-    </script>
-
+    
+    <script src="./libs/webgl-utils.js"></script>
+    <script src="./libs/mesh_utils.js"></script>
+    <script src="./libs/glm_utils.js"></script>
+    <script src="./libs/m4.js"></script>
+    <script src="./libs/dat.gui.js"></script>
+    <script src="./libs/jquery-3.6.0.js"></script>
+    
+    
     <script type="module">
-
-    /**************************************************************
-     * 1. SETUP BASE
-     **************************************************************/
-    const startButton = document.getElementById('start-button');
-    const startMenu   = document.getElementById('start-menu');
-    const canvas      = document.getElementById('canvas');
-    const container   = document.getElementById('container');
-
-    // Al click su START
-    startButton.addEventListener('click', () => {
-        // Nascondi menu, mostra canvas
-        startMenu.style.display = 'none';
-        canvas.style.display    = 'block';
-        container.style.display = 'block';
-
-        // Pointer lock
-        canvas.requestPointerLock();
-
-        // Avvia animazione
-        requestAnimationFrame(animate);
-    });
-
-    const gl = canvas.getContext("webgl");
-    if(!gl) alert("Il tuo browser non supporta WebGL!");
-
-    function resizeCanvas() {
-        canvas.width  = window.innerWidth;
-        canvas.height = window.innerHeight;
-        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-    }
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
-
-    gl.enable(gl.DEPTH_TEST);
-    gl.clearColor(0,0,0,1);
-
-    /**************************************************************
-     * 2. SHADERS
-     **************************************************************/
-    function createShader(gl, type, source) {
-        const s = gl.createShader(type);
-        gl.shaderSource(s, source);
-        gl.compileShader(s);
-        if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-            console.error(gl.getShaderInfoLog(s));
-            gl.deleteShader(s);
-            return null;
-        }
-        return s;
-    }
-    function createProgram(gl, vsSrc, fsSrc) {
-        const vs = createShader(gl, gl.VERTEX_SHADER,   vsSrc);
-        const fs = createShader(gl, gl.FRAGMENT_SHADER, fsSrc);
-        if(!vs || !fs) return null;
-
-        const prog = gl.createProgram();
-        gl.attachShader(prog, vs);
-        gl.attachShader(prog, fs);
-        gl.linkProgram(prog);
-        if(!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-            console.error(gl.getProgramInfoLog(prog));
-            gl.deleteProgram(prog);
-            return null;
-        }
-        return prog;
-    }
-
-    // Programma oggetti
-    const vsObj = document.getElementById('obj-vertex-shader').text;
-    const fsObj = document.getElementById('obj-fragment-shader').text;
-    const objProgram = createProgram(gl, vsObj, fsObj);
-    const objLocs = {
-        a_position: gl.getAttribLocation(objProgram, 'a_position'),
-        a_texcoord: gl.getAttribLocation(objProgram, 'a_texcoord'),
-        u_matrix:   gl.getUniformLocation(objProgram, 'u_matrix'),
-        u_texture:  gl.getUniformLocation(objProgram, 'u_texture'),
-    };
-
-    // Programma skybox
-    const vsSky = document.getElementById('sky-vertex-shader').text;
-    const fsSky = document.getElementById('sky-fragment-shader').text;
-    const skyProgram = createProgram(gl, vsSky, fsSky);
-    const skyLocs = {
-        a_position:    gl.getAttribLocation(skyProgram, 'a_position'),
-        u_invViewProj: gl.getUniformLocation(skyProgram, 'u_invViewProj'),
-        u_skybox:      gl.getUniformLocation(skyProgram, 'u_skybox'),
-    };
-
-    /**************************************************************
-     * 3. CAMERA E INPUT
-     **************************************************************/
-    let oldTime = 0;
-    const keys = {};
-    document.addEventListener('keydown', e => { keys[e.code] = true; });
-    document.addEventListener('keyup',   e => { keys[e.code] = false; });
-
-    document.addEventListener('mousemove', e => {
-        if(document.pointerLockElement === canvas){
-            camera.rotY -= e.movementX * 0.002;
-            camera.rotX -= e.movementY * 0.002;
-            camera.rotX = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotX));
-        }
-    });
-
-    // Parametri base
-    const GRAVITY     = 30;
-    const jumpImpulse = 10;
-
-    const camera = {
-        position: [0, 2, 10],
-        rotX: 0,
-        rotY: 0,
-
-        velocityY: 0,
-        isOnFloor: false,
-
-        stance: 'stand',     // 'stand' o 'crouch'
-        baseHeight: 2,
-        crouchHeight: 1.4,
-        speedFactor: 1.0,
-    };
-
-    // Toggle crouch
-    function toggleCrouch() {
-        if(camera.stance === 'stand'){
-            camera.stance = 'crouch';
-            camera.speedFactor = 0.7;
-        } else {
-            camera.stance = 'stand';
-            camera.speedFactor = 1.0;
-        }
-    }
-
-    // Teniamo traccia del "KeyC" di frame precedente, per beccare la transizione
-    let oldKeyC = false;
-
-    function updateCamera(dt) {
-        // Gestione crouch
-        if(keys['KeyC'] && !oldKeyC) {
-            toggleCrouch();
-        }
-        oldKeyC = keys['KeyC'];
-
-        // Interp. altezza
-        let targetHeight = (camera.stance==='crouch') ? camera.crouchHeight : camera.baseHeight;
-        let currentHeight= camera.position[1];
-        let alpha= 10*dt;
-        camera.position[1] = Math.max(
-            currentHeight + alpha*(targetHeight - currentHeight),
-            0
-        );
-
-        // Floor
-        if(camera.position[1]<0.001){
-            camera.position[1]=0;
-            camera.isOnFloor= true;
-            camera.velocityY=0;
-        } else {
-            camera.isOnFloor= false;
-        }
-
-        // Salto (solo se stance=stand e isOnFloor)
-        if(keys['Space']){
-            if(camera.stance==='crouch'){
-                // esce dal crouch
-                camera.stance='stand';
-                camera.speedFactor=1.0;
-            } else {
-                // stance stand => salta se onFloor
-                if(camera.isOnFloor){
-                    camera.velocityY= jumpImpulse;
-                    camera.isOnFloor= false;
-                }
+        import * as THREE from 'three';
+        import { Capsule } from 'three/addons/math/Capsule.js';
+        import { Octree } from 'three/addons/math/Octree.js';
+        import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+        import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+        import { FBXLoader } from 'three/addons/loaders/FBXLoader.js'; // Import FBXLoader
+        
+        const clock = new THREE.Clock();
+        const scene = new THREE.Scene();
+        
+        // Configurazione della skybox
+        const loader = new THREE.CubeTextureLoader();
+        const texture = loader.load([
+        'textures/skybox/px.png', // Positivo X
+        'textures/skybox/nx.png', // Negativo X
+        'textures/skybox/py.png', // Positivo Y
+        'textures/skybox/ny.png', // Negativo Y
+        'textures/skybox/pz.png', // Positivo Z
+        'textures/skybox/nz.png'  // Negativo Z
+        ]);
+        scene.background = texture;
+        
+        // Configurazione della camera
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.rotation.order = 'YXZ';
+        
+        // Aggiunta di una luce emisferica
+        const fillLight1 = new THREE.HemisphereLight(0x8dc1de, 0x00668d, 1.5);
+        fillLight1.position.set(2, 1, 1);
+        scene.add(fillLight1);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setAnimationLoop(animate);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Migliore qualità delle ombre
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        container.appendChild(renderer.domElement);
+        
+        // Evento per ridimensionare la finestra
+        window.addEventListener('resize', onWindowResize);
+        
+        let isPointerLocked = false; // Variabile per tracciare lo stato del blocco del puntatore
+        
+        // Funzione per richiedere il blocco del puntatore
+        function requestPointerLock() {
+            if (!isPointerLocked) {
+                canvas.requestPointerLock();
             }
         }
+        
+        // Aggiungi evento per rientrare nel "pointer lock" cliccando sul canvas
+        canvas.addEventListener('click', requestPointerLock);
+        
+        // Quando il gioco inizia, blocca il puntatore e nascondi il mouse
+        startButton.addEventListener('click', () => {
+            stats.domElement.style.display = 'block';  // Mostra il contatore degli FPS
+            startMenu.style.display = 'none';
+            canvas.style.display = 'block';
+            container.style.display = 'block';
+            controlPanel.style.display = 'block';
+            instructions.style.display = 'block';
+            crosshair.style.display = 'block';
+            introMusic.pause();
+            startMusic.play();
+            
+            // Blocca il puntatore e nascondi il mouse
+            document.body.requestPointerLock();
+            document.body.style.cursor = 'none';
 
-        // Gravità
-        if(!camera.isOnFloor){
-            camera.velocityY -= GRAVITY* dt;
-            camera.position[1]+= camera.velocityY* dt;
+            // Mostra la top bar
+            const topBar = document.getElementById('top-bar');
+            topBar.style.display = 'flex';  // Cambia da 'none' a 'flex' per mostrare la top bar
+
+            // Mostra i comandi
+            showGameControls();
+        });
+        
+        
+        
+        const GRAVITY = 30;
+        const STEPS_PER_FRAME = 5;
+        
+        const worldOctree = new Octree();
+        
+        const playerCollider = new Capsule(new THREE.Vector3(0, 0.35, 0), new THREE.Vector3(0, 4, 0), 0.35);
+        const playerVelocity = new THREE.Vector3();
+        const playerDirection = new THREE.Vector3();
+        
+        let playerOnFloor = false;
+        let canToggleLight = true; // Variabile per controllare il toggle
+        let isFlickering = false;  // Controlla se la luce sta sfarfallando
+        
+        const keyStates = {};
+        
+        document.addEventListener('keydown', (event) => {
+            keyStates[event.code] = true;
+        });
+        
+        document.addEventListener('keyup', (event) => {
+            keyStates[event.code] = false;
+            if (event.code === 'KeyF') {
+                canToggleLight = true;  // Reset della possibilità di togglare la luce
+            }
+        });
+        
+        container.addEventListener('mousedown', () => {
+            canvas.requestPointerLock();  // Richiedi il blocco del puntatore sul canvas
+            document.getElementById('crosshair').style.display = 'block'; // Mostra il crosshair
+        });
+        
+        // Seleziona il pannello laterale e il contatore FPS
+        const sidePanel = document.getElementById('side-panel');
+        const fpsCounter = document.getElementById('fps-counter');
+        const panelInstructions = document.getElementById('panel-instructions');
+        
+        // Variabili per tracciare gli stati
+        let isPanelOpen = false;
+        let showShadows = true;
+        let showReflections = true;
+        
+        // Funzione per aprire/chiudere il pannello e sganciare il mouse
+        document.addEventListener('keydown', (event) => {
+            if (event.code === 'KeyP') {
+                if (!isPanelOpen) {
+                    // Mostra il pannello e sgancia il mouse
+                    sidePanel.classList.remove('hidden');
+                    sidePanel.classList.add('visible');
+                    document.exitPointerLock();  // Sgancia il puntatore
+                    isPanelOpen = true;
+                    document.body.style.cursor = 'default';  // Mostra il cursore
+                } else {
+                    // Chiudi il pannello e blocca nuovamente il mouse
+                    sidePanel.classList.remove('visible');
+                    sidePanel.classList.add('hidden');
+                    canvas.requestPointerLock();  // Riaggancia il puntatore
+                    isPanelOpen = false;
+                    document.body.style.cursor = 'none';  // Nascondi il cursore
+                }
+            }
+        });
+        
+        document.getElementById('toggleShadows').addEventListener('click', () => {
+            showShadows = !showShadows;
+            renderer.shadowMap.enabled = showShadows;  // Attiva o disattiva le ombre
+            scene.traverse((object) => {
+                if (object.isMesh) {
+                    object.castShadow = showShadows;  // Abilita o disabilita le ombre per ogni mesh
+                    object.receiveShadow = showShadows;
+                }
+            });
+        });
+        
+        document.getElementById('toggleReflections').addEventListener('click', () => {
+            showReflections = !showReflections;
+            if (showReflections) {
+                // Attiva le riflessioni avanzate
+                renderer.toneMapping = THREE.ACESFilmicToneMapping;  
+            } else {
+                // Disattiva solo le riflessioni avanzate senza toccare le ombre
+                renderer.toneMapping = THREE.LinearToneMapping;  
+            }
+        });
+        
+        // Aggiorna il contatore FPS a ogni frame
+        function animate() {
+            const deltaTime = Math.min(0.05, clock.getDelta()) / STEPS_PER_FRAME;
+            for (let i = 0; i < STEPS_PER_FRAME; i++) {
+                controls(deltaTime);
+                updatePlayer(deltaTime);
+                teleportPlayerIfOob();
+            }
+            renderer.render(scene, camera);
         }
-
-        // Movement
-        const speed= 10* camera.speedFactor;
-        let forward= [ Math.sin(camera.rotY), 0, Math.cos(camera.rotY)];
-        let right=   [ Math.cos(camera.rotY), 0,-Math.sin(camera.rotY)];
-
-        // W: muoviti avanti ( => -Z se rotY=0)
-        if(keys['KeyW']){
-            camera.position[0] -= forward[0]* dt* speed;
-            camera.position[2] -= forward[2]* dt* speed;
+        
+        // Variabile per tracciare lo stato del rendering avanzato
+        let advancedRenderingEnabled = false;
+        
+        document.getElementById('advancedRendering').addEventListener('click', () => {
+            // Inverti lo stato di advancedRenderingEnabled
+            advancedRenderingEnabled = !advancedRenderingEnabled;
+            
+            if (advancedRenderingEnabled) {
+                // Abilita funzionalità di rendering avanzato
+                renderer.antialias = true;
+                renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                // Aggiungi eventuali altre funzionalità avanzate
+                console.log("Rendering avanzato abilitato");
+            } else {
+                // Disabilita funzionalità di rendering avanzato e ritorna ai valori di default
+                renderer.antialias = false;
+                renderer.toneMapping = THREE.LinearToneMapping;
+                renderer.shadowMap.enabled = true; // Manteniamo le ombre abilitate
+                renderer.shadowMap.type = THREE.PCFShadowMap; // Ritorniamo a ombre di qualità standard
+                console.log("Rendering avanzato disabilitato");
+            }
+            
+            // Reimposta le dimensioni del renderer per evitare problemi
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.render(scene, camera);
+        });
+        
+        // Avvia l'animazione
+        renderer.setAnimationLoop(animate);
+        
+        // Gestisci il cambiamento dello stato del pointer lock
+        document.addEventListener('pointerlockchange', () => {
+            if (document.pointerLockElement === canvas) {
+                isPointerLocked = true;
+            } else {
+                isPointerLocked = false;
+            }
+        });
+        
+        // Evento mousemove per muovere la camera solo se il puntatore è bloccato sul canvas
+        document.addEventListener('mousemove', (event) => {
+            if (document.pointerLockElement === canvas) {  // Controlla se il puntatore è bloccato sul canvas
+                camera.rotation.y -= event.movementX / 500;
+                camera.rotation.x -= event.movementY / 500;
+                camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));  // Limita il pitch della camera
+            }
+        });
+        
+        // Clicca sul canvas per riagganciare il mouse se è sganciato
+        canvas.addEventListener('click', () => {
+            if (!isPointerLocked) {
+                canvas.requestPointerLock();  // Riaggancia il puntatore
+                isPointerLocked = true;
+                document.body.style.cursor = 'none';  // Nascondi il cursore
+            }
+        });
+        
+        let initialTouchX = 0, initialTouchY = 0;
+        let swipeSensitivity = 0.005; // Sensibilità del movimento
+        
+        canvas.addEventListener('touchstart', function(event) {
+            // Memorizza le coordinate del primo tocco
+            initialTouchX = event.touches[0].clientX;
+            initialTouchY = event.touches[0].clientY;
+        });
+        
+        canvas.addEventListener('touchmove', function(event) {
+            if (event.touches.length == 1) { // Un solo dito in movimento
+                let touchX = event.touches[0].clientX;
+                let touchY = event.touches[0].clientY;
+                
+                // Calcola il movimento relativo
+                let deltaX = (touchX - initialTouchX) * swipeSensitivity;
+                let deltaY = (touchY - initialTouchY) * swipeSensitivity;
+                
+                // Aggiorna la rotazione della camera
+                camera.rotation.y -= deltaX; // Movimento orizzontale
+                camera.rotation.x -= deltaY; // Movimento verticale
+                camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x)); // Limita il pitch della camera
+                
+                // Aggiorna le coordinate del tocco
+                initialTouchX = touchX;
+                initialTouchY = touchY;
+            }
+        });
+        
+        canvas.addEventListener('touchstart', function(event) {
+            // Usa le coordinate del tocco per verificare se il giocatore è vicino all'interruttore
+            let playerPosition = playerCollider.end;
+            let distanceToSwitch = playerPosition.distanceTo(switchPosition);
+            
+            if (distanceToSwitch < 7) {  // Se il giocatore è vicino all'interruttore
+            pointLight.visible = !pointLight.visible; // Accendi/spegni la luce
+            if (pointLight.visible) {
+                flickerLight(pointLight, 500); // Aggiungi effetto sfarfallio
+            }
         }
-        if(keys['KeyS']){
-            camera.position[0] += forward[0]* dt* speed;
-            camera.position[2] += forward[2]* dt* speed;
-        }
-        if(keys['KeyA']){
-            camera.position[0] -= right[0]* dt* speed;
-            camera.position[2] -= right[2]* dt* speed;
-        }
-        if(keys['KeyD']){
-            camera.position[0] += right[0]* dt* speed;
-            camera.position[2] += right[2]* dt* speed;
-        }
-    }
-
-    function computeViewProj(){
-        let fov   = Math.PI*0.5;
-        let aspect= canvas.width/canvas.height;
-        let near  = 0.1;
-        let far   = 1000;
-        let proj  = m4.perspective(fov, aspect, near, far);
-
-        let view  = m4.identity();
-        view= m4.xRotate(view, camera.rotX);
-        view= m4.yRotate(view, camera.rotY);
-        view= m4.translate(view, -camera.position[0], -camera.position[1], -camera.position[2]);
-        return m4.multiply(proj, view);
-    }
-
-    /**************************************************************
-     * 4. SKYBOX
-     **************************************************************/
-    let skyTexture= gl.createTexture();
-    let skyBuffer= gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, skyBuffer);
-    let skyVerts= new Float32Array([
-       -1,-1,1,
-        1,-1,1,
-       -1, 1,1,
-       -1, 1,1,
-        1,-1,1,
-        1, 1,1
-    ]);
-    gl.bufferData(gl.ARRAY_BUFFER, skyVerts, gl.STATIC_DRAW);
-
-    gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyTexture);
-    const faces= [
-      { target: gl.TEXTURE_CUBE_MAP_POSITIVE_X, url:'skybox/px.png'},
-      { target: gl.TEXTURE_CUBE_MAP_NEGATIVE_X, url:'skybox/nx.png'},
-      { target: gl.TEXTURE_CUBE_MAP_POSITIVE_Y, url:'skybox/py.png'},
-      { target: gl.TEXTURE_CUBE_MAP_NEGATIVE_Y, url:'skybox/ny.png'},
-      { target: gl.TEXTURE_CUBE_MAP_POSITIVE_Z, url:'skybox/pz.png'},
-      { target: gl.TEXTURE_CUBE_MAP_NEGATIVE_Z, url:'skybox/nz.png'},
-    ];
-    faces.forEach(face=>{
-       gl.texImage2D(face.target,0, gl.RGBA,1,1,0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0,0,255,255]));
-       let img= new Image();
-       img.onload= ()=>{
-         gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyTexture);
-         gl.texImage2D(face.target,0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-         gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
-       };
-       img.src= face.url;
     });
-    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-
-    function drawSkybox(viewProj){
-        let invVP= m4.inverse(viewProj);
-
-        gl.depthFunc(gl.LEQUAL);
-        gl.depthMask(false);
-
-        gl.useProgram(skyProgram);
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, skyBuffer);
-        gl.enableVertexAttribArray(skyLocs.a_position);
-        gl.vertexAttribPointer(skyLocs.a_position,3,gl.FLOAT,false,0,0);
-
-        gl.uniformMatrix4fv(skyLocs.u_invViewProj,false,invVP);
-
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyTexture);
-        gl.uniform1i(skyLocs.u_skybox, 0);
-
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-        gl.depthMask(true);
-    }
-
-    /**************************************************************
-     * 5. TEXTURE MURI
-     **************************************************************/
-    let wallTexture= gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, wallTexture);
-    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([255,0,255,255]));
-    let wallImg= new Image();
-    wallImg.src= "textures/wall.jpg";
-    wallImg.onload= ()=>{
-      gl.bindTexture(gl.TEXTURE_2D, wallTexture);
-      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, wallImg);
-      gl.generateMipmap(gl.TEXTURE_2D);
-    };
-
-    /**************************************************************
-     * 6. SCENA (STANZA + OBJ)
-     **************************************************************/
-    let sceneObjs=[];
-
-    function createCubeWithTex(w,h,d){
-      let x= w/2, y= h/2, z= d/2;
-      const positions= new Float32Array([
-        // front
-        -x,-y, z,
-         x,-y, z,
-         x, y, z,
-        -x, y, z,
-        // back
-        -x,-y,-z,
-         x,-y,-z,
-         x, y,-z,
-        -x, y,-z,
-      ]);
-      const texcoords= new Float32Array([
-        0,0, 1,0, 1,1, 0,1,
-        0,0, 1,0, 1,1, 0,1,
-      ]);
-      const indices= new Uint16Array([
-        0,1,2,0,2,3,
-        4,5,6,4,6,7,
-        3,2,6,3,6,7,
-        0,1,5,0,5,4,
-        1,2,6,1,6,5,
-        0,3,7,0,7,4
-      ]);
-
-      let mesh={
-        vbo: gl.createBuffer(),
-        tbo: gl.createBuffer(),
-        ibo: gl.createBuffer(),
-        indexCount: indices.length,
-        position:[0,0,0],
-        rotation:[0,0,0],
-        scale:[1,1,1],
-      };
-      gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vbo);
-      gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
-
-      gl.bindBuffer(gl.ARRAY_BUFFER, mesh.tbo);
-      gl.bufferData(gl.ARRAY_BUFFER, texcoords, gl.STATIC_DRAW);
-
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ibo);
-      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
-
-      return mesh;
-    }
-
-    // Crea stanza come preferisci
-    function createRoom(){
-      // front
-      let front= createCubeWithTex(20,10,0.1);
-      front.position= [0,5,-12.5];
-      sceneObjs.push(front);
-
-      // back
-      let back= createCubeWithTex(20,10,0.1);
-      back.position= [0,5,12.5];
-      sceneObjs.push(back);
-
-      // left
-      let left= createCubeWithTex(0.1,10,25);
-      left.position= [-10,5,0];
-      sceneObjs.push(left);
-
-      // right
-      let right= createCubeWithTex(0.1,10,25);
-      right.position= [10,5,0];
-      sceneObjs.push(right);
-
-      // floor
-      let floor= createCubeWithTex(20,0.1,25);
-      floor.position= [0,0,0];
-      sceneObjs.push(floor);
-
-      // ceiling
-      let ceil= createCubeWithTex(20,0.1,25);
-      ceil.position= [0,10,0];
-      sceneObjs.push(ceil);
-    }
-    createRoom();
-
-    function loadObj(url, pos=[0,0,0], scale=1){
-      fetch(url)
-      .then(r=>{
-         if(!r.ok) throw new Error("OBJ error: " + r.statusText);
-         return r.text();
-      })
-      .then(data=>{
-         let mesh= new OBJ.Mesh(data);
-         OBJ.initMeshBuffers(gl, mesh);
-
-         mesh.position= pos.slice();
-         mesh.rotation= [0,0,0];
-         mesh.scale   = [scale, scale, scale];
-         sceneObjs.push(mesh);
-      })
-      .catch(err=> console.error(err));
-    }
-
-    // Esempio: carichiamo un teschio
-    loadObj('models/skull.obj', [-8,0,-11], 0.02);
-
-    /**************************************************************
-     * 7. RENDER
-     **************************************************************/
-    function drawMesh(mesh, viewProj){
-      gl.useProgram(objProgram);
-
-      let world= m4.identity();
-      // position
-      world= m4.translate(world, mesh.position[0], mesh.position[1], mesh.position[2]);
-      // scale
-      world= m4.scale(world, mesh.scale[0], mesh.scale[1], mesh.scale[2]);
-
-      let wvp= m4.multiply(viewProj, world);
-
-      if(mesh.vbo && mesh.tbo){
-        // cubi stanza
-        gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vbo);
-        gl.enableVertexAttribArray(objLocs.a_position);
-        gl.vertexAttribPointer(objLocs.a_position,3,gl.FLOAT,false,0,0);
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, mesh.tbo);
-        gl.enableVertexAttribArray(objLocs.a_texcoord);
-        gl.vertexAttribPointer(objLocs.a_texcoord,2,gl.FLOAT,false,0,0);
-
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ibo);
-
-        gl.uniformMatrix4fv(objLocs.u_matrix,false,wvp);
-
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, wallTexture);
-        gl.uniform1i(objLocs.u_texture,0);
-
-        gl.drawElements(gl.TRIANGLES, mesh.indexCount, gl.UNSIGNED_SHORT,0);
-
-      } else if(mesh.vertices){
-        // OBJ
-        gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vertexBuffer);
-        gl.enableVertexAttribArray(objLocs.a_position);
-        gl.vertexAttribPointer(objLocs.a_position, mesh.vertexBuffer.itemSize, gl.FLOAT,false,0,0);
-
-        if(mesh.textureBuffer){
-          gl.bindBuffer(gl.ARRAY_BUFFER, mesh.textureBuffer);
-          gl.enableVertexAttribArray(objLocs.a_texcoord);
-          gl.vertexAttribPointer(objLocs.a_texcoord, mesh.textureBuffer.itemSize, gl.FLOAT,false,0,0);
-        } else {
-          gl.disableVertexAttribArray(objLocs.a_texcoord);
+    
+    let initialDistance = 0;
+    
+    canvas.addEventListener('touchmove', function(event) {
+        if (event.touches.length == 2) { // Pinch-to-zoom con due dita
+            let dx = event.touches[0].clientX - event.touches[1].clientX;
+            let dy = event.touches[0].clientY - event.touches[1].clientY;
+            let distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (initialDistance == 0) {
+                initialDistance = distance;
+            }
+            
+            // Cambia il field of view (zoom) della camera in base alla distanza delle dita
+            camera.fov += (initialDistance - distance) * 0.05;
+            camera.fov = Math.max(30, Math.min(90, camera.fov)); // Limita lo zoom
+            camera.updateProjectionMatrix();
+            
+            initialDistance = distance;
         }
-
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer);
-
-        gl.uniformMatrix4fv(objLocs.u_matrix,false,wvp);
-
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, wallTexture);
-        gl.uniform1i(objLocs.u_texture,0);
-
-        gl.drawElements(gl.TRIANGLES, mesh.indexBuffer.numItems, gl.UNSIGNED_SHORT,0);
-      }
+    });
+    
+    canvas.addEventListener('touchend', function(event) {
+        if (event.touches.length < 2) {
+            initialDistance = 0; // Reset al termine del pinch
+        }
+    });
+    
+    window.addEventListener('resize', () => {
+    const topBar = document.getElementById('top-bar');
+    topBar.style.left = '50%'; // Posiziona sempre al centro
+    topBar.style.transform = 'translateX(-50%)'; // Corregge lo spostamento di metà della larghezza
+});
+    
+    
+    function onWindowResize() {
+        // Aggiorna l'aspetto della camera in base alle nuove dimensioni della finestra
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        
+        // Aggiorna la dimensione del renderer in base alla nuova finestra
+        renderer.setSize(window.innerWidth, window.innerHeight);
     }
-
-    /**************************************************************
-     * 8. ANIMATE
-     **************************************************************/
-    let oldT=0;
-    function animate(t=0){
-      let dt= (t - oldT)*0.001;
-      oldT= t;
-
-      updateCamera(dt);
-
-      gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-
-      let viewProj= computeViewProj();
-      drawSkybox(viewProj);
-
-      sceneObjs.forEach(obj => {
-        drawMesh(obj, viewProj);
-      });
-
-      requestAnimationFrame(animate);
+    // Creazione della stanza
+    const roomWidth = 20;
+    const roomHeight = 10;
+    const roomDepth = 25;
+    
+    const wallThickness = 0.1;
+    const windowWidth = 6;
+    const windowHeight = 4;
+    const doorWidth = 4;
+    const doorHeight = 8;
+    
+    const textureLoader = new THREE.TextureLoader();
+    const wallTexture = textureLoader.load('textures/wall.jpg');
+    const floorTexture = textureLoader.load('textures/wood.jpg');
+    const doorTexture = textureLoader.load('textures/door.png');
+    
+    // Materiali aggiornati
+    const wallMaterial = new THREE.MeshStandardMaterial({ map: wallTexture });
+    const floorMaterial = new THREE.MeshStandardMaterial({ map: floorTexture });
+    const glassMaterial = new THREE.MeshStandardMaterial({ color: 0x88ccee, opacity: 0.3, transparent: true, side: THREE.DoubleSide });
+    const doorMaterial = new THREE.MeshStandardMaterial({ map: doorTexture });
+    
+    function createWallWithWindowAndDoor() {
+        const frontWallTop = new THREE.Mesh(
+        new THREE.BoxGeometry(windowWidth, (roomHeight - windowHeight) / 2, wallThickness), wallMaterial);
+        frontWallTop.position.set(0, roomHeight - (roomHeight - windowHeight) / 4, -roomDepth / 2);
+        frontWallTop.castShadow = true; // Abilita le ombre per le pareti
+        frontWallTop.receiveShadow = true; // Permette alle pareti di ricevere le ombre
+        scene.add(frontWallTop);
+        
+        const frontWallBottom = new THREE.Mesh(new THREE.BoxGeometry(windowWidth, (roomHeight - windowHeight) / 2, wallThickness), wallMaterial);
+        frontWallBottom.position.set(0, (roomHeight - windowHeight) / 4, -roomDepth / 2);
+        frontWallBottom.castShadow = true;
+        frontWallBottom.receiveShadow = true;
+        scene.add(frontWallBottom);
+        
+        const frontWallLeft = new THREE.Mesh(new THREE.BoxGeometry((roomWidth - windowWidth) / 2, roomHeight, wallThickness), wallMaterial);
+        frontWallLeft.position.set(-((roomWidth - windowWidth) / 4 + windowWidth / 2), roomHeight / 2, -roomDepth / 2);
+        frontWallLeft.castShadow = true;
+        frontWallLeft.receiveShadow = true;
+        scene.add(frontWallLeft);
+        
+        const frontWallRight = new THREE.Mesh(new THREE.BoxGeometry((roomWidth - windowWidth) / 2, roomHeight, wallThickness), wallMaterial);
+        frontWallRight.position.set(((roomWidth - windowWidth) / 4 + windowWidth / 2), roomHeight / 2, -roomDepth / 2);
+        frontWallRight.castShadow = true;
+        frontWallRight.receiveShadow = true;
+        scene.add(frontWallRight);
+        
+        const frontWindow = new THREE.Mesh(new THREE.PlaneGeometry(windowWidth, windowHeight), glassMaterial);
+        frontWindow.position.set(0, roomHeight / 2, -roomDepth / 2 + wallThickness / 2);
+        frontWindow.castShadow = true;
+        frontWindow.receiveShadow = true;
+        scene.add(frontWindow);
+        
+        const backWallTop = new THREE.Mesh(
+        new THREE.BoxGeometry(windowWidth, (roomHeight - windowHeight) / 2, wallThickness), wallMaterial);
+        backWallTop.position.set(0, roomHeight - (roomHeight - windowHeight) / 4, roomDepth / 2);
+        backWallTop.castShadow = true;
+        backWallTop.receiveShadow = true;
+        scene.add(backWallTop);
+        
+        const backWallBottom = new THREE.Mesh(new THREE.BoxGeometry(windowWidth, (roomHeight - windowHeight) / 2, wallThickness), wallMaterial);
+        backWallBottom.position.set(0, (roomHeight - windowHeight) / 4, roomDepth / 2);
+        backWallBottom.castShadow = true;
+        backWallBottom.receiveShadow = true;
+        scene.add(backWallBottom);
+        
+        const backWallLeft = new THREE.Mesh(new THREE.BoxGeometry((roomWidth - windowWidth) / 2, roomHeight, wallThickness), wallMaterial);
+        backWallLeft.position.set(-((roomWidth - windowWidth) / 4 + windowWidth / 2), roomHeight / 2, roomDepth / 2);
+        backWallLeft.castShadow = true;
+        backWallLeft.receiveShadow = true;
+        scene.add(backWallLeft);
+        
+        const backWallRight = new THREE.Mesh(new THREE.BoxGeometry((roomWidth - windowWidth) / 2, roomHeight, wallThickness), wallMaterial);
+        backWallRight.position.set(((roomWidth - windowWidth) / 4 + windowWidth / 2), roomHeight / 2, roomDepth / 2);
+        backWallRight.castShadow = true;
+        backWallRight.receiveShadow = true;
+        scene.add(backWallRight);
+        
+        const backWindow = new THREE.Mesh(new THREE.PlaneGeometry(windowWidth, windowHeight), glassMaterial);
+        backWindow.position.set(0, roomHeight / 2, roomDepth / 2 + wallThickness / 2);
+        backWindow.castShadow = true;
+        backWindow.receiveShadow = true;
+        scene.add(backWindow);
+        
+        const leftWallTop = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight - doorHeight, doorWidth), wallMaterial);
+        leftWallTop.position.set(-roomWidth / 2, roomHeight - (roomHeight - doorHeight) / 2, 0);
+        leftWallTop.castShadow = true;
+        leftWallTop.receiveShadow = true;
+        scene.add(leftWallTop);
+        
+        const leftWallLeft = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight, (roomDepth - doorWidth) / 2), wallMaterial);
+        leftWallLeft.position.set(-roomWidth / 2, roomHeight / 2, (roomDepth - doorWidth) / 4 + doorWidth / 2);
+        leftWallLeft.castShadow = true;
+        leftWallLeft.receiveShadow = true;
+        scene.add(leftWallLeft);
+        
+        const leftWallRight = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight, (roomDepth - doorWidth) / 2), wallMaterial);
+        leftWallRight.position.set(-roomWidth / 2, roomHeight / 2, -(roomDepth - doorWidth) / 4 - doorWidth / 2);
+        leftWallRight.castShadow = true;
+        leftWallRight.receiveShadow = true;
+        scene.add(leftWallRight);
+        
+        const door = new THREE.Mesh(new THREE.PlaneGeometry(doorWidth, doorHeight), doorMaterial);
+        door.position.set(-roomWidth / 2 + wallThickness / 2, doorHeight / 2, 0);
+        door.rotation.y = Math.PI / 2;
+        door.castShadow = true;
+        door.receiveShadow = true;
+        scene.add(door);
+        
+        const rightWallTop = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, (roomHeight - windowHeight) / 2, windowWidth), wallMaterial);
+        rightWallTop.position.set(roomWidth / 2, roomHeight - (roomHeight - windowHeight) / 4, 0);
+        rightWallTop.castShadow = true;
+        rightWallTop.receiveShadow = true;
+        scene.add(rightWallTop);
+        
+        const rightWallBottom = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, (roomHeight - windowHeight) / 2, windowWidth), wallMaterial);
+        rightWallBottom.position.set(roomWidth / 2, (roomHeight - windowHeight) / 4, 0);
+        rightWallBottom.castShadow = true;
+        rightWallBottom.receiveShadow = true;
+        scene.add(rightWallBottom);
+        
+        const rightWallLeft = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight, (roomDepth - windowWidth) / 2), wallMaterial);
+        rightWallLeft.position.set(roomWidth / 2, roomHeight / 2, (roomDepth - windowWidth) / 4 + windowWidth / 2);
+        rightWallLeft.castShadow = true;
+        rightWallLeft.receiveShadow = true;
+        scene.add(rightWallLeft);
+        
+        const rightWallRight = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, roomHeight, (roomDepth - windowWidth) / 2), wallMaterial);
+        rightWallRight.position.set(roomWidth / 2, roomHeight / 2, -(roomDepth - windowWidth) / 4 - windowWidth / 2);
+        rightWallRight.castShadow = true;
+        rightWallRight.receiveShadow = true;
+        scene.add(rightWallRight);
+        
+        const rightWindow = new THREE.Mesh(new THREE.PlaneGeometry(windowWidth, windowHeight), glassMaterial);
+        rightWindow.position.set(roomWidth / 2 + wallThickness / 2, roomHeight / 2, 0);
+        rightWindow.rotation.y = -Math.PI / 2;
+        rightWindow.castShadow = true;
+        rightWindow.receiveShadow = true;
+        scene.add(rightWindow);
     }
+    
+    createWallWithWindowAndDoor();
+    
+    // Pavimento
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(roomWidth, 0.1, roomDepth), floorMaterial);
+    floor.position.set(0, 0, 0);
+    floor.receiveShadow = true; // Permette al pavimento di ricevere le ombre
+    scene.add(floor);
+    
+    // Soffitto
+    const ceiling = floor.clone();
+    ceiling.position.set(0, roomHeight, 0);
+    ceiling.receiveShadow = true;
+    scene.add(ceiling);
+    
+    // Caricamento del modello OBJ con MTL
+    const mtlLoader = new MTLLoader();
+    const objLoader = new OBJLoader();
+    
+    // Aggiunta di una luce puntuale per simulare un lampadario al centro della stanza
+    const pointLight = new THREE.PointLight(0xffd700, 100, 50); // Luce calda e più intensa
+    pointLight.position.set(0, 9, 0); // Posizionata vicino al soffitto, al centro della stanza
+    pointLight.castShadow = true; // Abilita le ombre
+    pointLight.shadow.mapSize.width = 1024; // Risoluzione delle ombre
+    pointLight.shadow.mapSize.height = 1024;
+    pointLight.shadow.camera.near = 0.5;
+    pointLight.shadow.camera.far = 150;
+    scene.add(pointLight);
+    
+    mtlLoader.load('models/lamp.mtl', (materials) => {
+        materials.preload();
+        objLoader.setMaterials(materials);
+        objLoader.load('models/lamp.obj', (object) => {
+            object.position.set(0, roomHeight, 0);
+            object.rotation.set(Math.PI / 2, 0, 0);
+            object.scale.set(2.5, 2.5, 2.5);
+            object.castShadow = true;
+            object.receiveShadow = true;
+            scene.add(object);
+        });
+    });
+    
+    // Caricamento del modello OBJ dell'orologio
+    const clockTexture = textureLoader.load('models/orologio-horror_baseColor.jpg');
+    
+    mtlLoader.load('models/pendent-clock.mtl', (materials) => {
+        materials.preload();
+        objLoader.setMaterials(materials);
+        objLoader.load('models/pendent-clock.obj', (object) => {
+            object.traverse((child) => {
+                if (child.isMesh) {
+                    child.material.map = clockTexture;
+                    child.material.needsUpdate = true;
+                    child.material.side = THREE.DoubleSide;
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+            object.position.set(-5, -0.75, -11.2);
+            object.rotation.set(-Math.PI, - Math.PI / 2, Math.PI);
+            object.scale.set(1, 1, 1);
+            
+            scene.add(object);
+        });
+    });
+    
+    // Aggiunta delle texture per il materiale dell'interruttore
+    const baseColor = textureLoader.load('textures/DefaultMaterial_Base_color.png');
+    const normalMap = textureLoader.load('textures/DefaultMaterial_Normal.png');
+    const roughnessMap = textureLoader.load('textures/DefaultMaterial_Roughness.png');
+    const metalnessMap = textureLoader.load('textures/DefaultMaterial_Metallic.png');
+    const aoMap = textureLoader.load('textures/DefaultMaterial_Mixed_AO.png');
+    
+    // Creazione del materiale per l'interruttore
+    const switchMaterial = new THREE.MeshStandardMaterial({
+        map: baseColor,
+        normalMap: normalMap,
+        roughnessMap: roughnessMap,
+        metalnessMap: metalnessMap,
+        aoMap: aoMap
+    });
+    
+    // Inizializza la posizione dell'interruttore
+    let switchPosition = new THREE.Vector3(-roomWidth / 2 + 0.1, doorHeight / 2, doorWidth / 2 + 0.5);  // Posizione dell'interruttore
+    
+    // Caricamento dell'interruttore
+    const fbxLoader = new FBXLoader();
+    fbxLoader.load('models/Switch.fbx', (object) => {
+        object.traverse((child) => {
+            if (child.isMesh) {
+                child.material = switchMaterial;
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+        
+        // Posizionamento dell'interruttore accanto alla porta d'ingresso
+        object.rotation.set(0, Math.PI / 2, 0);
+        object.position.copy(switchPosition);
+        object.scale.set(0.05, 0.05, 0.05); // Scala corretta per l'interruttore
+        scene.add(object);
+    });
+    
+    // Caricamento del modello OBJ della bambola
+    const dollTexture = textureLoader.load('models/Doll_Doll_BaseColor.png');
+    
+    objLoader.load('models/doll.obj', (object) => {
+        object.traverse((child) => {
+            if (child.isMesh) {
+                child.material.map = dollTexture; 
+                child.material.needsUpdate = true;
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+        
+        object.position.set((Math.random() - 0.5) * roomWidth, 0, (Math.random() - 0.5) * roomDepth);
+        object.scale.set(1, 1, 1);
+        scene.add(object);
+    });
+    
+    // Caricamento del modello OBJ della carrozzina 1
+    const wheelchair1Texture = textureLoader.load('models/Doll_Doll_BaseColor.png');
+    
+    objLoader.load('models/kurumaisu.unity_1.obj', (object) => {
+        object.traverse((child) => {
+            if (child.isMesh) {
+                child.material.map = wheelchair1Texture; 
+                child.material.needsUpdate = true;
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+        
+        // Posizionamento vicino al bordo sinistro della stanza
+        object.position.set(-roomWidth + 10.5, -2.7, -roomDepth / 2 + 8);
+        object.rotation.set(0, -Math.PI / 2, 0);
+        object.scale.set(0.2, 0.2, 0.2);
+        scene.add(object);
+    });
+    
+    // Caricamento del modello OBJ della carrozzina 2
+    const wheelchair2Texture = textureLoader.load('models/Doll_Doll_BaseColor.png');
+    
+    objLoader.load('models/UnsavedScene_1.obj', (object) => {
+        object.traverse((child) => {
+            if (child.isMesh) {
+                child.material.map = wheelchair2Texture; 
+                child.material.needsUpdate = true;
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+        
+        object.position.set(-roomWidth / 2 + 20, -2.1, -roomDepth / 2 + 8);
+        object.rotation.set(0, Math.PI / 2, 0);
+        object.scale.set(0.2, 0.2, 0.2);
+        scene.add(object);
+    });
+    
+    // Aggiunta di teschi posizionati lungo le pareti della stanza
+    function addSkull(position, rotation, scale) {
+        mtlLoader.load('models/12140_Skull_v3_L2.mtl', (materials) => {
+            materials.preload();
+            objLoader.setMaterials(materials);
+            
+            objLoader.load('models/12140_Skull_v3_L2.obj', (object) => {
+                object.position.set(position.x, position.y, position.z);
+                object.scale.set(scale, scale, scale);
+                object.rotation.set(rotation.x, rotation.y, rotation.z);
+                object.castShadow = true;
+                object.receiveShadow = true;
+                scene.add(object);
+            });
+        });
+    }
+    
+    // Teschio sul muro frontale sinistro
+    addSkull(
+    { x: -8, y: 0, z: -11.0 },
+    { x: -Math.PI / 2, y: 0, z: 0 },
+    0.05
+    );
+    addSkull(
+    { x: -8, y: 1.5, z: -10.8 },
+    { x: -Math.PI / 2 + 0.4, y: 0.2, z: 0.5 },
+    0.06
+    );
+    addSkull(
+    { x: -8, y: 3.3, z: -10.9 },
+    { x: -Math.PI / 2 + 0.2, y: 1.3, z: -0.15 },
+    0.05
+    );
+    
+    // Teschio sul muro frontale destro
+    addSkull(
+    { x: 8, y: 0.2, z: -10.9 },
+    { x: -Math.PI / 2 + 0.1, y: 0, z: 0 },
+    0.06
+    );
+    addSkull(
+    { x: 8, y: 1.8, z: -10.6 },
+    { x: -Math.PI / 2 + 0.3, y: 0, z: -0.3 },
+    0.07
+    );
+    
+    // Teschio sulla parete posteriore sinistra
+    addSkull(
+    { x: -8, y: 0, z: 11.3 },
+    { x: Math.PI / 2, y: Math.PI, z: 0 },
+    0.08
+    );
+    addSkull(
+    { x: -8, y: 2, z: 11.3 },
+    { x: Math.PI / 2 + 0.1, y: Math.PI, z: 0.2 },
+    0.07
+    );
+    
+    // Teschio sulla parete posteriore destra
+    addSkull(
+    { x: 7.7, y: 0, z: 11.3 },
+    { x: Math.PI / 2, y: Math.PI, z: 0 },
+    0.06
+    );
+    addSkull(
+    { x: 8, y: 1.4, z: 11.3 },
+    { x: Math.PI / 2 + 0.3, y: Math.PI, z: 0 },
+    0.07
+    );
+    addSkull(
+    { x: 7.8, y: 2.8, z: 11.3 },
+    { x: Math.PI / 2 + 0.3, y: Math.PI, z: 0.1 },
+    0.07
+    );
+    
+    // Teschio sul muro laterale sinistro, sopra la porta
+    addSkull(
+    { x: -10, y: doorHeight + 0.5, z: 0 },
+    { x: -Math.PI / 2, y: Math.PI / 2, z: 0 },
+    0.05
+    );
+    
+    // Teschio sul muro laterale destro
+    addSkull(
+    { x: 10, y: 0.7, z: 4 },
+    { x: -Math.PI / 2, y: -Math.PI / 2 - 0.1, z: 2 },
+    0.05
+    );
+    
+    // Aggiunta delle pareti e del pavimento all'Octree per le collisioni
+    worldOctree.fromGraphNode(scene);
+    
+    function playerCollisions() {
+        const result = worldOctree.capsuleIntersect(playerCollider);
+        playerOnFloor = false;
+        if (result) {
+            playerOnFloor = result.normal.y > 0;
+            if (!playerOnFloor) {
+                playerVelocity.addScaledVector(result.normal, -result.normal.dot(playerVelocity));
+            }
+            if (result.depth >= 1e-10) {
+                playerCollider.translate(result.normal.multiplyScalar(result.depth));
+            }
+        }
+    }
+    
+    function updatePlayer(deltaTime) {
+        let damping = Math.exp(-4 * deltaTime) - 1;
+        if (!playerOnFloor) {
+            playerVelocity.y -= GRAVITY * deltaTime;
+            damping *= 0.1;
+        }
+        playerVelocity.addScaledVector(playerVelocity, damping);
+        const deltaPosition = playerVelocity.clone().multiplyScalar(deltaTime);
+        playerCollider.translate(deltaPosition);
+        playerCollisions();
+        camera.position.copy(playerCollider.end);
+    }
+    
+    function getForwardVector() {
+        camera.getWorldDirection(playerDirection);
+        playerDirection.y = 0;
+        playerDirection.normalize();
+        return playerDirection;
+    }
+    
+    function getSideVector() {
+        camera.getWorldDirection(playerDirection);
+        playerDirection.y = 0;
+        playerDirection.normalize();
+        playerDirection.cross(camera.up);
+        return playerDirection;
+    }
+    
+    // Funzione per gestire lo sfarfallio della luce
+    function flickerLight(light, duration) {
+        let flickerCount = Math.floor(Math.random() * 5) + 3; // Numero casuale di sfarfallii tra 3 e 7
+        let flickerInterval = setInterval(() => {
+            light.visible = !light.visible;
+            flickerCount--;
+            if (flickerCount <= 0) {
+                clearInterval(flickerInterval);
+                light.visible = true; // Assicurati che la luce rimanga accesa alla fine
+            }
+        }, duration / flickerCount);
+    }
+    
+    // Controllo e aggiornamento della posizione e dell'interazione del giocatore
+    // Posizione della bambola (aggiorna con la posizione effettiva della tua bambola)
+    const dollPosition = new THREE.Vector3((Math.random() - 0.5) * roomWidth, 0, (Math.random() - 0.5) * roomDepth);
+    
+    // Raggio entro il quale il suono viene attivato
+    const proximityRadius = 5; // Imposta il raggio di prossimità alla bambola
+    
+    // Funzione per riprodurre casualmente uno dei due suoni solo se la luce è spenta
+    function playRandomDollSound() {
+        if (!pointLight.visible) {  // Controlla se la luce è spenta
+            const randomSound = Math.random() < 0.5 ? laLaLaSound : demonLaughSound; // 50% di probabilità per ogni suono
+            if (!randomSound.playing) {  // Controlla che il suono non sia già in esecuzione
+                randomSound.play();
+                randomSound.playing = true;
+                randomSound.onended = () => {
+                    randomSound.playing = false;  // Reimposta lo stato dopo che il suono è terminato
+                };
+            }
+        }
+    }
+    
+    // Aggiorna la funzione `controls` per includere il controllo di prossimità alla bambola
+    function controls(deltaTime) {
+        const speedDelta = deltaTime * (playerOnFloor ? 25 : 8);
+        if (keyStates['KeyW']) {
+            playerVelocity.add(getForwardVector().multiplyScalar(speedDelta));
+        }
+        if (keyStates['KeyS']) {
+            playerVelocity.add(getForwardVector().multiplyScalar(-speedDelta));
+        }
+        if (keyStates['KeyA']) {
+            playerVelocity.add(getSideVector().multiplyScalar(-speedDelta));
+        }
+        if (keyStates['KeyD']) {
+            playerVelocity.add(getSideVector().multiplyScalar(speedDelta));
+        }
+        if (playerOnFloor && keyStates['Space']) {
+            playerVelocity.y = 10;
+        }
+        
+        const playerPosition = playerCollider.end;
+        
+        // Controlla la distanza tra il giocatore e la bambola
+        const distanceToDoll = playerPosition.distanceTo(dollPosition);
+        
+        // Se il giocatore è vicino alla bambola e la luce è spenta, avvia un suono casuale
+        if (distanceToDoll < proximityRadius) {
+            playRandomDollSound();
+        }
+        
+        const distanceToSwitch = playerPosition.distanceTo(switchPosition);
+        if (distanceToSwitch < 7) {  // Se il giocatore è vicino all'interruttore
+        instructions.style.visibility = 'visible';
+        crosshair.style.backgroundImage = "url('images/crosshair-selection.png')"; // Cambia il colore del crosshair
+        
+        if (keyStates['KeyF'] && canToggleLight && !isFlickering) {
+            pointLight.visible = !pointLight.visible; // Accendi/spegni la luce
+            canToggleLight = false;  // Evita il toggling continuo mentre il tasto è premuto
+            if (pointLight.visible) {
+                flickerLight(pointLight, 500); // Aggiungi l'effetto di sfarfallio
+            }
+        }
+    } else {
+        instructions.style.visibility = 'hidden';
+        crosshair.style.backgroundImage = "url('images/crosshair.png')"; // Torna al crosshair originale
+    }
+}
 
-    </script>
+function teleportPlayerIfOob() {
+    if (camera.position.y <= -20) {
+        playerCollider.start.set(0, 0.35, 0);
+        playerCollider.end.set(0, 4, 0);
+        playerCollider.radius = 0.35;
+        camera.position.copy(playerCollider.end);
+        camera.rotation.set(0, 0, 0);
+    }
+}
+
+// Funzione per gestire l'interazione con la bambola
+function interactWithDoll() {
+    if (!playerCollider || !dollPosition) return;
+    
+    const playerPosition = playerCollider.end;
+    const distanceToDoll = playerPosition.distanceTo(dollPosition);
+    
+    if (distanceToDoll < 10) {
+        const randomSound = Math.random() < 0.5 ? laLaLaSound : demonLaughSound;
+        
+        if (!randomSound.playing) {
+            randomSound.play();
+            randomSound.playing = true;
+            randomSound.onended = () => {
+                randomSound.playing = false;
+            };
+        }
+    }
+}
+</script>
 </body>
 </html>
