@@ -9,17 +9,18 @@ export const Utils = {
         const texture = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, texture);
 
-        // Placeholder iniziale
+        // Placeholder iniziale per evitare errori di rendering.
         const placeholder = new Uint8Array([255, 255, 255, 255]);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, placeholder);
 
-        // Caricamento dell'immagine
+        // Caricamento dell'immagine.
         const image = new Image();
         image.onload = () => {
             gl.bindTexture(gl.TEXTURE_2D, texture);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
             gl.generateMipmap(gl.TEXTURE_2D);
         };
+        image.onerror = () => console.error(`Impossibile caricare la texture da ${url}`);
         image.src = url;
 
         return texture;
@@ -30,14 +31,15 @@ export const Utils = {
      * @param {WebGLRenderingContext} gl - Il contesto WebGL.
      * @param {string} source - Il codice sorgente dello shader.
      * @param {number} type - Il tipo di shader (VERTEX_SHADER o FRAGMENT_SHADER).
-     * @returns {WebGLShader} Lo shader compilato.
+     * @returns {WebGLShader|null} Lo shader compilato o null in caso di errore.
      */
     compileShader(gl, source, type) {
         const shader = gl.createShader(type);
         gl.shaderSource(shader, source);
         gl.compileShader(shader);
+
         if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            console.error(`Errore di compilazione dello shader: ${gl.getShaderInfoLog(shader)}`);
+            console.error(`Errore di compilazione dello shader (${type === gl.VERTEX_SHADER ? 'VERTEX' : 'FRAGMENT'}):`, gl.getShaderInfoLog(shader));
             gl.deleteShader(shader);
             return null;
         }
@@ -49,11 +51,13 @@ export const Utils = {
      * @param {WebGLRenderingContext} gl - Il contesto WebGL.
      * @param {string} vertexSource - Il codice sorgente del vertex shader.
      * @param {string} fragmentSource - Il codice sorgente del fragment shader.
-     * @returns {WebGLProgram} Il programma shader collegato.
+     * @returns {WebGLProgram|null} Il programma shader collegato o null in caso di errore.
      */
     createShaderProgram(gl, vertexSource, fragmentSource) {
         const vertexShader = this.compileShader(gl, vertexSource, gl.VERTEX_SHADER);
         const fragmentShader = this.compileShader(gl, fragmentSource, gl.FRAGMENT_SHADER);
+
+        if (!vertexShader || !fragmentShader) return null;
 
         const program = gl.createProgram();
         gl.attachShader(program, vertexShader);
@@ -61,7 +65,7 @@ export const Utils = {
         gl.linkProgram(program);
 
         if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-            console.error(`Errore di collegamento del programma shader: ${gl.getProgramInfoLog(program)}`);
+            console.error(`Errore di collegamento del programma shader:`, gl.getProgramInfoLog(program));
             gl.deleteProgram(program);
             return null;
         }
@@ -73,9 +77,13 @@ export const Utils = {
      * @param {WebGLRenderingContext} gl - Il contesto WebGL.
      * @param {number} target - Il target del buffer (ARRAY_BUFFER o ELEMENT_ARRAY_BUFFER).
      * @param {TypedArray} data - I dati da memorizzare nel buffer.
-     * @returns {WebGLBuffer} Il buffer creato.
+     * @returns {WebGLBuffer|null} Il buffer creato o null in caso di errore.
      */
     createBuffer(gl, target, data) {
+        if (!(data instanceof TypedArray)) {
+            console.error(`Dati non validi per il buffer:`, data);
+            return null;
+        }
         const buffer = gl.createBuffer();
         gl.bindBuffer(target, buffer);
         gl.bufferData(target, data, gl.STATIC_DRAW);

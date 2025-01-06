@@ -2,11 +2,14 @@
 
 /**
  * Calcola la distanza tra due punti in uno spazio 3D.
- * @param {Object} point1 - Primo punto con {x, y, z}.
- * @param {Object} point2 - Secondo punto con {x, y, z}.
+ * @param {Vector3} point1 - Primo punto con {x, y, z}.
+ * @param {Vector3} point2 - Secondo punto con {x, y, z}.
  * @returns {number} Distanza tra i due punti.
  */
 function distance3D(point1, point2) {
+    if (!point1 || !point2) {
+        throw new Error("Entrambi i punti devono essere definiti");
+    }
     return Math.sqrt(
         Math.pow(point2.x - point1.x, 2) +
         Math.pow(point2.y - point1.y, 2) +
@@ -22,49 +25,57 @@ function distance3D(point1, point2) {
  * @returns {number} Valore interpolato.
  */
 function lerp(a, b, t) {
+    if (t < 0 || t > 1) {
+        throw new Error("t deve essere compreso tra 0 e 1");
+    }
     return a + (b - a) * t;
 }
 
 /**
  * Normalizza un vettore 3D.
- * @param {Object} vec - Vettore con {x, y, z}.
- * @returns {Object} Vettore normalizzato.
+ * @param {Vector3} vec - Vettore da normalizzare.
+ * @returns {Vector3} Vettore normalizzato.
  */
 function normalize(vec) {
+    if (!vec) {
+        throw new Error("Il vettore deve essere definito");
+    }
     const length = Math.sqrt(vec.x * vec.x + vec.y * vec.y + vec.z * vec.z);
-    return {
-        x: vec.x / length,
-        y: vec.y / length,
-        z: vec.z / length,
-    };
+    if (length === 0) return new Vector3();
+    return new Vector3(vec.x / length, vec.y / length, vec.z / length);
 }
 
 /**
  * Prodotto scalare tra due vettori 3D.
- * @param {Object} vec1 - Primo vettore {x, y, z}.
- * @param {Object} vec2 - Secondo vettore {x, y, z}.
+ * @param {Vector3} vec1 - Primo vettore.
+ * @param {Vector3} vec2 - Secondo vettore.
  * @returns {number} Prodotto scalare.
  */
 function dotProduct(vec1, vec2) {
+    if (!vec1 || !vec2) {
+        throw new Error("Entrambi i vettori devono essere definiti");
+    }
     return vec1.x * vec2.x + vec1.y * vec2.y + vec1.z * vec2.z;
 }
 
 /**
  * Prodotto vettoriale tra due vettori 3D.
- * @param {Object} vec1 - Primo vettore {x, y, z}.
- * @param {Object} vec2 - Secondo vettore {x, y, z}.
- * @returns {Object} Prodotto vettoriale {x, y, z}.
+ * @param {Vector3} vec1 - Primo vettore.
+ * @param {Vector3} vec2 - Secondo vettore.
+ * @returns {Vector3} Prodotto vettoriale.
  */
 function crossProduct(vec1, vec2) {
-    return {
-        x: vec1.y * vec2.z - vec1.z * vec2.y,
-        y: vec1.z * vec2.x - vec1.x * vec2.z,
-        z: vec1.x * vec2.y - vec1.y * vec2.x,
-    };
+    if (!vec1 || !vec2) {
+        throw new Error("Entrambi i vettori devono essere definiti");
+    }
+    return new Vector3(
+        vec1.y * vec2.z - vec1.z * vec2.y,
+        vec1.z * vec2.x - vec1.x * vec2.z,
+        vec1.x * vec2.y - vec1.y * vec2.x
+    );
 }
 
 // Classe Vector3
-
 class Vector3 {
     constructor(x = 0, y = 0, z = 0) {
         this.x = x;
@@ -73,6 +84,7 @@ class Vector3 {
     }
 
     add(vec) {
+        if (!vec) throw new Error("Il vettore da sommare deve essere definito");
         this.x += vec.x;
         this.y += vec.y;
         this.z += vec.z;
@@ -80,6 +92,7 @@ class Vector3 {
     }
 
     subtract(vec) {
+        if (!vec) throw new Error("Il vettore da sottrarre deve essere definito");
         this.x -= vec.x;
         this.y -= vec.y;
         this.z -= vec.z;
@@ -99,12 +112,20 @@ class Vector3 {
 
     normalize() {
         const length = this.length();
-        if (length > 0) {
-            this.x /= length;
-            this.y /= length;
-            this.z /= length;
-        }
-        return this;
+        if (length === 0) return this;
+        return this.multiplyScalar(1 / length);
+    }
+
+    clone() {
+        return new Vector3(this.x, this.y, this.z);
+    }
+
+    equals(vec) {
+        return this.x === vec.x && this.y === vec.y && this.z === vec.z;
+    }
+
+    toArray() {
+        return [this.x, this.y, this.z];
     }
 }
 

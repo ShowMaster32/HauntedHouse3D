@@ -5,12 +5,11 @@ const PLAYER_RADIUS = 0.35; // Raggio del collider del giocatore
 const JUMP_VELOCITY = 10; // Velocità del salto
 const FRICTION = 0.98; // Attrito per rallentare i movimenti
 
-// Classe per gestire il giocatore
 export class Player {
     constructor(camera) {
-        this.camera = camera; // Riferimento alla camera per seguire il giocatore
+        this.camera = camera; // La camera è passata come oggetto
         this.collider = {
-            position: new Vector3(0, 0.35, 0), // Posizione iniziale
+            position: new Vector3(0, 1.8, 0), // Posizione iniziale del giocatore
             velocity: new Vector3(0, 0, 0),   // Velocità iniziale
             radius: PLAYER_RADIUS,            // Raggio del collider
             onFloor: false,                   // Indica se il giocatore è a terra
@@ -30,37 +29,23 @@ export class Player {
         });
     }
 
-    // Ottiene il vettore di movimento avanti/indietro
-    getForwardVector() {
-        const direction = new Vector3();
-        this.camera.getWorldDirection(direction);
-        direction.y = 0; // Mantieni il movimento sul piano orizzontale
-        return direction.normalize();
-    }
-
-    // Ottiene il vettore di movimento laterale
-    getSideVector() {
-        const direction = new Vector3();
-        this.camera.getWorldDirection(direction);
-        direction.y = 0; // Mantieni il movimento sul piano orizzontale
-        direction.normalize();
-        return direction.cross(new Vector3(0, 1, 0)); // Vettore verso l'alto
-    }
-
     // Aggiorna la posizione del giocatore in base ai controlli
     update(deltaTime, collisionObjects) {
         const speed = this.collider.onFloor ? 8 : 2; // Velocità diversa a terra o in aria
         const movement = new Vector3();
 
+        // Movimenti del giocatore
         if (this.keyStates['KeyW']) movement.add(this.getForwardVector().multiplyScalar(speed * deltaTime));
         if (this.keyStates['KeyS']) movement.add(this.getForwardVector().multiplyScalar(-speed * deltaTime));
         if (this.keyStates['KeyA']) movement.add(this.getSideVector().multiplyScalar(-speed * deltaTime));
         if (this.keyStates['KeyD']) movement.add(this.getSideVector().multiplyScalar(speed * deltaTime));
 
+        // Salto
         if (this.collider.onFloor && this.keyStates['Space']) {
             this.collider.velocity.y = JUMP_VELOCITY; // Salta solo se il giocatore è a terra
         }
 
+        // Aggiungi il movimento alla velocità
         this.collider.velocity.add(movement);
 
         // Applica gravità se il giocatore non è a terra
@@ -76,47 +61,36 @@ export class Player {
         this.collider.position.add(deltaPosition);
 
         // Controlla le collisioni
-        this.checkCollisions(collisionObjects);
+        //TODO: this.checkCollisions(collisionObjects);
 
         // Aggiorna la posizione della camera
-        this.camera.position.copy(this.collider.position);
+        this.camera.position = this.collider.position.clone(); // Usa `clone` per assegnare la nuova posizione
     }
 
     // Controlla le collisioni con oggetti della scena
     checkCollisions(collisionObjects) {
+        if (!Array.isArray(collisionObjects)) {
+            console.warn('collisionObjects non è un array.');
+            return;
+        }
+
         this.collider.onFloor = false; // Resetta lo stato "a terra"
 
-        collisionObjects.forEach((object) => {
-            const boundingBox = new THREE.Box3().setFromObject(object);
-            const playerBox = new THREE.Box3(
-                new THREE.Vector3(
-                    this.collider.position.x - this.collider.radius,
-                    this.collider.position.y - this.collider.radius,
-                    this.collider.position.z - this.collider.radius
-                ),
-                new THREE.Vector3(
-                    this.collider.position.x + this.collider.radius,
-                    this.collider.position.y + this.collider.radius,
-                    this.collider.position.z + this.collider.radius
-                )
-            );
+        collisionObjects.forEach((object, index) => {
+            if (!object || !object.position || !object.radius) {
+                console.warn(`Oggetto di collisione non valido all'indice ${index}:`, object);
+                return;
+            }
 
-            if (boundingBox.intersectsBox(playerBox)) {
-                const collisionNormal = boundingBox.getCenter(new THREE.Vector3())
-                    .sub(this.collider.position)
-                    .normalize();
-                this.collider.onFloor = collisionNormal.y > 0;
+            const objectPosition = new Vector3(object.position.x, object.position.y, object.position.z);
+            const distance = objectPosition.subtract(this.collider.position).length();
 
-                // Risolvi la penetrazione
-                const depth = boundingBox.distanceToPoint(this.collider.position);
-                if (depth > 0) {
-                    this.collider.position.add(collisionNormal.multiplyScalar(depth));
-                }
-
-                // Correggi la velocità del giocatore
-                if (!this.collider.onFloor) {
-                    this.collider.velocity.addScaledVector(collisionNormal, -collisionNormal.dot(this.collider.velocity));
-                }
+            if (distance < this.collider.radius + (object.radius || 0)) {
+                this.collider.onFloor = true;
+                const overlap = this.collider.radius + (object.radius || 0) - distance;
+                const direction = objectPosition.subtract(this.collider.position).normalize();
+                this.collider.position.add(direction.multiplyScalar(-overlap));
+                this.collider.velocity.multiplyScalar(0); // Arresta il movimento
             }
         });
     }
@@ -124,8 +98,38 @@ export class Player {
     // Riporta il giocatore all'interno della scena se cade fuori
     teleportIfOutOfBounds(bounds = { minY: -20 }) {
         if (this.collider.position.y <= bounds.minY) {
-            this.collider.position.set(0, 0.35, 0); // Riporta il giocatore alla posizione iniziale
+            this.collider.position.set(0, 1.8, 0); // Riporta il giocatore alla posizione iniziale
             this.collider.velocity.set(0, 0, 0);   // Resetta la velocità
         }
     }
+
+    // Ottiene il vettore di movimento avanti/indietro
+    getForwardVector() {
+        const direction = new Vector3(0, 0, -1);
+        return direction.normalize();
+    }
+
+    // Ottiene il vettore di movimento laterale
+    getSideVector() {
+        const direction = new Vector3(-1, 0, 0);
+        return direction.normalize();
+    }
 }
+
+export const controls = {
+    keyStates: {},
+
+    init() {
+        document.addEventListener('keydown', (event) => {
+            this.keyStates[event.code] = true;
+        });
+
+        document.addEventListener('keyup', (event) => {
+            this.keyStates[event.code] = false;
+        });
+    },
+
+    isKeyPressed(key) {
+        return !!this.keyStates[key];
+    },
+};

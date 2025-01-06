@@ -1,74 +1,53 @@
+/**
+ * Modulo per la gestione delle luci nel contesto WebGL.
+ */
 export const Lighting = {
     /**
-     * Inizializza una luce puntuale.
+     * Crea una luce puntuale.
      * @param {WebGLRenderingContext} gl - Il contesto WebGL.
      * @param {Array<number>} position - Posizione della luce [x, y, z].
      * @param {Array<number>} color - Colore della luce [r, g, b].
      * @returns {Object} Oggetto luce puntuale.
      */
-    createPointLight(gl, position, color) {
+    createPointLight(gl, position = [0, 0, 0], color = [1.0, 1.0, 1.0]) {
         return {
-            position: position || [0, 0, 0],
-            color: color || [1.0, 1.0, 1.0],
+            position,
+            color,
             intensity: 1.0,
             updateUniforms(program, gl) {
                 const lightPositionLocation = gl.getUniformLocation(program, "uLightPosition");
                 const lightColorLocation = gl.getUniformLocation(program, "uLightColor");
                 const lightIntensityLocation = gl.getUniformLocation(program, "uLightIntensity");
 
-                gl.uniform3fv(lightPositionLocation, this.position);
-                gl.uniform3fv(lightColorLocation, this.color);
-                gl.uniform1f(lightIntensityLocation, this.intensity);
+                if (lightPositionLocation) gl.uniform3fv(lightPositionLocation, this.position);
+                if (lightColorLocation) gl.uniform3fv(lightColorLocation, this.color);
+                if (lightIntensityLocation) gl.uniform1f(lightIntensityLocation, this.intensity);
             },
         };
     },
 
     /**
-     * Inizializza una luce direzionale.
+     * Crea una luce direzionale.
      * @param {WebGLRenderingContext} gl - Il contesto WebGL.
      * @param {Array<number>} direction - Direzione della luce [x, y, z].
      * @param {Array<number>} color - Colore della luce [r, g, b].
      * @returns {Object} Oggetto luce direzionale.
      */
-    createDirectionalLight(gl, direction, color) {
+    createDirectionalLight(gl, direction = [0, -1, 0], color = [1.0, 1.0, 1.0]) {
         return {
-            direction: direction || [0, -1, 0],
-            color: color || [1.0, 1.0, 1.0],
+            direction,
+            color,
             intensity: 1.0,
             updateUniforms(program, gl) {
                 const lightDirectionLocation = gl.getUniformLocation(program, "uLightDirection");
                 const lightColorLocation = gl.getUniformLocation(program, "uLightColor");
                 const lightIntensityLocation = gl.getUniformLocation(program, "uLightIntensity");
 
-                gl.uniform3fv(lightDirectionLocation, this.direction);
-                gl.uniform3fv(lightColorLocation, this.color);
-                gl.uniform1f(lightIntensityLocation, this.intensity);
+                if (lightDirectionLocation) gl.uniform3fv(lightDirectionLocation, this.direction);
+                if (lightColorLocation) gl.uniform3fv(lightColorLocation, this.color);
+                if (lightIntensityLocation) gl.uniform1f(lightIntensityLocation, this.intensity);
             },
         };
-    },
-
-    /**
-     * Aggiorna l'effetto di sfarfallio per una luce.
-     * @param {Object} light - L'oggetto luce da sfarfallare.
-     * @param {number} duration - Durata totale dello sfarfallio (ms).
-     */
-    flickerLight(light, duration) {
-        const flickerCount = Math.floor(Math.random() * 5) + 3; // Numero casuale di sfarfallii
-        const interval = duration / flickerCount;
-
-        let toggle = true;
-        let count = 0;
-
-        const flickerInterval = setInterval(() => {
-            light.intensity = toggle ? 0.8 : 1.2;
-            toggle = !toggle;
-            count++;
-
-            if (count >= flickerCount) {
-                clearInterval(flickerInterval);
-                light.intensity = 1.0; // Torna alla luminosità normale
-            }
-        }, interval);
     },
 
     /**
@@ -78,10 +57,33 @@ export const Lighting = {
      * @param {Array<Object>} lights - Array di luci da applicare.
      */
     applyLighting(gl, program, lights) {
-        lights.forEach((light) => {
-            if (light.updateUniforms) {
+        if (!Array.isArray(lights)) {
+            console.warn("L'array delle luci non è valido.");
+            return;
+        }
+
+        lights.forEach((light, index) => {
+            if (light && typeof light.updateUniforms === "function") {
                 light.updateUniforms(program, gl);
+            } else {
+                console.warn(`Luce non valida trovata all'indice ${index}.`);
             }
         });
     },
 };
+
+/**
+ * Abilita il rendering avanzato.
+ */
+export function enableAdvancedRendering() {
+    console.log("Rendering avanzato abilitato.");
+    // Configura impostazioni avanzate qui.
+}
+
+/**
+ * Disabilita il rendering avanzato.
+ */
+export function disableAdvancedRendering() {
+    console.log("Rendering avanzato disabilitato.");
+    // Ripristina impostazioni base qui.
+}
