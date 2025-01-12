@@ -101,3 +101,47 @@ export const Shaders = {
         }
     `
 };
+
+/**
+ * Funzione per creare uno shader.
+ * @param {WebGLRenderingContext} gl - Il contesto WebGL.
+ * @param {number} type - Il tipo di shader (VERTEX o FRAGMENT).
+ * @param {string} source - Il codice sorgente dello shader.
+ * @returns {WebGLShader} L'oggetto shader compilato.
+ */
+export function createShader(gl, type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error(`Errore nella compilazione dello shader (${type === gl.VERTEX_SHADER ? "VERTEX" : "FRAGMENT"}):`, gl.getShaderInfoLog(shader));
+        console.error("Sorgente dello shader:\n", source);
+        gl.deleteShader(shader);
+        return null;
+    }
+    console.log(`Shader (${type === gl.VERTEX_SHADER ? "VERTEX" : "FRAGMENT"}) compilato correttamente.`);
+    return shader;
+}
+
+/**
+ * Funzione per creare un programma shader.
+ * @param {WebGLRenderingContext} gl - Il contesto WebGL.
+ * @param {WebGLShader} vertexShader - Lo shader di vertice.
+ * @param {WebGLShader} fragmentShader - Lo shader di frammento.
+ * @returns {WebGLProgram} Il programma shader creato.
+ */
+export function createProgram(gl, vertexShader, fragmentShader) {
+    const program = gl.createProgram();
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error('Errore nel collegamento del programma:', gl.getProgramInfoLog(program));
+        gl.deleteProgram(program);
+        return null;
+    }
+    console.log("Programma shader collegato correttamente.");
+    return program;
+}

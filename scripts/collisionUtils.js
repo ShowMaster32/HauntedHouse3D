@@ -7,8 +7,12 @@
  * @returns {boolean} - True se c'è una collisione, false altrimenti.
  */
 export function checkCollisionWithSphere(playerPosition, objectPosition, objectRadius, playerRadius = 0.35) {
+    console.log("[CollisionUtils] Inizio verifica collisione con sfera.");
+    console.log(`[CollisionUtils] Parametri ricevuti: playerPosition=${JSON.stringify(playerPosition)}, objectPosition=${JSON.stringify(objectPosition)}, objectRadius=${objectRadius}, playerRadius=${playerRadius}`);
+
+    // Validazione dei parametri
     if (!playerPosition || !objectPosition || typeof objectRadius !== 'number') {
-        console.error('Parametri non validi in checkCollisionWithSphere.');
+        console.error("[CollisionUtils] Parametri non validi in checkCollisionWithSphere.");
         return false;
     }
 
@@ -17,9 +21,15 @@ export function checkCollisionWithSphere(playerPosition, objectPosition, objectR
     const dy = playerPosition.y - objectPosition.y;
     const dz = playerPosition.z - objectPosition.z;
 
+    // Log delle coordinate
+    console.log(`[CollisionUtils] Differenze coordinate: dx=${dx}, dy=${dy}, dz=${dz}`);
+
     // Calcolo della distanza tra il giocatore e l'oggetto
     const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    console.log(`[CollisionUtils] Distanza calcolata: ${distance}`);
 
     // Verifica della collisione
-    return distance < (objectRadius + playerRadius);
+    const collision = distance < (objectRadius + playerRadius);
+    console.log(`[CollisionUtils] Risultato collisione: ${collision}`);
+    return collision;
 }

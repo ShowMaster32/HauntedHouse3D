@@ -6,6 +6,7 @@ export const Utils = {
      * @returns {WebGLTexture} La texture caricata.
      */
     loadTexture(gl, url) {
+        console.log(`[loadTexture] Caricamento texture da URL: ${url}`);
         const texture = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, texture);
 
@@ -13,14 +14,14 @@ export const Utils = {
         const placeholder = new Uint8Array([255, 255, 255, 255]);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, placeholder);
 
-        // Caricamento dell'immagine.
         const image = new Image();
         image.onload = () => {
+            console.log(`[loadTexture] Texture caricata correttamente: ${url}`);
             gl.bindTexture(gl.TEXTURE_2D, texture);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
             gl.generateMipmap(gl.TEXTURE_2D);
         };
-        image.onerror = () => console.error(`Impossibile caricare la texture da ${url}`);
+        image.onerror = () => console.error(`[loadTexture] Errore nel caricamento della texture: ${url}`);
         image.src = url;
 
         return texture;
@@ -34,15 +35,17 @@ export const Utils = {
      * @returns {WebGLShader|null} Lo shader compilato o null in caso di errore.
      */
     compileShader(gl, source, type) {
+        console.log(`[compileShader] Compilazione dello shader: ${type === gl.VERTEX_SHADER ? 'VERTEX' : 'FRAGMENT'}`);
         const shader = gl.createShader(type);
         gl.shaderSource(shader, source);
         gl.compileShader(shader);
 
         if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            console.error(`Errore di compilazione dello shader (${type === gl.VERTEX_SHADER ? 'VERTEX' : 'FRAGMENT'}):`, gl.getShaderInfoLog(shader));
+            console.error(`[compileShader] Errore di compilazione (${type === gl.VERTEX_SHADER ? 'VERTEX' : 'FRAGMENT'}):`, gl.getShaderInfoLog(shader));
             gl.deleteShader(shader);
             return null;
         }
+        console.log(`[compileShader] Shader compilato con successo.`);
         return shader;
     },
 
@@ -54,10 +57,14 @@ export const Utils = {
      * @returns {WebGLProgram|null} Il programma shader collegato o null in caso di errore.
      */
     createShaderProgram(gl, vertexSource, fragmentSource) {
+        console.log(`[createShaderProgram] Creazione del programma shader.`);
         const vertexShader = this.compileShader(gl, vertexSource, gl.VERTEX_SHADER);
         const fragmentShader = this.compileShader(gl, fragmentSource, gl.FRAGMENT_SHADER);
 
-        if (!vertexShader || !fragmentShader) return null;
+        if (!vertexShader || !fragmentShader) {
+            console.error(`[createShaderProgram] Errore nella creazione degli shader.`);
+            return null;
+        }
 
         const program = gl.createProgram();
         gl.attachShader(program, vertexShader);
@@ -65,10 +72,11 @@ export const Utils = {
         gl.linkProgram(program);
 
         if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-            console.error(`Errore di collegamento del programma shader:`, gl.getProgramInfoLog(program));
+            console.error(`[createShaderProgram] Errore di collegamento del programma shader:`, gl.getProgramInfoLog(program));
             gl.deleteProgram(program);
             return null;
         }
+        console.log(`[createShaderProgram] Programma shader creato e collegato correttamente.`);
         return program;
     },
 
@@ -80,13 +88,15 @@ export const Utils = {
      * @returns {WebGLBuffer|null} Il buffer creato o null in caso di errore.
      */
     createBuffer(gl, target, data) {
+        console.log(`[createBuffer] Creazione del buffer per il target: ${target}`);
         if (!(data instanceof TypedArray)) {
-            console.error(`Dati non validi per il buffer:`, data);
+            console.error(`[createBuffer] Dati non validi per il buffer:`, data);
             return null;
         }
         const buffer = gl.createBuffer();
         gl.bindBuffer(target, buffer);
         gl.bufferData(target, data, gl.STATIC_DRAW);
+        console.log(`[createBuffer] Buffer creato con successo.`);
         return buffer;
     },
 
@@ -100,7 +110,9 @@ export const Utils = {
         const dx = point2[0] - point1[0];
         const dy = point2[1] - point1[1];
         const dz = point2[2] - point1[2];
-        return Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        console.log(`[calculateDistance] Distanza calcolata: ${distance}`);
+        return distance;
     },
 
     /**
@@ -110,8 +122,13 @@ export const Utils = {
      */
     normalizeVector(vector) {
         const length = Math.sqrt(vector[0] ** 2 + vector[1] ** 2 + vector[2] ** 2);
-        if (length === 0) return [0, 0, 0];
-        return [vector[0] / length, vector[1] / length, vector[2] / length];
+        if (length === 0) {
+            console.warn(`[normalizeVector] Lunghezza zero, restituisco [0, 0, 0].`);
+            return [0, 0, 0];
+        }
+        const normalized = [vector[0] / length, vector[1] / length, vector[2] / length];
+        console.log(`[normalizeVector] Vettore normalizzato: ${JSON.stringify(normalized)}`);
+        return normalized;
     },
 
     /**
@@ -119,7 +136,9 @@ export const Utils = {
      * @returns {Array<number>} Un colore casuale [r, g, b].
      */
     generateRandomColor() {
-        return [Math.random(), Math.random(), Math.random()];
+        const color = [Math.random(), Math.random(), Math.random()];
+        console.log(`[generateRandomColor] Colore generato: ${JSON.stringify(color)}`);
+        return color;
     },
 
     /**
@@ -132,6 +151,8 @@ export const Utils = {
      * @returns {number} Il valore mappato.
      */
     mapValue(value, inMin, inMax, outMin, outMax) {
-        return ((value - inMin) * (outMax - outMin)) / (inMax - inMin) + outMin;
+        const mapped = ((value - inMin) * (outMax - outMin)) / (inMax - inMin) + outMin;
+        console.log(`[mapValue] Valore mappato: ${mapped}`);
+        return mapped;
     }
 };
