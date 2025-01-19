@@ -32,25 +32,31 @@ export function initializeEnvironment(canvasId) {
         return null;
     }
     
-    // Configurazione iniziale di WebGL
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    gl.viewport(0, 0, canvas.width, canvas.height);
+    // Gestione corretta del DPI
+    function resizeCanvasToDisplaySize() {
+        const displayWidth = window.innerWidth;
+        const displayHeight = window.innerHeight;
+
+        // Imposta le dimensioni del buffer del canvas
+        canvas.width = displayWidth;
+        canvas.height = displayHeight;
+
+        // Aggiorna il viewport di WebGL
+        gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+
+    // Chiamala subito
+    resizeCanvasToDisplaySize();
+    
+    // E aggiungila al listener di resize
+    window.addEventListener('resize', resizeCanvasToDisplaySize);
     
     // Abilita il depth testing e il face culling
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.CULL_FACE);
     gl.cullFace(gl.BACK);
     
-    // Imposta il colore di sfondo
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
-    
-    // Gestisce il ridimensionamento della finestra
-    window.addEventListener('resize', () => {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        gl.viewport(0, 0, canvas.width, canvas.height);
-    });
     
     return { gl, canvas };
 }

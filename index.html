@@ -22,29 +22,31 @@
         <button id="start-button">START</button>
     </div>
 
-    <!-- Canvas WebGL -->
-    <canvas id="canvas" style="display: none;"></canvas>
+    <!-- Game container -->
+    <div id="game-container">
+        <canvas id="canvas"></canvas>
+        
+        <!-- HUD e UI -->
+        <div id="crosshair" style="display: none;"></div>
+        
+        <div id="instructions" style="visibility: hidden;">
+            Press <span>F</span> to turn on the light
+        </div>
 
-    <!-- HUD e UI -->
-    <div id="crosshair" style="display: none;"></div>
-    
-    <div id="instructions" style="visibility: hidden;">
-        Press <span>F</span> to turn on the light
-    </div>
+        <!-- Barra superiore -->
+        <div id="top-bar" style="display: none;">
+            <span id="panel-instructions">Press P to open control panel</span>
+            <span id="game-controls"></span>
+        </div>
 
-    <!-- Barra superiore -->
-    <div id="top-bar" style="display: none;">
-        <span id="panel-instructions">Press P to open control panel</span>
-        <span id="game-controls"></span>
-    </div>
-
-    <!-- Pannello di controllo -->
-    <div id="control-panel" class="hidden">
-        <h2>Control Panel</h2>
-        <button id="toggleShadows">Toggle Shadows</button>
-        <button id="toggleReflections">Toggle Reflections</button>
-        <button id="toggleFPS">Toggle FPS Counter</button>
-        <button id="advancedRendering">Toggle Advanced Rendering</button>
+        <!-- Pannello di controllo -->
+        <div id="control-panel" class="hidden">
+            <h2>Control Panel</h2>
+            <button id="toggleShadows">Toggle Shadows</button>
+            <button id="toggleReflections">Toggle Reflections</button>
+            <button id="toggleFPS">Toggle FPS Counter</button>
+            <button id="advancedRendering">Toggle Advanced Rendering</button>
+        </div>
     </div>
 
     <!-- Audio -->
@@ -66,7 +68,7 @@
     <script>
         // Questo assicura che m4 sia disponibile globalmente
         window.m4 = m4;
-        
+
         // Funzione per inizializzare il contesto WebGL
         function initGL() {
             const canvas = document.querySelector("#canvas");

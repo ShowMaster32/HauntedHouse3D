@@ -1,24 +1,24 @@
 /* main.css */
-
 /* Reset e stili base */
-* {
+html, body {
     margin: 0;
     padding: 0;
-    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
 }
 
 body {
-    margin: 0;
-    overflow: hidden;
+    position: relative;
     font-family: 'Creepster', cursive;
     background-color: black;
     color: white;
     user-select: none;
 }
 
-/* Canvas */
-#canvas {
-    position: absolute;
+/* Game container */
+#game-container {
+    position: fixed;
     top: 0;
     left: 0;
     width: 100vw;
@@ -26,18 +26,28 @@ body {
     z-index: 1;
 }
 
-/* Menu iniziale */
-#start-menu {
-    position: absolute;
+/* Canvas */
+#canvas {
+    position: fixed;
     top: 0;
     left: 0;
     width: 100%;
-    height: 100vh;
+    height: 100%;
+    display: block;
+    z-index: 1;
+}
+
+/* Menu iniziale */
+#start-menu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    /* Corretto il percorso dell'immagine assumendo una struttura di cartelle standard */
     background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)),
                 url('../images/background.png') no-repeat center center;
     background-size: cover;
@@ -74,13 +84,8 @@ body {
 }
 
 /* HUD e UI in-game */
-.hud {
-    position: fixed;
-    z-index: 10;
-}
-
 #crosshair {
-    position: absolute;
+    position: fixed;
     top: 50%;
     left: 50%;
     width: 20px;
@@ -93,7 +98,7 @@ body {
 }
 
 #instructions {
-    position: absolute;
+    position: fixed;
     top: 20%;
     width: 100%;
     text-align: center;
@@ -168,39 +173,21 @@ body {
 
 /* Responsive design */
 @media (max-width: 768px) {
-    #start-menu h1 {
-        font-size: 3rem;
-    }
-
-    #start-button {
+    #start-menu h1 { font-size: 3rem; }
+    #start-button { 
         padding: 15px 30px;
         font-size: 1.5rem;
     }
-
-    #instructions {
-        font-size: 1.5rem;
-    }
-
-    #control-panel {
-        width: 200px;
-    }
+    #instructions { font-size: 1.5rem; }
+    #control-panel { width: 200px; }
 }
 
 @media (max-width: 480px) {
-    #start-menu h1 {
-        font-size: 2rem;
-    }
-
-    #start-button {
+    #start-menu h1 { font-size: 2rem; }
+    #start-button { 
         padding: 10px 20px;
         font-size: 1.2rem;
     }
-
-    #instructions {
-        font-size: 1rem;
-    }
-
-    #control-panel {
-        width: 150px;
-    }
+    #instructions { font-size: 1rem; }
+    #control-panel { width: 150px; }
 }

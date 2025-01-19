@@ -138,7 +138,13 @@ function startGame() {
 
     // Nascondi il menu e mostra il gioco
     document.getElementById('start-menu').style.display = 'none';
+    
+    // Forza il ridimensionamento del canvas
     canvas.style.display = 'block';
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    
     document.getElementById('top-bar').style.display = 'flex';
     document.getElementById('crosshair').style.display = 'block';
 
