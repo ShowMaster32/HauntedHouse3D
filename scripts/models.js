@@ -1,153 +1,172 @@
-/**
- * Crea un oggetto di collisione con posizione e raggio specificati
- * @param {number} x - Posizione X
- * @param {number} y - Posizione Y
- * @param {number} z - Posizione Z
- * @param {number} radius - Raggio dell'oggetto di collisione
- * @returns {Object} Oggetto di collisione
- */
-export function createCollisionObject(x, y, z, radius) {
-    if (typeof x !== 'number' || typeof y !== 'number' || 
-        typeof z !== 'number' || typeof radius !== 'number') {
-        console.error('[Models] Parametri non validi per la creazione di un oggetto di collisione.');
-        return null;
-    }
-    console.log(`[Models] Creazione oggetto di collisione a (${x}, ${y}, ${z}) con raggio ${radius}`);
-    return {
-        position: { x, y, z },
-        radius
-    };
-}
+// models.js
 
-// Carica una texture da un URL
+/**
+ * Carica una texture da un URL.
+ * @param {WebGLRenderingContext} gl - Il contesto WebGL
+ * @param {string} url - L'URL della texture da caricare
+ * @returns {WebGLTexture} La texture caricata
+ */
 export function loadTexture(gl, url) {
-    console.log(`Caricamento texture da URL: ${url}`);
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    
-    // Placeholder iniziale per texture non caricate
-    const placeholder = new Uint8Array([255, 255, 255, 255]);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, placeholder);
-    
+
+    // Carica un pixel rosa come placeholder finché l'immagine non è caricata
+    const pixel = new Uint8Array([255, 192, 203, 255]);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+
     const image = new Image();
     image.onload = () => {
-        console.log(`Texture caricata correttamente: ${url}`);
         gl.bindTexture(gl.TEXTURE_2D, texture);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-        gl.generateMipmap(gl.TEXTURE_2D);
-    };
-    image.onerror = () => {
-        console.error(`Errore nel caricamento della texture: ${url}`);
+
+        // Controlla se l'immagine ha dimensioni potenza di 2
+        if (isPowerOf2(image.width) && isPowerOf2(image.height)) {
+            gl.generateMipmap(gl.TEXTURE_2D);
+        } else {
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        }
     };
     image.src = url;
-    
     return texture;
 }
 
-// Crea una parete con larghezza, altezza e texture specificate
+/**
+ * Crea un piano (per pareti, pavimento, soffitto)
+ * @param {WebGLRenderingContext} gl - Il contesto WebGL
+ * @param {number} width - Larghezza
+ * @param {number} height - Altezza
+ * @param {WebGLTexture} texture - La texture da applicare
+ */
 export function createWall(gl, width, height, texture) {
-    console.log(`Creazione parete: larghezza=${width}, altezza=${height}`);
-    const positions = [
-        -width / 2, -height / 2, 0.0,
-        width / 2, -height / 2, 0.0,
-        width / 2, height / 2, 0.0,
-        -width / 2, height / 2, 0.0,
-    ];
-    
-    const texCoords = [
-        0.0, 0.0,
-        1.0, 0.0,
-        1.0, 1.0,
-        0.0, 1.0,
-    ];
-    
-    const indices = [
-        0, 1, 2,
-        0, 2, 3,
-    ];
-    
-    const positionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
-    
+    const halfWidth = width / 2;
+    const halfHeight = height / 2;
+
+    // Vertici del piano
+    const vertices = new Float32Array([
+        -halfWidth, -halfHeight, 0.0,  // Bottom left
+        halfWidth, -halfHeight, 0.0,   // Bottom right
+        halfWidth, halfHeight, 0.0,    // Top right
+        -halfWidth, halfHeight, 0.0    // Top left
+    ]);
+
+    // Coordinate texture
+    const texCoords = new Float32Array([
+        0.0, 0.0,  // Bottom left
+        1.0, 0.0,  // Bottom right
+        1.0, 1.0,  // Top right
+        0.0, 1.0   // Top left
+    ]);
+
+    // Normali (tutte rivolte verso Z positivo)
+    const normals = new Float32Array([
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0
+    ]);
+
+    // Indici per disegnare i triangoli
+    const indices = new Uint16Array([
+        0, 1, 2,    // First triangle
+        0, 2, 3     // Second triangle
+    ]);
+
+    // Crea i buffer
+    const vertexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
     const texCoordBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(texCoords), gl.STATIC_DRAW);
-    
+    gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
+
+    const normalBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, normals, gl.STATIC_DRAW);
+
     const indexBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
-    
-    console.log(`Parete creata con successo: larghezza=${width}, altezza=${height}`);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+
     return {
-        positionBuffer,
-        texCoordBuffer,
-        indexBuffer,
-        vertexCount: indices.length,
-        texture,
+        position: vertexBuffer,
+        texcoord: texCoordBuffer,
+        normal: normalBuffer,
+        indices: indexBuffer,
+        texture: texture,
+        numElements: indices.length
     };
 }
 
-// Crea un pavimento (o soffitto) con larghezza, profondità e texture specificate
+/**
+ * Crea un pavimento/soffitto (usa la stessa funzione di createWall)
+ */
 export function createFloor(gl, width, depth, texture) {
-    console.log(`Creazione pavimento/soffitto: larghezza=${width}, profondità=${depth}`);
-    return createWall(gl, width, depth, texture); // Riutilizza la logica di `createWall`
+    return createWall(gl, width, depth, texture);
 }
 
-// Carica i modelli della stanza
-export function loadModels(gl) {
-    const wallTexture = loadTexture(gl, './textures/wall.jpg');
-    const floorTexture = loadTexture(gl, './textures/wood.jpg');
-    const ceilingTexture = loadTexture(gl, './textures/ceiling.jpg');
-    
-    // Definizione delle pareti con collisioni
-    const walls = [
-        { ...createWall(gl, 20, 10, wallTexture), collision: createCollisionObject(0, 5, -12.5, 1) },
-        { ...createWall(gl, 20, 10, wallTexture), collision: createCollisionObject(0, 5, 12.5, 1) },
-        { ...createWall(gl, 25, 10, wallTexture), collision: createCollisionObject(-10, 5, 0, 1) },
-        { ...createWall(gl, 25, 10, wallTexture), collision: createCollisionObject(10, 5, 0, 1) },
-    ];
-    
-    // Il pavimento deve avere un collider più preciso
-    const floor = {
-        ...createFloor(gl, 20, 25, floorTexture),
-        collision: createCollisionObject(0, 0, 0, 0.1) // Raggio più piccolo per il pavimento
-    };
-    
-    const ceiling = {
-        ...createFloor(gl, 20, 25, ceilingTexture),
-        collision: createCollisionObject(0, 10, 0, 0.1)
-    };
-    
-    console.log("[Models] Room elements loaded with collision objects:", { walls, floor, ceiling });
-    return { walls, floor, ceiling };
-}
+/**
+ * Disegna un modello.
+ */
+export function drawModel(gl, programInfo, model, modelViewMatrix) {
+    // Posizioni
+    gl.bindBuffer(gl.ARRAY_BUFFER, model.position);
+    gl.vertexAttribPointer(
+        programInfo.attribLocations.vertexPosition,
+        3,
+        gl.FLOAT,
+        false,
+        0,
+        0
+    );
+    gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
 
-// Disegna una parete
-export function drawWall(gl, programInfo, wall, modelViewMatrix) {
-    console.log("Disegno di una parete...");
-    gl.bindBuffer(gl.ARRAY_BUFFER, wall.positionBuffer);
-    gl.vertexAttribPointer(programInfo.attribLocations.aPosition, 3, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(programInfo.attribLocations.aPosition);
-    
-    gl.bindBuffer(gl.ARRAY_BUFFER, wall.texCoordBuffer);
-    gl.vertexAttribPointer(programInfo.attribLocations.aTexCoord, 2, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(programInfo.attribLocations.aTexCoord);
-    
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wall.indexBuffer);
-    
-    gl.uniformMatrix4fv(programInfo.uniformLocations.uModelViewMatrix, false, modelViewMatrix);
+    // Texture coordinates
+    gl.bindBuffer(gl.ARRAY_BUFFER, model.texcoord);
+    gl.vertexAttribPointer(
+        programInfo.attribLocations.textureCoord,
+        2,
+        gl.FLOAT,
+        false,
+        0,
+        0
+    );
+    gl.enableVertexAttribArray(programInfo.attribLocations.textureCoord);
+
+    // Normali
+    gl.bindBuffer(gl.ARRAY_BUFFER, model.normal);
+    gl.vertexAttribPointer(
+        programInfo.attribLocations.normal,
+        3,
+        gl.FLOAT,
+        false,
+        0,
+        0
+    );
+    gl.enableVertexAttribArray(programInfo.attribLocations.normal);
+
+    // Indici
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indices);
+
+    // Set uniforms
+    gl.uniformMatrix4fv(programInfo.uniformLocations.modelViewMatrix, false, modelViewMatrix);
+
+    // Bind texture
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, wall.texture);
-    gl.uniform1i(programInfo.uniformLocations.uTexture, 0);
-    
-    gl.drawElements(gl.TRIANGLES, wall.vertexCount, gl.UNSIGNED_SHORT, 0);
-    console.log("Parete disegnata con successo.");
+    gl.bindTexture(gl.TEXTURE_2D, model.texture);
+    gl.uniform1i(programInfo.uniformLocations.sampler, 0);
+
+    // Draw
+    gl.drawElements(gl.TRIANGLES, model.numElements, gl.UNSIGNED_SHORT, 0);
 }
 
-// Disegna un pavimento o soffitto usando la funzione `drawWall`
-export function drawFloor(gl, programInfo, floor, modelViewMatrix) {
-    console.log("Disegno del pavimento/soffitto...");
-    drawWall(gl, programInfo, floor, modelViewMatrix);
-    console.log("Pavimento/soffitto disegnato con successo.");
+// Funzioni di utilità
+function isPowerOf2(value) {
+    return (value & (value - 1)) === 0;
 }
+
+// Export delle funzioni per disegnare pareti e pavimento
+export const drawWall = drawModel;
+export const drawFloor = drawModel;

@@ -1,195 +1,256 @@
-import { Vector3 } from './math.js';
+// player.js
+import { Vector3, MathUtils } from './math.js';
 
-const GRAVITY = 9.81;          // Ridotta da 30 a 9.81
-const PLAYER_RADIUS = 0.35;    
-const JUMP_VELOCITY = 5;       // Ridotta da 10 a 5
-const FRICTION = 0.92;         // Ridotta da 0.98 a 0.92
-const MAX_FALL_SPEED = 20;     // Nuova costante per limitare la velocità di caduta
+// Costanti per la fisica del player
+const GRAVITY = 9.81;
+const JUMP_FORCE = 5;
+const MOVE_SPEED = 8;
+const SPRINT_SPEED = 12;
+const FRICTION = 0.92;
+const MAX_FALL_SPEED = 20;
+const PLAYER_HEIGHT = 1.8;
+const PLAYER_RADIUS = 0.35;
+const CAMERA_SENSITIVITY = 0.002;
 
 export class Player {
-    constructor(camera) {
-        console.log('[Player] Creazione del giocatore...');
-        this.camera = camera;
-        this.position = new Vector3(0, 1.8, 0);
-        this.velocity = new Vector3(0, 0, 0);
+    constructor(initialPosition = new Vector3(0, PLAYER_HEIGHT, 0)) {
+        // Proprietà base
+        this.position = initialPosition.clone();
+        this.velocity = new Vector3();
+        this.rotation = new Vector3();
+        
+        // Proprietà fisiche
+        this.height = PLAYER_HEIGHT;
+        this.radius = PLAYER_RADIUS;
+        this.onGround = false;
+        this.isSprinting = false;
+        
+        // Collider
         this.collider = {
             position: this.position.clone(),
-            velocity: this.velocity.clone(),
-            radius: PLAYER_RADIUS,
-            onFloor: false,
+            radius: this.radius,
+            height: this.height
         };
+        
+        // Camera
+        this.camera = {
+            position: this.position.clone(),
+            rotation: new Vector3(),
+            fov: 75,
+            sensitivity: CAMERA_SENSITIVITY
+        };
+        
+        // Input
         this.keyStates = {};
+        
         this.initControls();
-        console.log('[Player] Giocatore creato con posizione:', this.position);
     }
     
-    // Inizializza gli eventi per i controlli del giocatore
     initControls() {
-        console.log('[Player] Inizializzazione dei controlli...');
-        document.addEventListener('keydown', (event) => {
-            this.keyStates[event.code] = true;
-            console.log(`[Player] Tasto premuto: ${event.code}`);
+        // Tastiera
+        document.addEventListener('keydown', (e) => {
+            this.keyStates[e.code] = true;
+            if (e.code === 'ShiftLeft') this.isSprinting = true;
         });
         
-        document.addEventListener('keyup', (event) => {
-            this.keyStates[event.code] = false;
-            console.log(`[Player] Tasto rilasciato: ${event.code}`);
+        document.addEventListener('keyup', (e) => {
+            this.keyStates[e.code] = false;
+            if (e.code === 'ShiftLeft') this.isSprinting = false;
+        });
+        
+        // Mouse
+        document.addEventListener('mousemove', (e) => {
+            if (document.pointerLockElement === document.querySelector('canvas')) {
+                this.rotation.y -= e.movementX * this.camera.sensitivity;
+                this.rotation.x -= e.movementY * this.camera.sensitivity;
+                
+                // Limita la rotazione verticale della camera
+                this.rotation.x = MathUtils.clamp(
+                    this.rotation.x,
+                    -Math.PI / 2,
+                    Math.PI / 2
+                );
+            }
+        });
+        
+        // Touch
+        let touchStartX = 0;
+        let touchStartY = 0;
+        
+        document.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        });
+        
+        document.addEventListener('touchmove', (e) => {
+            const touchX = e.touches[0].clientX;
+            const touchY = e.touches[0].clientY;
+            
+            const deltaX = touchX - touchStartX;
+            const deltaY = touchY - touchStartY;
+            
+            this.rotation.y -= deltaX * 0.01;
+            this.rotation.x -= deltaY * 0.01;
+            
+            this.rotation.x = MathUtils.clamp(
+                this.rotation.x,
+                -Math.PI / 2,
+                Math.PI / 2
+            );
+            
+            touchStartX = touchX;
+            touchStartY = touchY;
         });
     }
     
-    // Aggiorna la posizione del giocatore in base ai controlli
-    update(deltaTime, collisionObjects) {
-        if (!deltaTime) return; // Previene deltaTime invalidi
+    update(deltaTime, collisionObjects = []) {
+        if (!deltaTime) return;
+
+        this.handleMovement(deltaTime);
+        this.applyPhysics(deltaTime);
+        this.updateCollider();
+        this.handleCollisions(collisionObjects);
+        this.updateCamera();
+        this.teleportIfOutOfBounds();
+    }
+    
+    handleMovement(deltaTime) {
+        const speed = this.isSprinting ? SPRINT_SPEED : MOVE_SPEED;
+        const moveVector = new Vector3();
         
-        console.log(`[Player] Aggiornamento. deltaTime: ${deltaTime}`);
-        const speed = this.collider.onFloor ? 8 : 2;
-        const movement = new Vector3();
-        
-        // Movimenti del giocatore
-        if (this.keyStates['KeyW']) movement.z = -speed * deltaTime;
-        if (this.keyStates['KeyS']) movement.z = speed * deltaTime;
-        if (this.keyStates['KeyA']) movement.x = -speed * deltaTime;
-        if (this.keyStates['KeyD']) movement.x = speed * deltaTime;
-        
-        // Salto
-        if (this.collider.onFloor && this.keyStates['Space']) {
-            this.collider.velocity.y = JUMP_VELOCITY;
-            this.collider.onFloor = false;
+        if (this.keyStates['KeyW']) {
+            moveVector.z -= Math.cos(this.rotation.y);
+            moveVector.x -= Math.sin(this.rotation.y);
+        }
+        if (this.keyStates['KeyS']) {
+            moveVector.z += Math.cos(this.rotation.y);
+            moveVector.x += Math.sin(this.rotation.y);
+        }
+        if (this.keyStates['KeyA']) {
+            moveVector.x -= Math.cos(this.rotation.y);
+            moveVector.z += Math.sin(this.rotation.y);
+        }
+        if (this.keyStates['KeyD']) {
+            moveVector.x += Math.cos(this.rotation.y);
+            moveVector.z -= Math.sin(this.rotation.y);
         }
         
-        // Applica movimento
-        this.collider.velocity.x += movement.x;
-        this.collider.velocity.z += movement.z;
-        
-        // Applica gravità solo se non siamo a terra
-        if (!this.collider.onFloor) {
-            this.collider.velocity.y -= GRAVITY * deltaTime;
-            // Limita la velocità di caduta
-            if (this.collider.velocity.y < -MAX_FALL_SPEED) {
-                this.collider.velocity.y = -MAX_FALL_SPEED;
-            }
+        if (moveVector.length() > 0) {
+            moveVector.normalize().multiply(speed * deltaTime);
+            this.velocity.x += moveVector.x;
+            this.velocity.z += moveVector.z;
         }
         
-        // Applica attrito
-        this.collider.velocity.x *= FRICTION;
-        this.collider.velocity.z *= FRICTION;
+        if (this.keyStates['Space'] && this.onGround) {
+            this.velocity.y = JUMP_FORCE;
+            this.onGround = false;
+        }
+    }
+    
+    applyPhysics(deltaTime) {
+        // Gravità
+        if (!this.onGround) {
+            this.velocity.y -= GRAVITY * deltaTime;
+            this.velocity.y = Math.max(this.velocity.y, -MAX_FALL_SPEED);
+        }
+        
+        // Attrito
+        this.velocity.x *= FRICTION;
+        this.velocity.z *= FRICTION;
         
         // Aggiorna posizione
-        this.collider.position.x += this.collider.velocity.x;
-        this.collider.position.y += this.collider.velocity.y * deltaTime;
-        this.collider.position.z += this.collider.velocity.z;
-        
-        // Controllo collisioni
-        this.checkCollisions(collisionObjects);
-        
-        // Teleport se fuori dai limiti
-        if (this.collider.position.y < -20) {
-            this.collider.position = new Vector3(0, 5, 0);
-            this.collider.velocity = new Vector3(0, 0, 0);
-        }
-        
-        // Aggiorna la camera
-        this.camera.position.x = this.collider.position.x;
-        this.camera.position.y = this.collider.position.y;
-        this.camera.position.z = this.collider.position.z;
+        const deltaPosition = this.velocity.clone().multiply(deltaTime);
+        this.position.add(deltaPosition);
     }
     
-    // Controlla le collisioni con oggetti della scena
-    checkCollisions(collisionObjects) {
-        if (!Array.isArray(collisionObjects)) {
-            console.warn('[Player] Gli oggetti di collisione devono essere un array.');
-            return;
-        }
+    updateCollider() {
+        this.collider.position.copy(this.position);
+    }
+    
+    handleCollisions(collisionObjects) {
+        this.onGround = false;
         
-        let wasOnFloor = this.collider.onFloor;
-        this.collider.onFloor = false;
-        
-        for (const object of collisionObjects) {
-            if (!object || !object.position || typeof object.radius !== 'number') continue;
+        for (const obj of collisionObjects) {
+            if (!obj) continue;
             
-            // Calcola la distanza
-            const dx = this.collider.position.x - object.position.x;
-            const dy = this.collider.position.y - object.position.y;
-            const dz = this.collider.position.z - object.position.z;
-            const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            const minDist = this.collider.radius + object.radius;
-            
-            if (distance < minDist) {
-                // Collisione rilevata
-                if (object.position.y < this.collider.position.y && 
-                    Math.abs(this.collider.position.y - object.position.y) < this.collider.radius + 0.1) {
-                        // Collisione con il pavimento
-                        this.collider.onFloor = true;
-                        this.collider.position.y = object.position.y + this.collider.radius;
-                        if (this.collider.velocity.y < 0) {
-                            this.collider.velocity.y = 0;
-                        }
-                    } else {
-                        // Collisione con le pareti
-                        const overlap = minDist - distance;
-                        const pushX = (dx / distance) * overlap;
-                        const pushZ = (dz / distance) * overlap;
-                        
-                        this.collider.position.x += pushX;
-                        this.collider.position.z += pushZ;
-                        
-                        // Riduce la velocità nella direzione della collisione
-                        if (Math.abs(pushX) > 0.01) this.collider.velocity.x = 0;
-                        if (Math.abs(pushZ) > 0.01) this.collider.velocity.z = 0;
-                    }
+            const collision = this.checkCollision(obj);
+            if (collision.collided) {
+                this.resolveCollision(collision);
+                
+                if (collision.normal.y > 0.7) {
+                    this.onGround = true;
+                    this.velocity.y = 0;
                 }
             }
-            
-            // Se eravamo a terra ma ora non lo siamo più, e non stiamo saltando
-            if (wasOnFloor && !this.collider.onFloor && this.collider.velocity.y <= 0) {
-                this.collider.velocity.y = 0;
-            }
-        }
-        
-        // Riporta il giocatore all'interno della scena se cade fuori
-        teleportIfOutOfBounds(bounds = { minY: -20 }) {
-            if (this.collider.position.y <= bounds.minY) {
-                console.warn('[Player] Giocatore fuori dai limiti. Teletrasporto alla posizione iniziale.');
-                this.collider.position.set(0, 1.8, 0); // Riporta il giocatore alla posizione iniziale
-                this.collider.velocity.set(0, 0, 0);   // Resetta la velocità
-            }
-        }
-        
-        // Ottiene il vettore di movimento avanti/indietro
-        getForwardVector() {
-            const direction = new Vector3(0, 0, -1);
-            console.log(`[Player] Vettore forward: ${JSON.stringify(direction)}`);
-            return direction.normalize();
-        }
-        
-        // Ottiene il vettore di movimento laterale
-        getSideVector() {
-            const direction = new Vector3(-1, 0, 0);
-            console.log(`[Player] Vettore laterale: ${JSON.stringify(direction)}`);
-            return direction.normalize();
         }
     }
     
-    export const controls = {
-        keyStates: {},
+    checkCollision(object) {
+        const dx = this.position.x - object.position.x;
+        const dy = this.position.y - object.position.y;
+        const dz = this.position.z - object.position.z;
         
-        init() {
-            console.log('[Controls] Inizializzazione dei controlli...');
-            document.addEventListener('keydown', (event) => {
-                this.keyStates[event.code] = true;
-                console.log(`[Controls] Tasto premuto: ${event.code}`);
-            });
-            
-            document.addEventListener('keyup', (event) => {
-                this.keyStates[event.code] = false;
-                console.log(`[Controls] Tasto rilasciato: ${event.code}`);
-            });
-        },
+        const distance = Math.sqrt(dx * dx + dz * dz);
         
-        isKeyPressed(key) {
-            const isPressed = !!this.keyStates[key];
-            console.log(`[Controls] Stato tasto ${key}: ${isPressed}`);
-            return isPressed;
-        },
-    };
+        if (distance < (this.radius + object.radius)) {
+            return {
+                collided: true,
+                normal: new Vector3(dx / distance, 0, dz / distance),
+                depth: (this.radius + object.radius) - distance
+            };
+        }
+        
+        return { collided: false };
+    }
     
+    resolveCollision(collision) {
+        if (!collision.collided) return;
+        
+        this.position.x += collision.normal.x * collision.depth;
+        this.position.z += collision.normal.z * collision.depth;
+        
+        const dot = this.velocity.x * collision.normal.x + 
+                   this.velocity.z * collision.normal.z;
+                   
+        this.velocity.x -= collision.normal.x * dot;
+        this.velocity.z -= collision.normal.z * dot;
+    }
+    
+    updateCamera() {
+        this.camera.position.copy(this.position);
+        this.camera.position.y += this.height;
+        this.camera.rotation.copy(this.rotation);
+    }
+    
+    teleportIfOutOfBounds(minY = -20) {
+        if (this.position.y < minY) {
+            this.position.set(0, PLAYER_HEIGHT, 0);
+            this.velocity.set(0, 0, 0);
+            this.rotation.set(0, 0, 0);
+        }
+    }
+    
+    getCameraDirection() {
+        const direction = new Vector3(0, 0, -1);
+        
+        const cosY = Math.cos(this.camera.rotation.y);
+        const sinY = Math.sin(this.camera.rotation.y);
+        const cosX = Math.cos(this.camera.rotation.x);
+        const sinX = Math.sin(this.camera.rotation.x);
+        
+        return new Vector3(
+            direction.x * cosY + direction.z * sinY,
+            direction.x * -sinY * sinX + direction.y * cosX + direction.z * cosY * sinX,
+            direction.x * sinY * cosX + direction.y * sinX + direction.z * -cosY * cosX
+        ).normalize();
+    }
+}
+
+export const controls = {
+    init() {
+        document.addEventListener('click', () => {
+            const canvas = document.querySelector('canvas');
+            canvas.requestPointerLock();
+        });
+    }
+};

@@ -1,143 +1,151 @@
-export class AudioManager {
+/**
+ * Classe per la gestione dell'audio nel gioco
+ */
+class AudioManager {
     constructor() {
+        // Mappa dei suoni caricati
         this.sounds = {};
-        console.log("[AudioManager] Inizializzazione completata.");
+        
+        // Stati dei suoni
+        this.isPlaying = {};
+        
+        // Volume globale
+        this.globalVolume = 1.0;
+        
+        // Audio context per effetti avanzati
+        this.context = null;
+        this.gainNodes = {};
+        
+        // Flag per mute
+        this.isMuted = false;
+        
+        // Inizializza AudioContext dopo interazione utente
+        document.addEventListener('click', () => {
+            if (!this.context) {
+                try {
+                    window.AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.context = new AudioContext();
+                    this.initializeAudioContext();
+                } catch (e) {
+                    console.warn('Web Audio API non supportata dal browser:', e);
+                }
+            }
+        }, { once: true });
+
+        // Carica i suoni dagli elementi audio HTML
+        this.loadDefaultSounds();
     }
-
-    /**
-     * Carica un file audio e lo aggiunge alla libreria.
-     * @param {string} name - Nome identificativo del suono.
-     * @param {string} src - Percorso del file audio.
-     */
-    loadSound(name, src) {
-        console.log(`[AudioManager] Inizio caricamento del suono: ${name}, URL: ${src}`);
-        const audio = new Audio(src);
-        audio.preload = "auto";
-
-        audio.onerror = () => {
-            console.error(`[AudioManager] Errore nel caricamento del suono: ${name} (${src})`);
-        };
-
-        audio.oncanplaythrough = () => {
-            console.log(`[AudioManager] Suono caricato correttamente: ${name}`);
-        };
-
-        this.sounds[name] = audio;
-    }
-
-    /**
-     * Riproduce un suono.
-     * @param {string} name - Nome del suono da riprodurre.
-     * @param {boolean} loop - Indica se il suono deve essere ripetuto (default: false).
-     */
-    playSound(name, loop = false) {
-        console.log(`[AudioManager] Tentativo di riprodurre il suono: ${name}, Loop: ${loop}`);
-        const sound = this.sounds[name];
-        if (sound) {
-            sound.loop = loop;
-            sound.currentTime = 0;
-            sound.play().then(() => {
-                console.log(`[AudioManager] Suono "${name}" riprodotto correttamente.`);
-            }).catch((e) => {
-                console.error(`[AudioManager] Errore nel riprodurre "${name}":`, e);
-            });
-        } else {
-            console.error(`[AudioManager] Suono "${name}" non trovato.`);
-        }
-    }
-
-    /**
-     * Ferma un suono in riproduzione.
-     * @param {string} name - Nome del suono da fermare.
-     */
-    stopSound(name) {
-        console.log(`[AudioManager] Tentativo di fermare il suono: ${name}`);
-        const sound = this.sounds[name];
-        if (sound) {
-            sound.loop = false;
-            sound.pause();
-            sound.currentTime = 0;
-            console.log(`[AudioManager] Suono "${name}" fermato correttamente.`);
-        } else {
-            console.error(`[AudioManager] Suono "${name}" non trovato.`);
-        }
-    }
-
-    /**
-     * Ferma tutti i suoni attualmente in riproduzione.
-     */
-    stopAllSounds() {
-        console.log("[AudioManager] Tentativo di fermare tutti i suoni in riproduzione.");
-        Object.keys(this.sounds).forEach((name) => {
+    
+    initializeAudioContext() {
+        if (!this.context) return;
+        
+        // Ricrea i nodi gain per tutti i suoni esistenti
+        Object.keys(this.sounds).forEach(name => {
             const sound = this.sounds[name];
-            sound.loop = false;
-            sound.pause();
-            sound.currentTime = 0;
-            console.log(`[AudioManager] Suono "${name}" fermato.`);
+            const source = this.context.createMediaElementSource(sound);
+            const gainNode = this.context.createGain();
+            source.connect(gainNode);
+            gainNode.connect(this.context.destination);
+            this.gainNodes[name] = gainNode;
         });
-        console.log("[AudioManager] Tutti i suoni fermati.");
     }
 
-    /**
-     * Cambia il volume di un suono.
-     * @param {string} name - Nome del suono.
-     * @param {number} volume - Valore del volume (0.0 - 1.0).
-     */
-    setVolume(name, volume) {
-        console.log(`[AudioManager] Tentativo di cambiare il volume del suono: ${name}, Volume: ${volume}`);
+    loadDefaultSounds() {
+        // Carica i suoni dagli elementi HTML esistenti
+        const audioElements = {
+            'introMusic': document.getElementById('intro-music'),
+            'startMusic': document.getElementById('start-music'),
+            'randomGhost': document.getElementById('random-ghost'),
+            'laLaLa': document.getElementById('la-la-la'),
+            'demonLaugh': document.getElementById('demon-laugh')
+        };
+
+        Object.entries(audioElements).forEach(([name, element]) => {
+            if (element) {
+                this.sounds[name] = element;
+                this.isPlaying[name] = false;
+                element.volume = this.globalVolume;
+            } else {
+                console.warn(`Elemento audio "${name}" non trovato nel DOM`);
+            }
+        });
+    }
+    
+    playSound(name, options = {}) {
+        const sound = this.sounds[name];
+        if (!sound) {
+            console.warn(`Suono "${name}" non trovato`);
+            return;
+        }
+        
+        const { loop = false, volume = 1.0 } = options;
+        
+        // Resetta e imposta le opzioni
+        sound.currentTime = 0;
+        sound.loop = loop;
+        sound.volume = Math.min(1, Math.max(0, volume * this.globalVolume));
+        
+        if (!this.isMuted) {
+            const playPromise = sound.play();
+            if (playPromise) {
+                playPromise.then(() => {
+                    this.isPlaying[name] = true;
+                }).catch(error => {
+                    console.warn(`Impossibile riprodurre "${name}":`, error);
+                });
+            }
+        }
+    }
+    
+    stopSound(name) {
         const sound = this.sounds[name];
         if (sound) {
-            sound.volume = Math.min(Math.max(volume, 0), 1);
-            console.log(`[AudioManager] Volume del suono "${name}" impostato a ${sound.volume}.`);
-        } else {
-            console.error(`[AudioManager] Suono "${name}" non trovato.`);
+            sound.pause();
+            sound.currentTime = 0;
+            this.isPlaying[name] = false;
         }
+    }
+    
+    setVolume(name, volume) {
+        const sound = this.sounds[name];
+        if (sound) {
+            sound.volume = Math.min(1, Math.max(0, volume * this.globalVolume));
+        }
+    }
+    
+    setGlobalVolume(volume) {
+        this.globalVolume = Math.min(1, Math.max(0, volume));
+        Object.values(this.sounds).forEach(sound => {
+            if (sound.volume) {
+                sound.volume = sound.volume * this.globalVolume;
+            }
+        });
+    }
+    
+    setMute(muted) {
+        this.isMuted = muted;
+        Object.values(this.sounds).forEach(sound => {
+            sound.muted = muted;
+        });
+    }
+    
+    playRandomGhostSound() {
+        const sounds = ['randomGhost', 'laLaLa', 'demonLaugh'];
+        const randomSound = sounds[Math.floor(Math.random() * sounds.length)];
+        const randomDelay = Math.random() * 20000 + 10000; // 10-30 secondi
+        
+        this.playSound(randomSound, { volume: 0.7 });
+        
+        setTimeout(() => this.playRandomGhostSound(), randomDelay);
+    }
+    
+    stopAllSounds() {
+        Object.keys(this.sounds).forEach(name => {
+            this.stopSound(name);
+        });
     }
 }
 
-// Esempio di utilizzo
+// Esporta una singola istanza
 const audioManager = new AudioManager();
-
-console.log("[AudioManager] Caricamento dei suoni di esempio.");
-audioManager.loadSound("introMusic", "./sounds/intro.mp3");
-audioManager.loadSound("startMusic", "./sounds/start-game.mp3");
-audioManager.loadSound("randomGhost", "./sounds/random-ghost.mp3");
-audioManager.loadSound("laLaLa", "./sounds/la-la-la.mp3");
-audioManager.loadSound("demonLaugh", "./sounds/demon-laugh.mp3");
-
-// Inizializza gli eventi e i suoni
-function initializeAudio() {
-    console.log("[AudioManager] Inizializzazione audio in corso.");
-    const startButton = document.getElementById('start-button');
-    if (!startButton) {
-        console.error('Elemento "start-button" non trovato.');
-        return;
-    }
-
-    startButton.addEventListener('click', () => {
-        console.log("[AudioManager] Pulsante START cliccato. Cambio suono.");
-        audioManager.stopSound("introMusic");
-        audioManager.playSound("startMusic", false);
-    });
-}
-
-// Funzione per attivare il suono casuale
-export function playRandomGhostSound() {
-    console.log("[AudioManager] Inizio riproduzione del suono casuale.");
-    const delay = Math.random() * (30000 - 10000) + 10000;
-    console.log(`[AudioManager] Prossimo suono casuale tra ${Math.round(delay / 1000)} secondi.`);
-    setTimeout(() => {
-        if (audioManager.sounds["randomGhost"]) {
-            audioManager.playSound("randomGhost");
-        } else {
-            console.warn("[AudioManager] Suono 'randomGhost' non caricato.");
-        }
-        playRandomGhostSound();
-    }, delay);
-}
-
-// Inizializzazione alla finestra di caricamento
-window.onload = () => {
-    console.log("[AudioManager] Finestra caricata. Inizializzo audio.");
-    initializeAudio();
-};
+export { audioManager };

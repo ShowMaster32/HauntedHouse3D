@@ -1,78 +1,117 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="HauntedHouse Game - A WebGL Interactive Experience">
-    <title>HauntedHouse</title>
-
-    <!-- Favicon and Fonts -->
-    <link rel="icon" href="./images/favicon.ico" type="image/x-icon">
+    <title>HauntedHouse - Progetto Computer Graphics</title>
+    <meta name="description" content="Progetto per il corso di Computer Graphics - HauntedHouse">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="images/favicon.ico">
+    
+    <!-- Font -->
     <link href="https://fonts.googleapis.com/css2?family=Creepster&display=swap" rel="stylesheet">
-
-    <!-- Stylesheets -->
-    <link rel="stylesheet" href="./styles/main.css">
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
-    <!-- Start Menu -->
+    <!-- Menu iniziale -->
     <div id="start-menu">
         <h1>Welcome to HauntedHouse</h1>
         <button id="start-button">START</button>
     </div>
 
-    <!-- Main Canvas for Rendering -->
+    <!-- Canvas WebGL -->
     <canvas id="canvas" style="display: none;"></canvas>
 
-    <!-- Game Container -->
-    <div id="container" style="display: none;"></div>
-
-    <!-- Instructions -->
+    <!-- HUD e UI -->
+    <div id="crosshair" style="display: none;"></div>
+    
     <div id="instructions" style="visibility: hidden;">
         Press <span>F</span> to turn on the light
     </div>
 
-    <!-- Crosshair -->
-    <div id="crosshair" style="display: none;"></div>
-
-    <!-- Top Bar -->
+    <!-- Barra superiore -->
     <div id="top-bar" style="display: none;">
         <span id="panel-instructions">Press P to open control panel</span>
-        <span id="game-controls" style="margin-left: 20px;"></span>
+        <span id="game-controls"></span>
     </div>
 
-    <!-- Side Panel -->
-    <div id="side-panel" class="hidden">
+    <!-- Pannello di controllo -->
+    <div id="control-panel" class="hidden">
         <h2>Control Panel</h2>
         <button id="toggleShadows">Toggle Shadows</button>
         <button id="toggleReflections">Toggle Reflections</button>
+        <button id="toggleFPS">Toggle FPS Counter</button>
         <button id="advancedRendering">Toggle Advanced Rendering</button>
     </div>
 
-    <!-- Audio Elements -->
-    <audio id="intro-music" src="./sounds/intro.mp3"></audio>
-    <audio id="start-music" src="./sounds/start-game.mp3"></audio>
-    <audio id="random-ghost" src="./sounds/random-ghost.mp3"></audio>
-    <audio id="la-la-la" src="./sounds/la-la-la.mp3"></audio>
-    <audio id="demon-laugh" src="./sounds/demon-laugh.mp3"></audio>
+    <!-- Audio -->
+    <audio id="intro-music" src="sounds/intro.mp3" preload="auto"></audio>
+    <audio id="start-music" src="sounds/start-game.mp3" preload="auto"></audio>
+    <audio id="random-ghost" src="sounds/random-ghost.mp3" preload="auto"></audio>
+    <audio id="la-la-la" src="sounds/la-la-la.mp3" preload="auto"></audio>
+    <audio id="demon-laugh" src="sounds/demon-laugh.mp3" preload="auto"></audio>
 
-    <!-- Libraries -->
-    <script src="./libs/webgl-utils.js"></script>
-    <script src="./libs/glm-js.min.js"></script>
-    <script src="./libs/dat.gui.min.js"></script>
-    <script src="./libs/jquery-3.6.0.min.js"></script>
-    <script src="./libs/m4.js"></script>
-    <script src="./libs/gl-matrix-min.js"></script>
+    <!-- Librerie di base richieste -->
+    <script src="libs/webgl-utils.js"></script>
+    <script src="libs/m4.js"></script>
+    <script src="libs/glm_utils.js"></script>
+    <script src="libs/mesh_utils.js"></script>
+    <script src="libs/dat.gui.js"></script>
+    <script src="libs/jquery-3.6.0.js"></script>
 
-    <!-- Game Scripts -->
-    <script type="module" src="./scripts/main.js"></script>
-    <script type="module" src="./scripts/environment.js"></script>
-    <script type="module" src="./scripts/models.js"></script>
-    <script type="module" src="./scripts/player.js"></script>
-    <script type="module" src="./scripts/audio.js"></script>
-    <script type="module" src="./scripts/shaders.js"></script>
-    <script type="module" src="./scripts/utils.js"></script>
-    <script type="module" src="./scripts/lighting.js"></script>
-    <script type="module" src="./scripts/math.js"></script>
+    <!-- Scripts del gioco -->
+    <script>
+        // Questo assicura che m4 sia disponibile globalmente
+        window.m4 = m4;
+        
+        // Funzione per inizializzare il contesto WebGL
+        function initGL() {
+            const canvas = document.querySelector("#canvas");
+            const gl = canvas.getContext("webgl");
+            if (!gl) {
+                alert("WebGL non disponibile");
+                return null;
+            }
+            return gl;
+        }
 
+        // Funzione per gestire il caricamento delle risorse
+        function loadResources() {
+            return new Promise((resolve) => {
+                // Qui il codice per caricare modelli e texture
+                resolve();
+            });
+        }
+
+        // Funzione principale che verrà chiamata dopo il caricamento del DOM
+        window.onload = async function() {
+            const gl = initGL();
+            if (!gl) return;
+
+            await loadResources();
+            
+            // Ora possiamo caricare i nostri moduli
+            const gameModules = [
+                './scripts/main.js',
+                './scripts/shaders.js',
+                './scripts/math.js',
+                './scripts/models.js',
+                './scripts/lighting.js',
+                './scripts/player.js',
+                './scripts/environment.js',
+                './scripts/audio.js',
+                './scripts/collisionUtils.js',
+                './scripts/utils.js'
+            ];
+
+            // Carica i moduli in modo sequenziale
+            for (const module of gameModules) {
+                await import(module);
+            }
+        };
+    </script>
 </body>
 </html>

@@ -1,236 +1,190 @@
-import { initializeEnvironment } from './environment.js';
-import { loadModels } from './models.js';
+// main.js
+import { initializeEnvironment, createRoom, drawRoom } from './environment.js';
+import { Lighting } from './lighting.js';
 import { Player } from './player.js';
-import { controls } from './player.js';
 import { Vector3 } from './math.js';
-import { drawWall } from './models.js';
-const { mat4 } = glMatrix;
+import { Shaders } from './shaders.js';
+import { audioManager } from './audio.js';
 
 let gl;
-let camera;
-let gameStarted = false;
+let canvas;
+let programInfo;
+let player;
+let lastFrameTime = 0;
+let isGameStarted = false;
+let pointLight;
+let roomElements;
+let m4 = window.m4;  // Usa m4 invece di mat4
 
-/**
-* Disegna la scena.
-* @param {WebGLRenderingContext} gl - Contesto WebGL.
-* @param {Object} programInfo - Informazioni sul programma shader.
-* @param {Object} roomElements - Elementi della stanza.
-*/
-function drawScene(gl, programInfo, roomElements) {
-    console.log("[Main] Disegnando la scena...");
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+function initialize() {
+    const env = initializeEnvironment('canvas');
+    if (!env) {
+        console.error('Impossibile inizializzare WebGL');
+        return false;
+    }
+    gl = env.gl;
+    canvas = env.canvas;
+
+    const shaderProgram = Shaders.initShaderProgram(gl);
+    if (!shaderProgram) {
+        console.error('Impossibile inizializzare gli shader');
+        return false;
+    }
+
+    // Aggiorna i nomi degli attributi per corrispondere agli shader
+    programInfo = {
+        program: shaderProgram,
+        attribLocations: {
+            vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
+            textureCoord: gl.getAttribLocation(shaderProgram, 'aTextureCoord'),
+            normal: gl.getAttribLocation(shaderProgram, 'aVertexNormal'),
+        },
+        uniformLocations: {
+            projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix'),
+            modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),
+            normalMatrix: gl.getUniformLocation(shaderProgram, 'uNormalMatrix'),
+            sampler: gl.getUniformLocation(shaderProgram, 'uSampler'),
+            lightPosition: gl.getUniformLocation(shaderProgram, 'uLightPosition'),
+            lightColor: gl.getUniformLocation(shaderProgram, 'uLightColor'),
+            lightEnabled: gl.getUniformLocation(shaderProgram, 'uLightEnabled'),
+            ambientStrength: gl.getUniformLocation(shaderProgram, 'uAmbientStrength')
+        }
+    };
+
+    // Crea la stanza
+    roomElements = createRoom(gl);
+    if (!roomElements) {
+        console.error('Impossibile creare gli elementi della stanza');
+        return false;
+    }
+
+    // Inizializza il player
+    player = new Player(new Vector3(0, 1.8, 0));
     
-    roomElements.walls.forEach((wall) => {
-        const modelViewMatrix = mat4.create();
-        mat4.translate(modelViewMatrix, mat4.create(), [0, 0, -5]); // Modifica la posizione se necessario
-        drawWall(gl, programInfo, wall, modelViewMatrix);
+    // Crea la luce principale
+    pointLight = Lighting.createPointLight(gl, [0, 8, 0], [1.0, 0.95, 0.8]);
+
+    // Imposta valori iniziali per gli uniform della luce
+    gl.useProgram(programInfo.program);
+    gl.uniform1f(programInfo.uniformLocations.ambientStrength, 0.3);
+    gl.uniform1i(programInfo.uniformLocations.lightEnabled, 1);
+
+    initializeAudioEvents();
+    return true;
+}
+
+function gameLoop(currentTime) {
+    if (!isGameStarted) return;
+
+    const deltaTime = Math.min((currentTime - lastFrameTime) / 1000.0, 0.1); // Limita deltaTime
+    lastFrameTime = currentTime;
+
+    player.update(deltaTime);
+    updatePointLight();
+    render();
+
+    requestAnimationFrame(gameLoop);
+}
+
+function updatePointLight() {
+    if (!pointLight || !programInfo) return;
+
+    pointLight.position.x = player.position.x;
+    pointLight.position.y = player.position.y + 3;
+    pointLight.position.z = player.position.z;
+
+    gl.useProgram(programInfo.program);
+    gl.uniform3fv(programInfo.uniformLocations.lightPosition, pointLight.position.toArray());
+    gl.uniform3fv(programInfo.uniformLocations.lightColor, pointLight.color.toArray());
+}
+
+function render() {
+    if (!gl || !programInfo || !roomElements) return;
+
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+    const fieldOfView = 45 * Math.PI / 180;
+
+    const projectionMatrix = m4.perspective(
+        fieldOfView,
+        aspect,
+        0.1,
+        100.0
+    );
+
+    const cameraPosition = player.position.toArray();
+    const target = [
+        cameraPosition[0] + Math.sin(player.rotation.y),
+        cameraPosition[1] + Math.sin(player.rotation.x),
+        cameraPosition[2] + Math.cos(player.rotation.y)
+    ];
+    const up = [0, 1, 0];
+
+    const viewMatrix = m4.lookAt(cameraPosition, target, up);
+
+    // Calcola e imposta la matrice normale
+    const normalMatrix = m4.transpose(m4.inverse(viewMatrix));
+    gl.uniformMatrix4fv(programInfo.uniformLocations.normalMatrix, false, normalMatrix);
+
+    drawRoom(gl, programInfo, roomElements, viewMatrix, projectionMatrix);
+}
+
+// Gestisce l'avvio del gioco
+function startGame() {
+    if (!initialize()) {
+        return;
+    }
+
+    // Nascondi il menu e mostra il gioco
+    document.getElementById('start-menu').style.display = 'none';
+    canvas.style.display = 'block';
+    document.getElementById('top-bar').style.display = 'flex';
+    document.getElementById('crosshair').style.display = 'block';
+
+    // Avvia la musica di gioco
+    audioManager.stopSound('introMusic');
+    audioManager.playSound('startMusic');
+    audioManager.playRandomGhostSound();
+
+    // Blocca il puntatore
+    canvas.requestPointerLock();
+
+    // Avvia il game loop
+    isGameStarted = true;
+    lastFrameTime = performance.now();
+    requestAnimationFrame(gameLoop);
+}
+
+// Gestisce gli eventi audio
+function initializeAudioEvents() {
+    // Avvia la musica dell'intro al caricamento
+    window.addEventListener('load', () => {
+        audioManager.playSound('introMusic', { loop: true });
     });
 }
 
-/**
-* Avvia il gioco.
-*/
-function startGame() {
-    console.log("[Main] Avvio del gioco...");
-    document.getElementById('start-menu').style.display = 'none';
-    document.getElementById('canvas').style.display = 'block';
-    
-    const introMusic = document.getElementById('intro-music');
-    if (!gameStarted) {
-        introMusic.play().catch((error) => console.error('[Main] Errore riproduzione audio:', error));
-        gameStarted = true;
-    }
-    
-    main();
+// Gestione eventi resize
+function onWindowResize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    gl.viewport(0, 0, canvas.width, canvas.height);
 }
 
-/**
-* Funzione principale del gioco.
-*/
-function main() {
-    console.log("[Main] Inizializzazione del gioco...");
-    
-    const { gl: glContext, canvas } = initializeEnvironment('canvas');
-    gl = glContext;
-    
-    if (!gl) {
-        console.error("[Main] WebGL non disponibile");
-        return;
-    }
-    
-    const program = initializeShaders(gl);
-    gl.useProgram(program);
-    
-    // Inizializza la camera
-    camera = {
-        position: new Vector3(0, 1.8, 0),
-        rotation: new Vector3(0, 0, 0),
-        up: new Vector3(0, 1, 0)
-    };
-    
-    // Carica i modelli
-    const roomElements = loadModels(gl);
-    console.log("[Main] Elementi della stanza caricati:", roomElements);
-    
-    // Crea il player
-    const player = new Player(camera);
-    
-    // Programma shader
-    const programInfo = {
-        program: program,
-        attribLocations: {
-            vertexPosition: gl.getAttribLocation(program, 'aPosition'),
-            textureCoord: gl.getAttribLocation(program, 'aTexCoord'),
-        },
-        uniformLocations: {
-            modelViewMatrix: gl.getUniformLocation(program, 'uModelViewMatrix'),
-            projectionMatrix: gl.getUniformLocation(program, 'uProjectionMatrix'),
-            sampler: gl.getUniformLocation(program, 'uTexture'),
-        },
-    };
-    
-    let lastFrameTime = 0;
-    
-    function gameLoop(currentTime) {
-        // Calcola deltaTime in secondi
-        const deltaTime = (currentTime - lastFrameTime) / 1000.0;
-        lastFrameTime = currentTime;
-        
-        // Skip frame if deltaTime is too large (e.g., after tab switch)
-        if (deltaTime > 0.1) {
-            requestAnimationFrame(gameLoop);
-            return;
-        }
-        
-        console.log(`[Main] Frame time: ${deltaTime.toFixed(4)}s`);
-        
-        // Prepara gli oggetti di collisione
-        const collisionObjects = [
-            ...roomElements.walls.map(wall => wall.collision),
-            roomElements.floor.collision,
-            roomElements.ceiling.collision
-        ].filter(obj => obj != null);
-        
-        // Aggiorna il player
-        player.update(deltaTime, collisionObjects);
-        
-        // Pulisci il buffer
-        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        
-        // Matrice di proiezione
-        const fieldOfView = 45 * Math.PI / 180;
-        const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
-        const zNear = 0.1;
-        const zFar = 100.0;
-        const projectionMatrix = mat4.create();
-        mat4.perspective(projectionMatrix, fieldOfView, aspect, zNear, zFar);
-        
-        // Matrice di vista
-        const viewMatrix = mat4.create();
-        mat4.lookAt(viewMatrix,
-            [camera.position.x, camera.position.y, camera.position.z],
-            [camera.position.x, camera.position.y, camera.position.z - 1],
-            [camera.up.x, camera.up.y, camera.up.z]);
-            
-            // Disegna la scena una sola volta
-            drawScene(gl, programInfo, roomElements, viewMatrix, projectionMatrix);
-            
-            requestAnimationFrame(gameLoop);
-        }
-        
-        // Avvia il game loop
-        requestAnimationFrame(gameLoop);
-    }
-    
-    /**
-    * Inizializza gli shader.
-    * @param {WebGLRenderingContext} gl - Contesto WebGL.
-    * @returns {WebGLProgram} - Programma shader.
-    */
-    function initializeShaders(gl) {
-        console.log("[Main] Inizializzazione degli shader...");
-        
-        const vertexShaderSource = `
-        attribute vec3 aPosition;
-        attribute vec2 aTexCoord;
-    
-        uniform mat4 uModelViewMatrix;
-        uniform mat4 uProjectionMatrix;
-    
-        varying vec2 vTexCoord;
-    
-        void main() {
-            gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(aPosition, 1.0);
-            vTexCoord = aTexCoord;
-        }
-    `;
-        
-        const fragmentShaderSource = `
-        precision mediump float;
-    
-        varying vec2 vTexCoord;
-    
-        uniform sampler2D uTexture;
-    
-        void main() {
-            gl_FragColor = texture2D(uTexture, vTexCoord);
-        }
-    `;
-        
-        const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
-        const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
-        const program = createProgram(gl, vertexShader, fragmentShader);
-        
-        console.log("[Main] Shader inizializzati correttamente.");
-        return program;
-    }
-    
-    /**
-    * Crea uno shader.
-    * @param {WebGLRenderingContext} gl - Contesto WebGL.
-    * @param {number} type - Tipo di shader.
-    * @param {string} source - Codice sorgente dello shader.
-    * @returns {WebGLShader} - Shader compilato.
-    */
-    function createShader(gl, type, source) {
-        const shader = gl.createShader(type);
-        gl.shaderSource(shader, source);
-        gl.compileShader(shader);
-        
-        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            console.error('[Main] Errore nella compilazione dello shader:', gl.getShaderInfoLog(shader));
-            gl.deleteShader(shader);
-            return null;
-        }
-        
-        console.log(`[Main] Shader compilato correttamente: ${type}`);
-        return shader;
-    }
-    
-    /**
-    * Crea un programma shader.
-    * @param {WebGLRenderingContext} gl - Contesto WebGL.
-    * @param {WebGLShader} vertexShader - Shader dei vertici.
-    * @param {WebGLShader} fragmentShader - Shader dei frammenti.
-    * @returns {WebGLProgram} - Programma shader.
-    */
-    function createProgram(gl, vertexShader, fragmentShader) {
-        const program = gl.createProgram();
-        gl.attachShader(program, vertexShader);
-        gl.attachShader(program, fragmentShader);
-        gl.linkProgram(program);
-        
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-            console.error('[Main] Errore nel collegamento del programma:', gl.getProgramInfoLog(program));
-            gl.deleteProgram(program);
-            return null;
-        }
-        
-        console.log("[Main] Programma shader collegato correttamente.");
-        return program;
-    }
-    
-    // Aggiungi evento per il pulsante "START"
+// Inizializza gli event listener
+function initEventListeners() {
+    window.addEventListener('resize', onWindowResize);
     document.getElementById('start-button').addEventListener('click', startGame);
-    console.log("[Main] Modulo main.js caricato correttamente.");
     
+    // Gestione Pointer Lock
+    document.addEventListener('pointerlockchange', () => {
+        if (document.pointerLockElement === canvas) {
+            document.body.style.cursor = 'none';
+        } else {
+            document.body.style.cursor = 'auto';
+        }
+    });
+}
+
+// Avvia l'inizializzazione degli eventi
+initEventListeners();
