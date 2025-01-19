@@ -51,15 +51,15 @@ export function createWall(gl, width, height, texture) {
         -halfWidth, halfHeight, 0.0    // Top left
     ]);
 
-    // Coordinate texture
+    // Coordinate texture (ripetute)
     const texCoords = new Float32Array([
-        0.0, 0.0,  // Bottom left
-        1.0, 0.0,  // Bottom right
-        1.0, 1.0,  // Top right
-        0.0, 1.0   // Top left
+        0.0, 0.0,
+        4.0, 0.0,  // ripeti la texture 4 volte
+        4.0, 4.0,
+        0.0, 4.0
     ]);
 
-    // Normali (tutte rivolte verso Z positivo)
+    // Normali (assicurati che puntino verso l'osservatore)
     const normals = new Float32Array([
         0.0, 0.0, 1.0,
         0.0, 0.0, 1.0,

@@ -1,10 +1,8 @@
-// shaders.js
 export const Shaders = {
-    // Vertex shader base con supporto per illuminazione e texture
     vertexShaderSource: `
-        attribute vec4 aVertexPosition;       // MODIFICATO
+        attribute vec4 aVertexPosition;
         attribute vec2 aTextureCoord;
-        attribute vec3 aVertexNormal;         // MODIFICATO
+        attribute vec3 aVertexNormal;
         
         uniform mat4 uModelViewMatrix;
         uniform mat4 uProjectionMatrix;
@@ -15,16 +13,15 @@ export const Shaders = {
         varying vec3 vFragPos;
         
         void main(void) {
-            gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;  // MODIFICATO
+            gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
             vTextureCoord = aTextureCoord;
-            vNormal = mat3(uNormalMatrix) * aVertexNormal;                        // MODIFICATO
-            vFragPos = vec3(uModelViewMatrix * aVertexPosition);                  // MODIFICATO
+            vNormal = normalize(mat3(uNormalMatrix) * aVertexNormal);  // Normalizzato qui
+            vFragPos = vec3(uModelViewMatrix * aVertexPosition);
         }
     `,
 
-    // Fragment shader rimane lo stesso
     fragmentShaderSource: `
-        precision mediump float;
+        precision highp float;  // Aumentato la precisione
         
         varying vec2 vTextureCoord;
         varying vec3 vNormal;
@@ -39,33 +36,41 @@ export const Shaders = {
         void main(void) {
             vec4 texColor = texture2D(uSampler, vTextureCoord);
             
+            // Base visibility assicurata
+            float baseLighting = 0.3;
+            
             if (uLightEnabled) {
-                // Illuminazione ambientale
-                vec3 ambient = uAmbientStrength * uLightColor;
+                // Illuminazione ambientale aumentata
+                vec3 ambient = max(uAmbientStrength, 0.4) * uLightColor;
                 
-                // Illuminazione diffusa
+                // Illuminazione diffusa migliorata
                 vec3 norm = normalize(vNormal);
                 vec3 lightDir = normalize(uLightPosition - vFragPos);
-                float diff = max(dot(norm, lightDir), 0.0);
+                float diff = max(dot(norm, lightDir), 0.2);  // Minimo 0.2 per visibilità base
                 vec3 diffuse = diff * uLightColor;
                 
-                // Illuminazione speculare
-                float specularStrength = 0.5;
+                // Illuminazione speculare ridotta
+                float specularStrength = 0.3;
                 vec3 viewDir = normalize(-vFragPos);
                 vec3 reflectDir = reflect(-lightDir, norm);
-                float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
+                float spec = pow(max(dot(viewDir, reflectDir), 0.0), 16.0);  // Esponente ridotto
                 vec3 specular = specularStrength * spec * uLightColor;
                 
-                vec3 result = (ambient + diffuse + specular) * vec3(texColor);
+                // Combina gli effetti con pesi modificati
+                vec3 result = (ambient * 0.5 + diffuse * 0.8 + specular * 0.3) * vec3(texColor);
+                
+                // Assicura una luminosità minima
+                result = max(result, vec3(baseLighting) * vec3(texColor));
+                
                 gl_FragColor = vec4(result, texColor.a);
             } else {
-                vec3 ambient = vec3(0.1) * vec3(texColor);
-                gl_FragColor = vec4(ambient, texColor.a);
+                // Fallback con illuminazione base
+                vec3 result = vec3(baseLighting) * vec3(texColor);
+                gl_FragColor = vec4(result, texColor.a);
             }
         }
     `,
 
-    // Il resto del codice rimane invariato
     createShader(gl, type, source) {
         const shader = gl.createShader(type);
         gl.shaderSource(shader, source);

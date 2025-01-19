@@ -1,27 +1,29 @@
 // player.js
 import { Vector3, MathUtils } from './math.js';
 
-// Costanti per la fisica del player
-const GRAVITY = 9.81;
-const JUMP_FORCE = 5;
-const MOVE_SPEED = 8;
-const SPRINT_SPEED = 12;
-const FRICTION = 0.92;
-const MAX_FALL_SPEED = 20;
-const PLAYER_HEIGHT = 1.8;
-const PLAYER_RADIUS = 0.35;
-const CAMERA_SENSITIVITY = 0.002;
+// Esportiamo le costanti
+export const PLAYER_CONSTANTS = {
+    GRAVITY: 9.81,
+    JUMP_FORCE: 5,
+    MOVE_SPEED: 8,
+    SPRINT_SPEED: 12,
+    FRICTION: 0.92,
+    MAX_FALL_SPEED: 20,
+    PLAYER_HEIGHT: 1.8,
+    PLAYER_RADIUS: 0.35,
+    CAMERA_SENSITIVITY: 0.002
+};
 
 export class Player {
-    constructor(initialPosition = new Vector3(0, PLAYER_HEIGHT, 0)) {
+    constructor(initialPosition = new Vector3(0, PLAYER_CONSTANTS.PLAYER_HEIGHT, 0)) {
         // Proprietà base
         this.position = initialPosition.clone();
         this.velocity = new Vector3();
         this.rotation = new Vector3();
         
         // Proprietà fisiche
-        this.height = PLAYER_HEIGHT;
-        this.radius = PLAYER_RADIUS;
+        this.height = PLAYER_CONSTANTS.PLAYER_HEIGHT;
+        this.radius = PLAYER_CONSTANTS.PLAYER_RADIUS;
         this.onGround = false;
         this.isSprinting = false;
         
@@ -37,7 +39,7 @@ export class Player {
             position: this.position.clone(),
             rotation: new Vector3(),
             fov: 75,
-            sensitivity: CAMERA_SENSITIVITY
+            sensitivity: PLAYER_CONSTANTS.CAMERA_SENSITIVITY
         };
         
         // Input
@@ -45,31 +47,42 @@ export class Player {
         
         this.initControls();
     }
-    
     initControls() {
-        // Tastiera
+        // Debug dei controlli
+        console.log("Initializing controls...");
+        
+        // Aggiungi event listeners direttamente al document
         document.addEventListener('keydown', (e) => {
+            console.log("Key pressed:", e.code);  // Debug
             this.keyStates[e.code] = true;
             if (e.code === 'ShiftLeft') this.isSprinting = true;
+            
+            // Previeni il comportamento di default per i tasti di movimento
+            if (['KeyW', 'KeyS', 'KeyA', 'KeyD', 'Space'].includes(e.code)) {
+                e.preventDefault();
+            }
         });
         
         document.addEventListener('keyup', (e) => {
+            console.log("Key released:", e.code);  // Debug
             this.keyStates[e.code] = false;
             if (e.code === 'ShiftLeft') this.isSprinting = false;
         });
-        
+    
         // Mouse
         document.addEventListener('mousemove', (e) => {
             if (document.pointerLockElement === document.querySelector('canvas')) {
                 this.rotation.y -= e.movementX * this.camera.sensitivity;
                 this.rotation.x -= e.movementY * this.camera.sensitivity;
                 
-                // Limita la rotazione verticale della camera
+                // Limita la rotazione verticale
                 this.rotation.x = MathUtils.clamp(
                     this.rotation.x,
                     -Math.PI / 2,
                     Math.PI / 2
                 );
+                
+                console.log("Mouse moved, rotation:", this.rotation);  // Debug
             }
         });
         
@@ -115,48 +128,47 @@ export class Player {
     }
     
     handleMovement(deltaTime) {
-        const speed = this.isSprinting ? SPRINT_SPEED : MOVE_SPEED;
+        const speed = this.isSprinting ? PLAYER_CONSTANTS.SPRINT_SPEED : PLAYER_CONSTANTS.MOVE_SPEED;
         const moveVector = new Vector3();
         
         if (this.keyStates['KeyW']) {
             moveVector.z -= Math.cos(this.rotation.y);
             moveVector.x -= Math.sin(this.rotation.y);
+            console.log("Moving forward");  // Debug
         }
         if (this.keyStates['KeyS']) {
             moveVector.z += Math.cos(this.rotation.y);
             moveVector.x += Math.sin(this.rotation.y);
+            console.log("Moving backward");  // Debug
         }
         if (this.keyStates['KeyA']) {
             moveVector.x -= Math.cos(this.rotation.y);
             moveVector.z += Math.sin(this.rotation.y);
+            console.log("Moving left");  // Debug
         }
         if (this.keyStates['KeyD']) {
             moveVector.x += Math.cos(this.rotation.y);
             moveVector.z -= Math.sin(this.rotation.y);
+            console.log("Moving right");  // Debug
         }
         
         if (moveVector.length() > 0) {
             moveVector.normalize().multiply(speed * deltaTime);
-            this.velocity.x += moveVector.x;
-            this.velocity.z += moveVector.z;
-        }
-        
-        if (this.keyStates['Space'] && this.onGround) {
-            this.velocity.y = JUMP_FORCE;
-            this.onGround = false;
+            this.position.add(moveVector);
+            console.log("New position:", this.position);  // Debug
         }
     }
     
     applyPhysics(deltaTime) {
         // Gravità
         if (!this.onGround) {
-            this.velocity.y -= GRAVITY * deltaTime;
-            this.velocity.y = Math.max(this.velocity.y, -MAX_FALL_SPEED);
+            this.velocity.y -= PLAYER_CONSTANTS.GRAVITY * deltaTime;
+            this.velocity.y = Math.max(this.velocity.y, -PLAYER_CONSTANTS.MAX_FALL_SPEED);
         }
         
         // Attrito
-        this.velocity.x *= FRICTION;
-        this.velocity.z *= FRICTION;
+        this.velocity.x *= PLAYER_CONSTANTS.FRICTION;
+        this.velocity.z *= PLAYER_CONSTANTS.FRICTION;
         
         // Aggiorna posizione
         const deltaPosition = this.velocity.clone().multiply(deltaTime);
@@ -168,18 +180,38 @@ export class Player {
     }
     
     handleCollisions(collisionObjects) {
+        if (!Array.isArray(collisionObjects)) {
+            console.warn('handleCollisions: collisionObjects non è un array');
+            return;
+        }
+    
         this.onGround = false;
         
         for (const obj of collisionObjects) {
-            if (!obj) continue;
+            if (!obj || !obj.collision || !obj.position) {
+                console.warn('handleCollisions: oggetto di collisione non valido', obj);
+                continue;
+            }
             
-            const collision = this.checkCollision(obj);
-            if (collision.collided) {
-                this.resolveCollision(collision);
-                
-                if (collision.normal.y > 0.7) {
-                    this.onGround = true;
-                    this.velocity.y = 0;
+            if (obj.collision.type === 'plane' && obj.collision.normal) {
+                try {
+                    const distanceVec = this.position.clone().subtract(obj.position);
+                    const distance = obj.collision.normal.dot(distanceVec);
+                    
+                    if (Math.abs(distance) < this.radius) {
+                        const correction = obj.collision.normal.clone()
+                            .multiply(this.radius - distance);
+                        this.position.add(correction);
+                        
+                        if (obj.collision.normal.y > 0.7) {
+                            this.onGround = true;
+                            this.velocity.y = 0;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Errore durante il calcolo della collisione:', error);
+                    console.log('Oggetto problematico:', obj);
+                    console.log('Player position:', this.position);
                 }
             }
         }
@@ -224,7 +256,7 @@ export class Player {
     
     teleportIfOutOfBounds(minY = -20) {
         if (this.position.y < minY) {
-            this.position.set(0, PLAYER_HEIGHT, 0);
+            this.position.set(0, PLAYER_CONSTANTS.PLAYER_HEIGHT, 0);
             this.velocity.set(0, 0, 0);
             this.rotation.set(0, 0, 0);
         }

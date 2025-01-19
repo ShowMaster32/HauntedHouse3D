@@ -16,6 +16,10 @@ export class Vector3 {
     }
 
     subtract(v) {
+        if (!v) {
+            console.error('Vector3.subtract: parametro non definito');
+            return this;
+        }
         this.x -= v.x;
         this.y -= v.y;
         this.z -= v.z;
