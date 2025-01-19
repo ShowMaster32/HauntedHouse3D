@@ -190,6 +190,14 @@ function initEventListeners() {
             document.body.style.cursor = 'auto';
         }
     });
+    
+    // Gestione tasto P per il pannello di controllo
+    document.addEventListener('keydown', (e) => {
+        if (e.code === 'KeyP') {
+            const controlPanel = document.getElementById('control-panel');
+            controlPanel.classList.toggle('hidden');
+        }
+    });
 }
 
 // Avvia l'inizializzazione degli eventi

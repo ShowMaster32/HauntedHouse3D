@@ -36,17 +36,14 @@ export function initializeEnvironment(canvasId) {
     function resizeCanvasToDisplaySize() {
         const displayWidth = window.innerWidth;
         const displayHeight = window.innerHeight;
-
-        // Imposta le dimensioni del buffer del canvas
-        canvas.width = displayWidth;
-        canvas.height = displayHeight;
-
-        // Aggiorna il viewport di WebGL
-        gl.viewport(0, 0, canvas.width, canvas.height);
+    
+        if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+            canvas.width = displayWidth;
+            canvas.height = displayHeight;
+            gl.viewport(0, 0, canvas.width, canvas.height);
+        }
     }
-
-    // Chiamala subito
-    resizeCanvasToDisplaySize();
+    resizeCanvasToDisplaySize();    
     
     // E aggiungila al listener di resize
     window.addEventListener('resize', resizeCanvasToDisplaySize);
