@@ -1,76 +1,79 @@
 export const Shaders = {
     vertexShaderSource: `
-        attribute vec4 aVertexPosition;
-        attribute vec2 aTextureCoord;
-        attribute vec3 aVertexNormal;
-            
-        uniform mat4 uModelViewMatrix;
-        uniform mat4 uProjectionMatrix;
-        uniform mat4 uNormalMatrix;
-            
-        varying vec2 vTextureCoord;
-        varying vec3 vNormal;
-        varying vec3 vFragPos;
-            
-        void main(void) {
-            vec4 worldPosition = uModelViewMatrix * aVertexPosition;
-            gl_Position = uProjectionMatrix * worldPosition;
-            vFragPos = worldPosition.xyz;
-            vTextureCoord = aTextureCoord;
-            vNormal = mat3(uNormalMatrix) * aVertexNormal;
-        }
-    `,
+    attribute vec4 aVertexPosition;
+    attribute vec2 aTextureCoord;
+    attribute vec3 aVertexNormal;
+    attribute vec3 aTangent;
+    attribute vec3 aBitangent;
+    
+    uniform mat4 uModelViewMatrix;
+    uniform mat4 uProjectionMatrix;
+    uniform mat4 uNormalMatrix;
+    
+    varying vec2 vTextureCoord;
+    varying vec3 vNormal;
+    varying vec3 vTangent;
+    varying vec3 vBitangent;
+    varying vec3 vFragPos;
+    
+    void main(void) {
+        gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+        vTextureCoord = aTextureCoord;
+        
+        // Calcola lo spazio tangente per il normal mapping
+        vNormal = normalize(mat3(uNormalMatrix) * aVertexNormal);
+        vTangent = normalize(mat3(uNormalMatrix) * aTangent);
+        vBitangent = normalize(mat3(uNormalMatrix) * aBitangent);
+        
+        vFragPos = vec3(uModelViewMatrix * aVertexPosition);
+    }
+`,
     
     fragmentShaderSource: `
-        precision highp float;  // Aumentato la precisione
+    precision highp float;
+    
+    varying vec2 vTextureCoord;
+    varying vec3 vNormal;
+    varying vec3 vTangent;
+    varying vec3 vBitangent;
+    varying vec3 vFragPos;
+    
+    uniform sampler2D uDiffuse;
+    uniform sampler2D uNormal;
+    uniform sampler2D uRoughness;
+    uniform vec3 uLightPosition;
+    uniform vec3 uLightColor;
+    uniform bool uLightEnabled;
+    uniform float uAmbientStrength;
+    
+    void main(void) {
+        // Texture sampling
+        vec4 diffuseColor = texture2D(uDiffuse, vTextureCoord);
+        vec3 normalMap = texture2D(uNormal, vTextureCoord).rgb * 2.0 - 1.0;
+        float roughness = texture2D(uRoughness, vTextureCoord).r;
         
-        varying vec2 vTextureCoord;
-        varying vec3 vNormal;
-        varying vec3 vFragPos;
+        // Costruisci la matrice TBN per il normal mapping
+        mat3 TBN = mat3(normalize(vTangent), normalize(vBitangent), normalize(vNormal));
+        vec3 normal = normalize(TBN * normalMap);
         
-        uniform sampler2D uSampler;
-        uniform vec3 uLightPosition;
-        uniform vec3 uLightColor;
-        uniform bool uLightEnabled;
-        uniform float uAmbientStrength;
+        // Calcoli di illuminazione
+        vec3 lightDir = normalize(uLightPosition - vFragPos);
+        float diff = max(dot(normal, lightDir), 0.0);
         
-        void main(void) {
-            vec4 texColor = texture2D(uSampler, vTextureCoord);
-            
-            // Base visibility assicurata
-            float baseLighting = 0.3;
-            
-            if (uLightEnabled) {
-                // Illuminazione ambientale aumentata
-                vec3 ambient = max(uAmbientStrength, 0.4) * uLightColor;
-                
-                // Illuminazione diffusa migliorata
-                vec3 norm = normalize(vNormal);
-                vec3 lightDir = normalize(uLightPosition - vFragPos);
-                float diff = max(dot(norm, lightDir), 0.2);  // Minimo 0.2 per visibilità base
-                vec3 diffuse = diff * uLightColor;
-                
-                // Illuminazione speculare ridotta
-                float specularStrength = 0.3;
-                vec3 viewDir = normalize(-vFragPos);
-                vec3 reflectDir = reflect(-lightDir, norm);
-                float spec = pow(max(dot(viewDir, reflectDir), 0.0), 16.0);  // Esponente ridotto
-                vec3 specular = specularStrength * spec * uLightColor;
-                
-                // Combina gli effetti con pesi modificati
-                vec3 result = (ambient * 0.5 + diffuse * 0.8 + specular * 0.3) * vec3(texColor);
-                
-                // Assicura una luminosità minima
-                result = max(result, vec3(baseLighting) * vec3(texColor));
-                
-                gl_FragColor = vec4(result, texColor.a);
-            } else {
-                // Fallback con illuminazione base
-                vec3 result = vec3(baseLighting) * vec3(texColor);
-                gl_FragColor = vec4(result, texColor.a);
-            }
-        }
-    `,
+        // Calcolo speculare base PBR
+        vec3 viewDir = normalize(-vFragPos);
+        vec3 halfwayDir = normalize(lightDir + viewDir);
+        float spec = pow(max(dot(normal, halfwayDir), 0.0), 32.0);
+        float specStrength = (1.0 - roughness) * 0.5;
+        
+        vec3 ambient = uAmbientStrength * uLightColor;
+        vec3 diffuse = diff * uLightColor;
+        vec3 specular = specStrength * spec * uLightColor;
+        
+        vec3 result = (ambient + diffuse + specular) * diffuseColor.rgb;
+        gl_FragColor = vec4(result, diffuseColor.a);
+    }
+`,
     
     createShader(gl, type, source) {
         const shader = gl.createShader(type);

@@ -9,9 +9,10 @@ export const PLAYER_CONSTANTS = {
     SPRINT_SPEED: 12,
     FRICTION: 0.92,
     MAX_FALL_SPEED: 20,
-    PLAYER_HEIGHT: 1.8,
+    PLAYER_HEIGHT: 1.7,  // Abbassato da 1.8
     PLAYER_RADIUS: 0.35,
-    CAMERA_SENSITIVITY: 0.002
+    CAMERA_SENSITIVITY: 0.002,
+    EYE_HEIGHT: 1.6     // Aggiunta questa costante
 };
 
 export class Player {
@@ -82,12 +83,13 @@ export class Player {
     }
     
     handleMovement(deltaTime) {
-        console.log("Movement state:", this.keyStates);
-        
         const speed = this.isSprinting ? PLAYER_CONSTANTS.SPRINT_SPEED : PLAYER_CONSTANTS.MOVE_SPEED;
+        const moveAmount = speed * deltaTime;
+        
         let moveX = 0;
         let moveZ = 0;
-        
+    
+        // Movimento più fluido con interpolazione
         if (this.keyStates['KeyW']) {
             moveZ = -Math.cos(this.rotation.y);
             moveX = -Math.sin(this.rotation.y);
@@ -104,12 +106,28 @@ export class Player {
             moveX = Math.cos(this.rotation.y);
             moveZ = -Math.sin(this.rotation.y);
         }
-        
-        if (moveX !== 0 || moveZ !== 0) {
-            const moveAmount = speed * deltaTime;
-            this.position.x += moveX * moveAmount;
-            this.position.z += moveZ * moveAmount;
-            console.log("Moving to:", this.position);
+    
+        // Normalizza il movimento diagonale
+        if (moveX !== 0 && moveZ !== 0) {
+            const length = Math.sqrt(moveX * moveX + moveZ * moveZ);
+            moveX /= length;
+            moveZ /= length;
+        }
+    
+        this.velocity.x = moveX * moveAmount;
+        this.velocity.z = moveZ * moveAmount;
+    }
+
+    handleJump() {
+        if (this.keyStates['Space'] && this.onGround) {
+            this.velocity.y = PLAYER_CONSTANTS.JUMP_FORCE;
+            this.onGround = false;
+        }
+    
+        // Aggiunge gravità più realistica
+        if (!this.onGround) {
+            this.velocity.y -= PLAYER_CONSTANTS.GRAVITY * deltaTime;
+            this.velocity.y = Math.max(this.velocity.y, -PLAYER_CONSTANTS.MAX_FALL_SPEED);
         }
     }
     
