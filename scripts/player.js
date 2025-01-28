@@ -47,78 +47,32 @@ export class Player {
         
         this.initControls();
     }
+    
     initControls() {
-        // Debug dei controlli
-        console.log("Initializing controls...");
-        
-        // Aggiungi event listeners direttamente al document
-        document.addEventListener('keydown', (e) => {
-            console.log("Key pressed:", e.code);  // Debug
+        // Cambio da document a window per gli eventi tastiera
+        window.addEventListener('keydown', (e) => {
             this.keyStates[e.code] = true;
-            if (e.code === 'ShiftLeft') this.isSprinting = true;
-            
-            // Previeni il comportamento di default per i tasti di movimento
-            if (['KeyW', 'KeyS', 'KeyA', 'KeyD', 'Space'].includes(e.code)) {
-                e.preventDefault();
-            }
+            console.log("Tasto premuto:", e.code);
         });
         
-        document.addEventListener('keyup', (e) => {
-            console.log("Key released:", e.code);  // Debug
+        window.addEventListener('keyup', (e) => {
             this.keyStates[e.code] = false;
-            if (e.code === 'ShiftLeft') this.isSprinting = false;
+            console.log("Tasto rilasciato:", e.code);
         });
     
-        // Mouse
+        // Controllo mouse invariato
         document.addEventListener('mousemove', (e) => {
             if (document.pointerLockElement === document.querySelector('canvas')) {
                 this.rotation.y -= e.movementX * this.camera.sensitivity;
                 this.rotation.x -= e.movementY * this.camera.sensitivity;
-                
-                // Limita la rotazione verticale
-                this.rotation.x = MathUtils.clamp(
-                    this.rotation.x,
-                    -Math.PI / 2,
-                    Math.PI / 2
-                );
-                
-                console.log("Mouse moved, rotation:", this.rotation);  // Debug
+                this.rotation.x = MathUtils.clamp(this.rotation.x, -Math.PI / 2, Math.PI / 2);
             }
-        });
-        
-        // Touch
-        let touchStartX = 0;
-        let touchStartY = 0;
-        
-        document.addEventListener('touchstart', (e) => {
-            touchStartX = e.touches[0].clientX;
-            touchStartY = e.touches[0].clientY;
-        });
-        
-        document.addEventListener('touchmove', (e) => {
-            const touchX = e.touches[0].clientX;
-            const touchY = e.touches[0].clientY;
-            
-            const deltaX = touchX - touchStartX;
-            const deltaY = touchY - touchStartY;
-            
-            this.rotation.y -= deltaX * 0.01;
-            this.rotation.x -= deltaY * 0.01;
-            
-            this.rotation.x = MathUtils.clamp(
-                this.rotation.x,
-                -Math.PI / 2,
-                Math.PI / 2
-            );
-            
-            touchStartX = touchX;
-            touchStartY = touchY;
         });
     }
     
     update(deltaTime, collisionObjects = []) {
         if (!deltaTime) return;
-
+        
         this.handleMovement(deltaTime);
         this.applyPhysics(deltaTime);
         this.updateCollider();
@@ -128,34 +82,34 @@ export class Player {
     }
     
     handleMovement(deltaTime) {
+        console.log("Movement state:", this.keyStates);
+        
         const speed = this.isSprinting ? PLAYER_CONSTANTS.SPRINT_SPEED : PLAYER_CONSTANTS.MOVE_SPEED;
-        const moveVector = new Vector3();
+        let moveX = 0;
+        let moveZ = 0;
         
         if (this.keyStates['KeyW']) {
-            moveVector.z -= Math.cos(this.rotation.y);
-            moveVector.x -= Math.sin(this.rotation.y);
-            console.log("Moving forward");  // Debug
+            moveZ = -Math.cos(this.rotation.y);
+            moveX = -Math.sin(this.rotation.y);
         }
         if (this.keyStates['KeyS']) {
-            moveVector.z += Math.cos(this.rotation.y);
-            moveVector.x += Math.sin(this.rotation.y);
-            console.log("Moving backward");  // Debug
+            moveZ = Math.cos(this.rotation.y);
+            moveX = Math.sin(this.rotation.y);
         }
         if (this.keyStates['KeyA']) {
-            moveVector.x -= Math.cos(this.rotation.y);
-            moveVector.z += Math.sin(this.rotation.y);
-            console.log("Moving left");  // Debug
+            moveX = -Math.cos(this.rotation.y);
+            moveZ = Math.sin(this.rotation.y);
         }
         if (this.keyStates['KeyD']) {
-            moveVector.x += Math.cos(this.rotation.y);
-            moveVector.z -= Math.sin(this.rotation.y);
-            console.log("Moving right");  // Debug
+            moveX = Math.cos(this.rotation.y);
+            moveZ = -Math.sin(this.rotation.y);
         }
         
-        if (moveVector.length() > 0) {
-            moveVector.normalize().multiply(speed * deltaTime);
-            this.position.add(moveVector);
-            console.log("New position:", this.position);  // Debug
+        if (moveX !== 0 || moveZ !== 0) {
+            const moveAmount = speed * deltaTime;
+            this.position.x += moveX * moveAmount;
+            this.position.z += moveZ * moveAmount;
+            console.log("Moving to:", this.position);
         }
     }
     
@@ -184,7 +138,7 @@ export class Player {
             console.warn('handleCollisions: collisionObjects non è un array');
             return;
         }
-    
+        
         this.onGround = false;
         
         for (const obj of collisionObjects) {
@@ -200,7 +154,7 @@ export class Player {
                     
                     if (Math.abs(distance) < this.radius) {
                         const correction = obj.collision.normal.clone()
-                            .multiply(this.radius - distance);
+                        .multiply(this.radius - distance);
                         this.position.add(correction);
                         
                         if (obj.collision.normal.y > 0.7) {
@@ -242,8 +196,8 @@ export class Player {
         this.position.z += collision.normal.z * collision.depth;
         
         const dot = this.velocity.x * collision.normal.x + 
-                   this.velocity.z * collision.normal.z;
-                   
+        this.velocity.z * collision.normal.z;
+        
         this.velocity.x -= collision.normal.x * dot;
         this.velocity.z -= collision.normal.z * dot;
     }

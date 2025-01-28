@@ -3,23 +3,24 @@ export const Shaders = {
         attribute vec4 aVertexPosition;
         attribute vec2 aTextureCoord;
         attribute vec3 aVertexNormal;
-        
+            
         uniform mat4 uModelViewMatrix;
         uniform mat4 uProjectionMatrix;
         uniform mat4 uNormalMatrix;
-        
+            
         varying vec2 vTextureCoord;
         varying vec3 vNormal;
         varying vec3 vFragPos;
-        
+            
         void main(void) {
-            gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+            vec4 worldPosition = uModelViewMatrix * aVertexPosition;
+            gl_Position = uProjectionMatrix * worldPosition;
+            vFragPos = worldPosition.xyz;
             vTextureCoord = aTextureCoord;
-            vNormal = normalize(mat3(uNormalMatrix) * aVertexNormal);  // Normalizzato qui
-            vFragPos = vec3(uModelViewMatrix * aVertexPosition);
+            vNormal = mat3(uNormalMatrix) * aVertexNormal;
         }
     `,
-
+    
     fragmentShaderSource: `
         precision highp float;  // Aumentato la precisione
         
@@ -70,12 +71,12 @@ export const Shaders = {
             }
         }
     `,
-
+    
     createShader(gl, type, source) {
         const shader = gl.createShader(type);
         gl.shaderSource(shader, source);
         gl.compileShader(shader);
-
+        
         if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
             console.error('Errore di compilazione shader:', gl.getShaderInfoLog(shader));
             gl.deleteShader(shader);
@@ -83,13 +84,13 @@ export const Shaders = {
         }
         return shader;
     },
-
+    
     createProgram(gl, vertexShader, fragmentShader) {
         const program = gl.createProgram();
         gl.attachShader(program, vertexShader);
         gl.attachShader(program, fragmentShader);
         gl.linkProgram(program);
-
+        
         if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
             console.error('Errore nel linking del programma:', gl.getProgramInfoLog(program));
             gl.deleteProgram(program);
@@ -97,15 +98,15 @@ export const Shaders = {
         }
         return program;
     },
-
+    
     initShaderProgram(gl) {
         const vertexShader = this.createShader(gl, gl.VERTEX_SHADER, this.vertexShaderSource);
         const fragmentShader = this.createShader(gl, gl.FRAGMENT_SHADER, this.fragmentShaderSource);
-
+        
         if (!vertexShader || !fragmentShader) {
             return null;
         }
-
+        
         const program = this.createProgram(gl, vertexShader, fragmentShader);
         if (!program) {
             return null;

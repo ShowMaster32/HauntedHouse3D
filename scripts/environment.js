@@ -66,56 +66,52 @@ export function initializeEnvironment(canvasId) {
 * @returns {Object} Elementi della stanza
 */
 export function createRoom(gl) {
-    // Carica le texture
     const wallTexture = loadTexture(gl, TEXTURES.wall);
     const floorTexture = loadTexture(gl, TEXTURES.floor);
     const ceilingTexture = loadTexture(gl, TEXTURES.ceiling);
     
-    // Pareti con normali verso l'interno della stanza
     const walls = [
-        // Parete frontale (Z negativo)
+        // Parete frontale (ruotata di 180° per puntare all'interno)
         {
             mesh: createWall(gl, ROOM_WIDTH, ROOM_HEIGHT, wallTexture),
             position: new Vector3(0, ROOM_HEIGHT/2, -ROOM_DEPTH/2),
-            rotation: new Vector3(0, Math.PI, 0),  // Ruotato per far puntare la normale verso l'interno
+            rotation: new Vector3(0, Math.PI, 0),
             collision: { type: 'plane', normal: new Vector3(0, 0, 1) }
         },
-        // Parete posteriore (Z positivo)
+        // Parete posteriore
         {
             mesh: createWall(gl, ROOM_WIDTH, ROOM_HEIGHT, wallTexture),
             position: new Vector3(0, ROOM_HEIGHT/2, ROOM_DEPTH/2),
             rotation: new Vector3(0, 0, 0),
             collision: { type: 'plane', normal: new Vector3(0, 0, -1) }
         },
-        // Parete sinistra (X negativo)
+        // Parete sinistra
         {
             mesh: createWall(gl, ROOM_DEPTH, ROOM_HEIGHT, wallTexture),
             position: new Vector3(-ROOM_WIDTH/2, ROOM_HEIGHT/2, 0),
-            rotation: new Vector3(0, Math.PI/2, 0),
+            rotation: new Vector3(0, -Math.PI/2, 0),
             collision: { type: 'plane', normal: new Vector3(1, 0, 0) }
         },
-        // Parete destra (X positivo)
+        // Parete destra
         {
             mesh: createWall(gl, ROOM_DEPTH, ROOM_HEIGHT, wallTexture),
             position: new Vector3(ROOM_WIDTH/2, ROOM_HEIGHT/2, 0),
-            rotation: new Vector3(0, -Math.PI/2, 0),
+            rotation: new Vector3(0, Math.PI/2, 0),
             collision: { type: 'plane', normal: new Vector3(-1, 0, 0) }
         }
     ];
     
-    // Pavimento
     const floor = {
         mesh: createFloor(gl, ROOM_WIDTH, ROOM_DEPTH, floorTexture),
         position: new Vector3(0, 0, 0),
-        rotation: new Vector3(Math.PI/2, 0, 0),  // Ruotato per far puntare la normale verso l'alto
+        rotation: new Vector3(-Math.PI/2, 0, 0),
         collision: { type: 'plane', normal: new Vector3(0, 1, 0) }
     };
     
-    // Soffitto
     const ceiling = {
         mesh: createFloor(gl, ROOM_WIDTH, ROOM_DEPTH, ceilingTexture),
         position: new Vector3(0, ROOM_HEIGHT, 0),
-        rotation: new Vector3(-Math.PI/2, 0, 0),  // Ruotato per far puntare la normale verso il basso
+        rotation: new Vector3(Math.PI/2, 0, 0),
         collision: { type: 'plane', normal: new Vector3(0, -1, 0) }
     };
     
@@ -131,21 +127,40 @@ export function createRoom(gl) {
 * @param {Float32Array} projectionMatrix - Matrice di proiezione
 */
 export function drawRoom(gl, programInfo, roomElements, viewMatrix, projectionMatrix) {
-    gl.enable(gl.CULL_FACE);
-    gl.cullFace(gl.BACK);  // Culla solo i back faces
+    gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
 
-    // Disegna pareti
-    roomElements.walls.forEach(wall => {
+    roomElements.walls.forEach((wall) => {
         const modelMatrix = createModelMatrix(wall.position, wall.rotation);
-        drawWall(gl, programInfo, wall.mesh, modelMatrix);
+        const modelViewMatrix = m4.multiply(viewMatrix, modelMatrix);
+        gl.uniformMatrix4fv(programInfo.uniformLocations.modelViewMatrix, false, modelViewMatrix);
+        
+        const normalMatrix = m4.transpose(m4.inverse(modelViewMatrix));
+        gl.uniformMatrix4fv(programInfo.uniformLocations.normalMatrix, false, normalMatrix);
+        
+        drawWall(gl, programInfo, wall.mesh, modelViewMatrix);
     });
 
-    // Disegna pavimento e soffitto
-    const floorMatrix = createModelMatrix(roomElements.floor.position, roomElements.floor.rotation);
-    drawFloor(gl, programInfo, roomElements.floor.mesh, floorMatrix);
+    if (roomElements.floor) {
+        const modelMatrix = createModelMatrix(roomElements.floor.position, roomElements.floor.rotation);
+        const modelViewMatrix = m4.multiply(viewMatrix, modelMatrix);
+        gl.uniformMatrix4fv(programInfo.uniformLocations.modelViewMatrix, false, modelViewMatrix);
+        
+        const normalMatrix = m4.transpose(m4.inverse(modelViewMatrix));
+        gl.uniformMatrix4fv(programInfo.uniformLocations.normalMatrix, false, normalMatrix);
+        
+        drawFloor(gl, programInfo, roomElements.floor.mesh, modelViewMatrix);
+    }
 
-    const ceilingMatrix = createModelMatrix(roomElements.ceiling.position, roomElements.ceiling.rotation);
-    drawFloor(gl, programInfo, roomElements.ceiling.mesh, ceilingMatrix);
+    if (roomElements.ceiling) {
+        const modelMatrix = createModelMatrix(roomElements.ceiling.position, roomElements.ceiling.rotation);
+        const modelViewMatrix = m4.multiply(viewMatrix, modelMatrix);
+        gl.uniformMatrix4fv(programInfo.uniformLocations.modelViewMatrix, false, modelViewMatrix);
+        
+        const normalMatrix = m4.transpose(m4.inverse(modelViewMatrix));
+        gl.uniformMatrix4fv(programInfo.uniformLocations.normalMatrix, false, normalMatrix);
+        
+        drawFloor(gl, programInfo, roomElements.ceiling.mesh, modelViewMatrix);
+    }
 }
 
 /**
