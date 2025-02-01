@@ -309,6 +309,10 @@ class Game {
 
         // Aggiorna la camera
         this.updateCamera();
+
+        if (this.renderer.settings.debug.playerPosition) {
+            console.log('Player position:', this.player.position);
+        }
     }
 
     checkObjectInteractions() {
@@ -572,7 +576,7 @@ class Game {
             P: Open/Close Control Panel
         `;
     }
-    
+
     pause() {
         if (this.isRunning) {
             this.isPaused = true;

@@ -210,21 +210,19 @@ class Renderer {
             
             async loadMesh(name, objUrl, mtlUrl = null) {
                 try {
+                    if (this.settings.debug.meshLoading) {
+                        console.log(`Caricamento mesh ${name} da ${objUrl}`);
+                    }
+                    
                     const response = await fetch(objUrl);
                     const objText = await response.text();
                     
-                    // Verifica che glmUtils sia disponibile
                     if (typeof window.glmUtils === 'undefined') {
                         throw new Error('glmUtils non è stato caricato correttamente');
                     }
-                    
+            
                     const mesh = window.glmUtils.loadObj(objText);
-                    
-                    // Ottieni il contesto WebGL
                     const gl = this.gl;
-                    if (!gl) {
-                        throw new Error('Contesto WebGL non disponibile');
-                    }
                     
                     const meshData = {
                         vertices: this.createBuffer(mesh.vertices),
@@ -233,6 +231,10 @@ class Renderer {
                         indices: this.createBuffer(mesh.indices, gl.ELEMENT_ARRAY_BUFFER),
                         numIndices: mesh.indices.length
                     };
+                    
+                    if (this.settings.debug.meshLoading) {
+                        console.log(`Mesh ${name} caricata con successo:`, meshData);
+                    }
                     
                     this.meshes.set(name, meshData);
                     return meshData;
@@ -302,6 +304,10 @@ class Renderer {
                 render(scene) {
                     const gl = this.gl;
                     
+                    if (this.settings.debug.renderingSteps) {
+                        console.log('Inizio rendering frame');
+                    }
+                    
                     // First render pass: shadow mapping
                     if (this.settings.shadows) {
                         this.renderShadowMap(scene);
@@ -345,6 +351,9 @@ class Renderer {
                                 gl.uniform1f(lightIntensityLoc, light.intensity);
                             }
                         });
+                    }
+                    if (this.settings.debug.sceneObjects && scene.objects) {
+                        console.log('Scene objects:', scene.objects);
                     }
                 }
                 
@@ -557,6 +566,21 @@ class Renderer {
                     lightFolder.add(this.light, 'intensity', 0, 200).name('Light Intensity');
                     lightFolder.addColor(this.light, 'color').name('Light Color');
                     lightFolder.open();
+                
+                    // Aggiungi cartella per i debug log
+                    const debugFolder = gui.addFolder('Debug Settings');
+                    this.settings.debug = {
+                        meshLoading: true,
+                        renderingSteps: true,
+                        sceneObjects: true,
+                        playerPosition: true
+                    };
+                    
+                    debugFolder.add(this.settings.debug, 'meshLoading').name('Mesh Loading Logs');
+                    debugFolder.add(this.settings.debug, 'renderingSteps').name('Rendering Logs');
+                    debugFolder.add(this.settings.debug, 'sceneObjects').name('Scene Objects Logs');
+                    debugFolder.add(this.settings.debug, 'playerPosition').name('Player Position Logs');
+                    debugFolder.open();
                 }
                 
                 onWindowResize() {
