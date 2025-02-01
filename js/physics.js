@@ -278,4 +278,4 @@ class PhysicsSystem {
 }
 
 // Esporta la classe
-export default PhysicsSystem;
+window.PhysicsSystem = PhysicsSystem;
