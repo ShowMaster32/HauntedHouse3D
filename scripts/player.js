@@ -1,252 +1,162 @@
 // player.js
 import { Vector3, MathUtils } from './math.js';
 
-// Esportiamo le costanti
 export const PLAYER_CONSTANTS = {
-    GRAVITY: 9.81,
-    JUMP_FORCE: 5,
-    MOVE_SPEED: 8,
-    SPRINT_SPEED: 12,
-    FRICTION: 0.92,
-    MAX_FALL_SPEED: 20,
-    PLAYER_HEIGHT: 1.7,  // Abbassato da 1.8
-    PLAYER_RADIUS: 0.35,
-    CAMERA_SENSITIVITY: 0.002,
-    EYE_HEIGHT: 1.6     // Aggiunta questa costante
+    // Fisica e movimento
+    MOVE_SPEED: 8.0,
+    SPRINT_SPEED: 12.0,
+    GRAVITY: 20.0,
+    
+    // Dimensioni stanza e giocatore
+    ROOM_WIDTH: 40.0,
+    ROOM_HEIGHT: 15.0,
+    ROOM_DEPTH: 50.0,
+    PLAYER_HEIGHT: 2.0,
+    PLAYER_RADIUS: 0.4,
+    EYE_HEIGHT: 1.85,
+    
+    // Fisica movimento
+    FRICTION: 0.92,          // Attrito un po' più alto per movimento più stabile
+    AIR_RESISTANCE: 0.98,    // Resistenza aria più alta per maggiore controllo
+    
+    // Camera
+    CAMERA_SENSITIVITY: 0.002
 };
 
 export class Player {
-    constructor(initialPosition = new Vector3(0, PLAYER_CONSTANTS.PLAYER_HEIGHT, 0)) {
-        // Proprietà base
-        this.position = initialPosition.clone();
-        this.velocity = new Vector3();
-        this.rotation = new Vector3();
+    constructor(initialPosition) {
+        this.position = initialPosition || new Vector3(0, PLAYER_CONSTANTS.PLAYER_HEIGHT, 0);
+        this.velocity = new Vector3(0, 0, 0);
+        this.yaw = 0;  // Solo rotazione orizzontale
+        this.forward = new Vector3(0, 0, -1);
+        this.right = new Vector3(1, 0, 0);
         
-        // Proprietà fisiche
-        this.height = PLAYER_CONSTANTS.PLAYER_HEIGHT;
-        this.radius = PLAYER_CONSTANTS.PLAYER_RADIUS;
+        // Stati
         this.onGround = false;
         this.isSprinting = false;
-        
-        // Collider
-        this.collider = {
-            position: this.position.clone(),
-            radius: this.radius,
-            height: this.height
-        };
-        
-        // Camera
-        this.camera = {
-            position: this.position.clone(),
-            rotation: new Vector3(),
-            fov: 75,
-            sensitivity: PLAYER_CONSTANTS.CAMERA_SENSITIVITY
-        };
-        
-        // Input
         this.keyStates = {};
         
         this.initControls();
     }
-    
+
     initControls() {
-        // Cambio da document a window per gli eventi tastiera
         window.addEventListener('keydown', (e) => {
             this.keyStates[e.code] = true;
-            console.log("Tasto premuto:", e.code);
+            if (e.code === 'ShiftLeft') this.isSprinting = true;
         });
-        
+
         window.addEventListener('keyup', (e) => {
             this.keyStates[e.code] = false;
-            console.log("Tasto rilasciato:", e.code);
+            if (e.code === 'ShiftLeft') this.isSprinting = false;
         });
-    
-        // Controllo mouse invariato
+
         document.addEventListener('mousemove', (e) => {
             if (document.pointerLockElement === document.querySelector('canvas')) {
-                this.rotation.y -= e.movementX * this.camera.sensitivity;
-                this.rotation.x -= e.movementY * this.camera.sensitivity;
-                this.rotation.x = MathUtils.clamp(this.rotation.x, -Math.PI / 2, Math.PI / 2);
+                // Solo rotazione orizzontale
+                this.yaw -= e.movementX * PLAYER_CONSTANTS.CAMERA_SENSITIVITY;
+                this.updateDirectionVectors();
             }
         });
     }
-    
-    update(deltaTime, collisionObjects = []) {
-        if (!deltaTime) return;
-        
-        this.handleMovement(deltaTime);
-        this.applyPhysics(deltaTime);
-        this.updateCollider();
-        this.handleCollisions(collisionObjects);
-        this.updateCamera();
-        this.teleportIfOutOfBounds();
-    }
-    
-    handleMovement(deltaTime) {
-        const speed = this.isSprinting ? PLAYER_CONSTANTS.SPRINT_SPEED : PLAYER_CONSTANTS.MOVE_SPEED;
-        const moveAmount = speed * deltaTime;
-        
-        let moveX = 0;
-        let moveZ = 0;
-    
-        // Movimento più fluido con interpolazione
-        if (this.keyStates['KeyW']) {
-            moveZ = -Math.cos(this.rotation.y);
-            moveX = -Math.sin(this.rotation.y);
-        }
-        if (this.keyStates['KeyS']) {
-            moveZ = Math.cos(this.rotation.y);
-            moveX = Math.sin(this.rotation.y);
-        }
-        if (this.keyStates['KeyA']) {
-            moveX = -Math.cos(this.rotation.y);
-            moveZ = Math.sin(this.rotation.y);
-        }
-        if (this.keyStates['KeyD']) {
-            moveX = Math.cos(this.rotation.y);
-            moveZ = -Math.sin(this.rotation.y);
-        }
-    
-        // Normalizza il movimento diagonale
-        if (moveX !== 0 && moveZ !== 0) {
-            const length = Math.sqrt(moveX * moveX + moveZ * moveZ);
-            moveX /= length;
-            moveZ /= length;
-        }
-    
-        this.velocity.x = moveX * moveAmount;
-        this.velocity.z = moveZ * moveAmount;
+
+    updateDirectionVectors() {
+        // Aggiorna i vettori di direzione basati solo sulla rotazione yaw
+        this.forward.x = -Math.sin(this.yaw);
+        this.forward.y = 0;  // La y rimane 0 per movimento orizzontale
+        this.forward.z = -Math.cos(this.yaw);
+        this.forward.normalize();
+
+        // Aggiorna il vettore destro
+        this.right.x = Math.cos(this.yaw);
+        this.right.y = 0;
+        this.right.z = -Math.sin(this.yaw);
+        this.right.normalize();
     }
 
-    handleJump() {
-        if (this.keyStates['Space'] && this.onGround) {
-            this.velocity.y = PLAYER_CONSTANTS.JUMP_FORCE;
-            this.onGround = false;
-        }
-    
-        // Aggiunge gravità più realistica
-        if (!this.onGround) {
-            this.velocity.y -= PLAYER_CONSTANTS.GRAVITY * deltaTime;
-            this.velocity.y = Math.max(this.velocity.y, -PLAYER_CONSTANTS.MAX_FALL_SPEED);
-        }
-    }
-    
-    applyPhysics(deltaTime) {
-        // Gravità
-        if (!this.onGround) {
-            this.velocity.y -= PLAYER_CONSTANTS.GRAVITY * deltaTime;
-            this.velocity.y = Math.max(this.velocity.y, -PLAYER_CONSTANTS.MAX_FALL_SPEED);
-        }
-        
-        // Attrito
-        this.velocity.x *= PLAYER_CONSTANTS.FRICTION;
-        this.velocity.z *= PLAYER_CONSTANTS.FRICTION;
-        
-        // Aggiorna posizione
-        const deltaPosition = this.velocity.clone().multiply(deltaTime);
-        this.position.add(deltaPosition);
-    }
-    
-    updateCollider() {
-        this.collider.position.copy(this.position);
-    }
-    
-    handleCollisions(collisionObjects) {
-        if (!Array.isArray(collisionObjects)) {
-            console.warn('handleCollisions: collisionObjects non è un array');
-            return;
-        }
-        
-        this.onGround = false;
-        
-        for (const obj of collisionObjects) {
-            if (!obj || !obj.collision || !obj.position) {
-                console.warn('handleCollisions: oggetto di collisione non valido', obj);
-                continue;
-            }
+    handleMovement(deltaTime) {
+        const speed = this.isSprinting ? 
+            PLAYER_CONSTANTS.SPRINT_SPEED : 
+            PLAYER_CONSTANTS.MOVE_SPEED;
+
+        let movement = new Vector3(0, 0, 0);
+
+        // Input movimento
+        if (this.keyStates['KeyW']) movement.add(this.forward);
+        if (this.keyStates['KeyS']) movement.subtract(this.forward);
+        if (this.keyStates['KeyA']) movement.subtract(this.right);
+        if (this.keyStates['KeyD']) movement.add(this.right);
+
+        // Normalizza e applica il movimento
+        if (movement.lengthSquared() > 0) {
+            movement.normalize();
+            movement.multiply(speed * deltaTime);
             
-            if (obj.collision.type === 'plane' && obj.collision.normal) {
-                try {
-                    const distanceVec = this.position.clone().subtract(obj.position);
-                    const distance = obj.collision.normal.dot(distanceVec);
-                    
-                    if (Math.abs(distance) < this.radius) {
-                        const correction = obj.collision.normal.clone()
-                        .multiply(this.radius - distance);
-                        this.position.add(correction);
-                        
-                        if (obj.collision.normal.y > 0.7) {
-                            this.onGround = true;
-                            this.velocity.y = 0;
-                        }
-                    }
-                } catch (error) {
-                    console.error('Errore durante il calcolo della collisione:', error);
-                    console.log('Oggetto problematico:', obj);
-                    console.log('Player position:', this.position);
-                }
-            }
+            // Solo movimento orizzontale - la y rimane invariata
+            this.velocity.x = movement.x;
+            this.velocity.z = movement.z;
+        } else {
+            // Applica attrito quando non ci si muove
+            this.velocity.x *= this.onGround ? PLAYER_CONSTANTS.FRICTION : PLAYER_CONSTANTS.AIR_RESISTANCE;
+            this.velocity.z *= this.onGround ? PLAYER_CONSTANTS.FRICTION : PLAYER_CONSTANTS.AIR_RESISTANCE;
         }
     }
-    
-    checkCollision(object) {
-        const dx = this.position.x - object.position.x;
-        const dy = this.position.y - object.position.y;
-        const dz = this.position.z - object.position.z;
-        
-        const distance = Math.sqrt(dx * dx + dz * dz);
-        
-        if (distance < (this.radius + object.radius)) {
-            return {
-                collided: true,
-                normal: new Vector3(dx / distance, 0, dz / distance),
-                depth: (this.radius + object.radius) - distance
-            };
+
+    applyPhysics(deltaTime) {
+        // Applica gravità solo quando non si è sul terreno
+        if (!this.onGround) {
+            this.velocity.y -= PLAYER_CONSTANTS.GRAVITY * deltaTime;
         }
+
+        // Aggiorna posizione
+        this.position.x += this.velocity.x;
+        this.position.y += this.velocity.y * deltaTime;
+        this.position.z += this.velocity.z;
+
+        // Controlla collisioni con i limiti della stanza
+        const halfWidth = PLAYER_CONSTANTS.ROOM_WIDTH / 2 - PLAYER_CONSTANTS.PLAYER_RADIUS;
+        const halfDepth = PLAYER_CONSTANTS.ROOM_DEPTH / 2 - PLAYER_CONSTANTS.PLAYER_RADIUS;
         
-        return { collided: false };
-    }
-    
-    resolveCollision(collision) {
-        if (!collision.collided) return;
-        
-        this.position.x += collision.normal.x * collision.depth;
-        this.position.z += collision.normal.z * collision.depth;
-        
-        const dot = this.velocity.x * collision.normal.x + 
-        this.velocity.z * collision.normal.z;
-        
-        this.velocity.x -= collision.normal.x * dot;
-        this.velocity.z -= collision.normal.z * dot;
-    }
-    
-    updateCamera() {
-        this.camera.position.copy(this.position);
-        this.camera.position.y += this.height;
-        this.camera.rotation.copy(this.rotation);
-    }
-    
-    teleportIfOutOfBounds(minY = -20) {
-        if (this.position.y < minY) {
-            this.position.set(0, PLAYER_CONSTANTS.PLAYER_HEIGHT, 0);
-            this.velocity.set(0, 0, 0);
-            this.rotation.set(0, 0, 0);
+        this.position.x = MathUtils.clamp(this.position.x, -halfWidth, halfWidth);
+        this.position.z = MathUtils.clamp(this.position.z, -halfDepth, halfDepth);
+
+        // Imposta altezza minima (pavimento)
+        if (this.position.y < PLAYER_CONSTANTS.PLAYER_HEIGHT) {
+            this.position.y = PLAYER_CONSTANTS.PLAYER_HEIGHT;
+            this.velocity.y = 0;
+            this.onGround = true;
         }
     }
-    
-    getCameraDirection() {
-        const direction = new Vector3(0, 0, -1);
-        
-        const cosY = Math.cos(this.camera.rotation.y);
-        const sinY = Math.sin(this.camera.rotation.y);
-        const cosX = Math.cos(this.camera.rotation.x);
-        const sinX = Math.sin(this.camera.rotation.x);
-        
-        return new Vector3(
-            direction.x * cosY + direction.z * sinY,
-            direction.x * -sinY * sinX + direction.y * cosX + direction.z * cosY * sinX,
-            direction.x * sinY * cosX + direction.y * sinX + direction.z * -cosY * cosX
-        ).normalize();
+
+    getViewMatrix() {
+        // Posizione della camera (occhi)
+        const eyePosition = new Vector3(
+            this.position.x,
+            this.position.y + PLAYER_CONSTANTS.EYE_HEIGHT - PLAYER_CONSTANTS.PLAYER_HEIGHT,
+            this.position.z
+        );
+
+        // Punto di vista
+        const target = new Vector3(
+            eyePosition.x + this.forward.x,
+            eyePosition.y,  // Mantiene y costante per vista parallela al pavimento
+            eyePosition.z + this.forward.z
+        );
+
+        // Vector UP sempre (0,1,0) per mantenere l'orizzonte dritto
+        const up = new Vector3(0, 1, 0);
+
+        return window.m4.lookAt(
+            [eyePosition.x, eyePosition.y, eyePosition.z],
+            [target.x, target.y, target.z],
+            [up.x, up.y, up.z]
+        );
+    }
+
+    update(deltaTime) {
+        if (!deltaTime) return;
+
+        this.handleMovement(deltaTime);
+        this.applyPhysics(deltaTime);
     }
 }
 
@@ -254,7 +164,7 @@ export const controls = {
     init() {
         document.addEventListener('click', () => {
             const canvas = document.querySelector('canvas');
-            canvas.requestPointerLock();
+            if (canvas) canvas.requestPointerLock();
         });
     }
 };

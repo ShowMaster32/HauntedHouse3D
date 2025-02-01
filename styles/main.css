@@ -191,3 +191,55 @@ body {
     #instructions { font-size: 1rem; }
     #control-panel { width: 150px; }
 }
+
+#control-panel {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 20px;
+    border-radius: 10px;
+    z-index: 3;
+    transition: transform 0.3s ease;
+    color: white;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+#control-panel.hidden {
+    transform: translateX(100%);
+}
+
+.panel-section {
+    margin: 15px 0;
+    padding: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0);
+}
+
+/* Debug panel styles */
+.debug-toggle-btn {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    margin: 5px 0;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+.debug-toggle-btn.active {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.debug-toggle-btn.inactive {
+    background-color: #f44336;
+    color: white;
+}
+
+.debug-toggle-btn:hover {
+    opacity: 0.9;
+    transform: scale(1.02);
+}

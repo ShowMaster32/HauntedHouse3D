@@ -42,12 +42,22 @@
         <!-- Pannello di controllo -->
         <div id="control-panel" class="hidden">
             <h2>Control Panel</h2>
-            <button id="toggleShadows">Toggle Shadows</button>
-            <button id="toggleReflections">Toggle Reflections</button>
-            <button id="toggleFPS">Toggle FPS Counter</button>
-            <button id="advancedRendering">Toggle Advanced Rendering</button>
+            <div class="panel-section">
+                <h3>Rendering</h3>
+                <button id="toggleShadows">Toggle Shadows</button>
+                <button id="toggleReflections">Toggle Reflections</button>
+                <button id="toggleFPS">Toggle FPS Counter</button>
+            </div>
+            
+            <div class="panel-section">
+                <h3>Debug</h3>
+                <button id="toggleDebugMain">Toggle Debug</button>
+                <button id="toggleDebugPhysics">Toggle Physics Debug</button>
+                <button id="toggleDebugRendering">Toggle Rendering Debug</button>
+                <button id="toggleDebugCollision">Toggle Collision Debug</button>
+                <button id="toggleDebugPlayer">Toggle Player Debug</button>
+            </div>
         </div>
-    </div>
 
     <!-- Audio -->
     <audio id="intro-music" src="sounds/intro.mp3" preload="auto"></audio>

@@ -1,6 +1,7 @@
 // environment.js
-import { loadTexture, createWall, createFloor, drawWall, drawFloor } from './models.js';
+import { loadTexture, createWall, createFloor } from './models.js';
 import { Vector3 } from './math.js';
+import { DebugLogger } from './debug.js';
 
 const m4 = window.m4;
 
@@ -12,10 +13,10 @@ const WALL_THICKNESS = 0.1;
 
 // Percorsi delle texture
 const TEXTURES = {
-    wall: 'textures/wall.jpg',
-    floor: 'textures/wood.jpg',
-    ceiling: 'textures/ceiling.jpg',
-    door: 'textures/door.png'
+    wall: './textures/wall.jpg',
+    floor: './textures/wood.jpg',
+    ceiling: './textures/ceiling.jpg',
+    door: './textures/door.png'
 };
 
 /**
@@ -66,54 +67,104 @@ export function initializeEnvironment(canvasId) {
 * @returns {Object} Elementi della stanza
 */
 export function createRoom(gl) {
-    const wallTexture = loadTexture(gl, TEXTURES.wall);
-    const floorTexture = loadTexture(gl, TEXTURES.floor);
-    const ceilingTexture = loadTexture(gl, TEXTURES.ceiling);
+    DebugLogger.rendering('Inizializzando la stanza...');
     
+    // Carica le texture
+    let wallTexture, floorTexture, ceilingTexture;
+    
+    try {
+        DebugLogger.rendering('Caricamento texture pareti da:', TEXTURES.wall);
+        wallTexture = loadTexture(gl, TEXTURES.wall);
+        
+        DebugLogger.rendering('Caricamento texture pavimento da:', TEXTURES.floor);
+        floorTexture = loadTexture(gl, TEXTURES.floor);
+        
+        DebugLogger.rendering('Caricamento texture soffitto da:', TEXTURES.ceiling);
+        ceilingTexture = loadTexture(gl, TEXTURES.ceiling);
+    } catch (error) {
+        DebugLogger.error('Errore nel caricamento delle texture:', error);
+        // Crea texture di fallback
+        wallTexture = createFallbackTexture(gl, [128, 128, 128, 255]);  // Grigio
+        floorTexture = createFallbackTexture(gl, [139, 69, 19, 255]);   // Marrone
+        ceilingTexture = createFallbackTexture(gl, [211, 211, 211, 255]); // Grigio chiaro
+    }
+    
+    // Funzione di utilità per creare una texture di fallback
+    function createFallbackTexture(gl, color) {
+        const texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(color));
+        return texture;
+    }
+    
+    // Crea le pareti
     const walls = [
-        // Parete frontale (ruotata di 180° per puntare all'interno)
+        // Parete frontale
         {
             mesh: createWall(gl, ROOM_WIDTH, ROOM_HEIGHT, wallTexture),
             position: new Vector3(0, ROOM_HEIGHT/2, -ROOM_DEPTH/2),
             rotation: new Vector3(0, Math.PI, 0),
-            collision: { type: 'plane', normal: new Vector3(0, 0, 1) }
+            collision: {
+                type: 'plane',
+                normal: new Vector3(0, 0, 1).normalize() // Assicurati che la normale sia normalizzata
+            }
         },
         // Parete posteriore
         {
             mesh: createWall(gl, ROOM_WIDTH, ROOM_HEIGHT, wallTexture),
             position: new Vector3(0, ROOM_HEIGHT/2, ROOM_DEPTH/2),
             rotation: new Vector3(0, 0, 0),
-            collision: { type: 'plane', normal: new Vector3(0, 0, -1) }
+            collision: {
+                type: 'plane',
+                normal: new Vector3(0, 0, -1).normalize()
+            }
         },
         // Parete sinistra
         {
             mesh: createWall(gl, ROOM_DEPTH, ROOM_HEIGHT, wallTexture),
             position: new Vector3(-ROOM_WIDTH/2, ROOM_HEIGHT/2, 0),
             rotation: new Vector3(0, -Math.PI/2, 0),
-            collision: { type: 'plane', normal: new Vector3(1, 0, 0) }
+            collision: {
+                type: 'plane',
+                normal: new Vector3(1, 0, 0).normalize()
+            }
         },
         // Parete destra
         {
             mesh: createWall(gl, ROOM_DEPTH, ROOM_HEIGHT, wallTexture),
             position: new Vector3(ROOM_WIDTH/2, ROOM_HEIGHT/2, 0),
             rotation: new Vector3(0, Math.PI/2, 0),
-            collision: { type: 'plane', normal: new Vector3(-1, 0, 0) }
+            collision: {
+                type: 'plane',
+                normal: new Vector3(-1, 0, 0).normalize()
+            }
         }
     ];
+    DebugLogger.rendering('Pareti create:', walls.length);
     
+    // Piano e soffitto con normali precise
     const floor = {
         mesh: createFloor(gl, ROOM_WIDTH, ROOM_DEPTH, floorTexture),
         position: new Vector3(0, 0, 0),
         rotation: new Vector3(-Math.PI/2, 0, 0),
-        collision: { type: 'plane', normal: new Vector3(0, 1, 0) }
+        collision: {
+            type: 'plane',
+            normal: new Vector3(0, 1, 0).normalize()
+        }
     };
+    DebugLogger.rendering('Pavimento creato:', floor);
     
+    // Crea il soffitto
     const ceiling = {
         mesh: createFloor(gl, ROOM_WIDTH, ROOM_DEPTH, ceilingTexture),
         position: new Vector3(0, ROOM_HEIGHT, 0),
         rotation: new Vector3(Math.PI/2, 0, 0),
-        collision: { type: 'plane', normal: new Vector3(0, -1, 0) }
+        collision: {
+            type: 'plane',
+            normal: new Vector3(0, -1, 0).normalize()
+        }
     };
+    DebugLogger.rendering('Soffitto creato:', ceiling);
     
     return { walls, floor, ceiling };
 }
@@ -128,7 +179,7 @@ export function createRoom(gl) {
 */
 export function drawRoom(gl, programInfo, roomElements, viewMatrix, projectionMatrix) {
     gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
-
+    
     roomElements.walls.forEach((wall) => {
         const modelMatrix = createModelMatrix(wall.position, wall.rotation);
         const modelViewMatrix = m4.multiply(viewMatrix, modelMatrix);
@@ -139,7 +190,7 @@ export function drawRoom(gl, programInfo, roomElements, viewMatrix, projectionMa
         
         drawWall(gl, programInfo, wall.mesh, modelViewMatrix);
     });
-
+    
     if (roomElements.floor) {
         const modelMatrix = createModelMatrix(roomElements.floor.position, roomElements.floor.rotation);
         const modelViewMatrix = m4.multiply(viewMatrix, modelMatrix);
@@ -150,7 +201,7 @@ export function drawRoom(gl, programInfo, roomElements, viewMatrix, projectionMa
         
         drawFloor(gl, programInfo, roomElements.floor.mesh, modelViewMatrix);
     }
-
+    
     if (roomElements.ceiling) {
         const modelMatrix = createModelMatrix(roomElements.ceiling.position, roomElements.ceiling.rotation);
         const modelViewMatrix = m4.multiply(viewMatrix, modelMatrix);
@@ -170,12 +221,11 @@ export function drawRoom(gl, programInfo, roomElements, viewMatrix, projectionMa
 * @returns {Float32Array} Matrice di modello
 */
 function createModelMatrix(position, rotation) {
-    // Usa m4 invece di mat4
-    let matrix = m4.identity();
-    matrix = m4.translate(matrix, position.x, position.y, position.z);
-    matrix = m4.xRotate(matrix, rotation.x);
-    matrix = m4.yRotate(matrix, rotation.y);
-    matrix = m4.zRotate(matrix, rotation.z);
+    let matrix = window.m4.identity();
+    matrix = window.m4.translate(matrix, position.x, position.y, position.z);
+    matrix = window.m4.xRotate(matrix, rotation.x);
+    matrix = window.m4.yRotate(matrix, rotation.y);
+    matrix = window.m4.zRotate(matrix, rotation.z);
     return matrix;
 }
 
