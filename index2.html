@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Progetto CG A.A.2023/2024</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
+    <link href="https://fonts.googleapis.com/css2?family=Creepster&display=swap" rel="stylesheet">
+    <link type="text/css" rel="stylesheet" href="main.css">
+</head>
+<body>
+    <!-- Start Menu -->
+    <div id="start-menu">
+        <h1>Welcome to HauntedHouse</h1>
+        <button id="start-button">START</button>
+    </div>
+    
+    <!-- Canvas per il rendering -->
+    <canvas id="canvas" style="display: none;"></canvas>
+    
+    <!-- Contenitore del gioco -->
+    <div id="container" style="display: none;"></div>
+    
+    <!-- Istruzioni -->
+    <div id="instructions" style="visibility: hidden;">Press <span>F</span> to turn on the light</div>
+    
+    <!-- Crosshair per mirare -->
+    <div id="crosshair" style="display: none;"></div>
+    
+    <!-- Barra in alto -->
+    <div id="top-bar" style="display: none;">
+        <span id="panel-instructions">Press P to open control panel</span>
+        <span id="game-controls" style="margin-left: 20px;"></span>
+    </div>
+    
+    <!-- Pannello laterale -->
+    <div id="side-panel" class="hidden">
+        <h2>Control Panel</h2>
+        <div id="gui-container"></div>
+    </div>
+    
+    <!-- Audio -->
+    <audio id="intro-music" src="./sounds/intro.mp3"></audio>
+    <audio id="start-music" src="./sounds/start-game.mp3"></audio>
+    <audio id="random-ghost" src="./sounds/random-ghost.mp3"></audio>
+    <audio id="la-la-la" src="./sounds/la-la-la.mp3"></audio>
+    <audio id="demon-laugh" src="./sounds/demon-laugh.mp3"></audio>
+
+    <!-- Librerie richieste -->
+    <script src="lib/webgl-utils.js"></script>
+    <script src="lib/m4.js"></script>
+    <script src="lib/glm_utils.js"></script>
+    <script src="lib/mesh_utils.js"></script>
+    <script src="lib/dat.gui.js"></script>
+    <script src="lib/jquery-3.6.0.js"></script>
+
+    <!-- Shaders -->
+    <script id="vertex-shader" type="x-shader/x-vertex">
+        #version 300 es
+        in vec4 aPosition;
+        in vec2 aTextureCoord;
+        in vec3 aNormal;
+        
+        uniform mat4 uModelViewMatrix;
+        uniform mat4 uProjectionMatrix;
+        uniform mat4 uNormalMatrix;
+        
+        out vec2 vTextureCoord;
+        out vec3 vNormal;
+        out vec3 vPosition;
+        out vec4 vPositionFromLight;
+        
+        uniform mat4 uLightSpaceMatrix; // Per le shadow maps
+        
+        void main() {
+            vTextureCoord = aTextureCoord;
+            vNormal = (uNormalMatrix * vec4(aNormal, 0.0)).xyz;
+            vec4 position = uModelViewMatrix * aPosition;
+            vPosition = position.xyz;
+            vPositionFromLight = uLightSpaceMatrix * aPosition; // Per le shadow maps
+            gl_Position = uProjectionMatrix * position;
+        }
+    </script>
+
+    <script id="fragment-shader" type="x-shader/x-fragment">
+        #version 300 es
+        precision highp float;
+        
+        in vec2 vTextureCoord;
+        in vec3 vNormal;
+        in vec3 vPosition;
+        in vec4 vPositionFromLight;
+        
+        uniform sampler2D uSampler;
+        uniform sampler2D uShadowMap;
+        uniform vec3 uLightPosition;
+        uniform bool uShadowsEnabled;
+        uniform bool uReflectionsEnabled;
+        
+        out vec4 fragColor;
+        
+        float calculateShadow() {
+            vec3 projCoords = vPositionFromLight.xyz / vPositionFromLight.w;
+            projCoords = projCoords * 0.5 + 0.5;
+            
+            float currentDepth = projCoords.z;
+            float closestDepth = texture(uShadowMap, projCoords.xy).r;
+            
+            float bias = 0.005;
+            return currentDepth - bias > closestDepth ? 0.5 : 1.0;
+        }
+        
+        void main() {
+            vec3 normal = normalize(vNormal);
+            vec3 lightDir = normalize(uLightPosition - vPosition);
+            float diff = max(dot(normal, lightDir), 0.0);
+            
+            vec4 texColor = texture(uSampler, vTextureCoord);
+            float shadow = uShadowsEnabled ? calculateShadow() : 1.0;
+            
+            vec3 ambient = 0.3 * texColor.rgb;
+            vec3 diffuse = 0.7 * diff * texColor.rgb;
+            
+            if (uReflectionsEnabled) {
+                vec3 viewDir = normalize(-vPosition);
+                vec3 reflectDir = reflect(-lightDir, normal);
+                float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
+                vec3 specular = 0.2 * spec * vec3(1.0);
+                fragColor = vec4((ambient + shadow * (diffuse + specular)), texColor.a);
+            } else {
+                fragColor = vec4((ambient + shadow * diffuse), texColor.a);
+            }
+        }
+    </script>
+
+    <!-- Game Logic -->
+    <script src="js/input.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/physics.js"></script>
+    <script src="js/renderer.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html>
