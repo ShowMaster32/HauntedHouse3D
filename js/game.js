@@ -152,6 +152,22 @@ class Game {
         
         // Aggiungi illuminazione
         this.setupLighting();
+        
+        // Aggiungi questa riga per inizializzare la modelMatrix
+        this.scene.objects.forEach(obj => {
+            obj.modelMatrix = m4.identity();
+        });
+        
+        // Inizializza modelMatrix per tutti gli oggetti
+        this.scene.objects.forEach(obj => {
+            obj.modelMatrix = m4.identity();
+            obj.modelViewMatrix = m4.identity();
+        });
+    }
+    
+    handleResize(width, height) {
+        this.renderer.onWindowResize();
+        this.updateCamera();
     }
     
     setupWalls() {
@@ -384,6 +400,7 @@ class Game {
                     }
                     
                     updateCamera() {
+                        if(!this.player || !this.player.position) return;
                         // Aggiorna la posizione della camera in base al giocatore
                         this.renderer.updateCamera(
                             this.player.position,

@@ -30,7 +30,7 @@ void main() {
     vPositionFromLight = uLightSpaceMatrix * aPosition;
     
     // Calcola la posizione mondiale per calcoli di illuminazione
-    vWorldPosition = (uModelViewMatrix * aPosition).xyz;
+    vWorldPosition = (uModelMatrix * aPosition).xyz; // Usa la matrice model invece di model-view
     
     // Proietta il vertice
     gl_Position = uProjectionMatrix * viewPosition;

@@ -2,6 +2,7 @@
 class Renderer {
     constructor(canvas) {
         this.canvas = canvas;
+        this.scene = null; 
         this.gl = canvas.getContext('webgl2');
         if (!this.gl) {
             throw new Error('WebGL 2 not available');
@@ -36,9 +37,9 @@ class Renderer {
         
         // Light setup
         this.light = {
-            position: [0, 9, 0],
+            position: [0, 8, 0],
             color: [1, 0.95, 0.8],
-            intensity: 100,
+            intensity: 300,       
             enabled: true
         };
         
@@ -75,33 +76,39 @@ class Renderer {
     }
     
     setupLighting() {
-        // Luce principale (lampadario)
+        // Inizializza scene se non esiste
         if (!this.scene) {
             this.scene = {
-                lights: new Map()
+                lights: new Map(),
+                objects: new Map() // Aggiungi anche objects per sicurezza
             };
         }
+        // Garantisci che lights sia sempre una Map
+        if (!this.scene.lights || !(this.scene.lights instanceof Map)) {
+            this.scene.lights = new Map();
+        }
         
+        // Luce principale
         this.scene.lights.set('mainLight', {
             type: 'point',
             position: [0, 8, 0],
-            color: [1, 1, 1],
-            intensity: 300,
+            color: [1, 0.95, 0.8],
+            intensity: 1.5,
             enabled: true
         });
         
-        // Luce ambientale più intensa
+        // Luce ambientale
         this.scene.lights.set('ambient', {
             type: 'ambient',
-            color: [0.3, 0.3, 0.3],
-            intensity: 0.5
+            color: [0.2, 0.2, 0.2],
+            intensity: 0.3
         });
         
-        // Aggiorna anche la luce principale della classe
+        // Aggiorna la luce del renderer
         this.light = {
             position: [0, 8, 0],
-            color: [1, 1, 1],
-            intensity: 300,
+            color: [1, 0.95, 0.8],
+            intensity: 1.5,
             enabled: true
         };
     }
@@ -110,7 +117,9 @@ class Renderer {
         const gl = this.gl;
         gl.enable(gl.DEPTH_TEST);
         gl.enable(gl.CULL_FACE);
-        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        gl.clearColor(0.1, 0.1, 0.1, 1.0); // Sfondo leggermente più chiaro
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     }
     
     createProgram(vertexSource, fragmentSource) {
@@ -220,6 +229,12 @@ class Renderer {
                 const gl = this.gl;
                 const texture = gl.createTexture();
                 gl.bindTexture(gl.TEXTURE_2D, texture);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+                // Aggiungi per correggere la gamma
+                gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
                 
                 // Placeholder white pixel
                 gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
@@ -266,12 +281,7 @@ class Renderer {
                     gl.clearColor(0.2, 0.2, 0.2, 1.0);
                     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
                     
-                    // Posiziona la camera più in alto e indietro
-                    this.camera.position = [0, 5, 15];
-                    this.camera.target = [0, 0, 0];
-                    
-                    // Aumenta l'intensità della luce
-                    this.light.intensity = 200;
+                    this.updateCamera(this.camera.position, this.camera.target, this.camera.up);
                     
                     if (this.settings.debug.renderingSteps) {
                         console.log('Inizio rendering frame');
@@ -324,6 +334,12 @@ class Renderer {
                     if (this.settings.debug.sceneObjects && scene.objects) {
                         console.log('Scene objects:', scene.objects);
                     }
+                    // Render lights solo se presenti e valide
+                    if (scene.lights && scene.lights instanceof Map) {
+                        scene.lights.forEach((light, key) => {
+                            // Aggiorna uniforms...
+                        });
+                    }
                 }
                 
                 renderShadowMap(scene) {
@@ -355,26 +371,35 @@ class Renderer {
                 setMainProgramUniforms(program) {
                     const gl = this.gl;
                     
+                    // Aggiungi controlli di validità
+                    if(!this.camera || !this.light) {
+                        console.error('Camera or light not initialized!');
+                        return;
+                    }
+                    
                     const viewMatrix = this.getCameraViewMatrix();
                     const projectionMatrix = this.getCameraProjectionMatrix();
                     const lightSpaceMatrix = this.getLightSpaceMatrix();
                     
+                    // Verifica le matrici prima dell'uso
+                    const validateMatrix = (mat, name) => {
+                        if(!mat || mat.length !== 16) {
+                            console.error(`Invalid ${name} matrix:`, mat);
+                            return m4.identity();
+                        }
+                        return mat;
+                    };
+                    
                     gl.uniformMatrix4fv(
                         gl.getUniformLocation(program, 'uViewMatrix'),
                         false,
-                        viewMatrix
+                        validateMatrix(viewMatrix, 'view')
                     );
                     
                     gl.uniformMatrix4fv(
                         gl.getUniformLocation(program, 'uProjectionMatrix'),
                         false,
-                        projectionMatrix
-                    );
-                    
-                    gl.uniformMatrix4fv(
-                        gl.getUniformLocation(program, 'uLightSpaceMatrix'),
-                        false,
-                        lightSpaceMatrix
+                        validateMatrix(projectionMatrix, 'projection')
                     );
                     
                     gl.uniform3fv(
@@ -401,6 +426,26 @@ class Renderer {
                         gl.getUniformLocation(program, 'uReflectionsEnabled'),
                         this.settings.reflections
                     );
+                    
+                    gl.uniform1f(
+                        gl.getUniformLocation(program, 'uAmbientStrength'),
+                        0.2  // Aumenta l'ambient strength
+                    );
+                    
+                    gl.uniform1f(
+                        gl.getUniformLocation(program, 'uSpecularStrength'),
+                        0.5  // Mantenuto come nel fragment shader
+                    );
+                    
+                    gl.uniform1f(
+                        gl.getUniformLocation(program, 'uShininess'),
+                        32.0  // Coerente con lo shader
+                    );
+                    
+                    gl.uniform3fv(
+                        gl.getUniformLocation(program, 'uViewPosition'),
+                        this.camera.position
+                    );
                 }
                 
                 renderObject(object, program) {
@@ -420,6 +465,8 @@ class Renderer {
                     // Set up textures
                     gl.activeTexture(gl.TEXTURE0);
                     gl.bindTexture(gl.TEXTURE_2D, this.textures.get(object.texture));
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
                     gl.uniform1i(gl.getUniformLocation(program, 'uSampler'), 0);
                     
                     if (this.settings.shadows) {
@@ -428,13 +475,33 @@ class Renderer {
                         gl.uniform1i(gl.getUniformLocation(program, 'uShadowMap'), 1);
                     }
                     
-                    // Set up model matrix
+                    if(object.position) m4.translate(modelMatrix, ...object.position);
+                    if(object.rotation) {
+                        m4.rotateX(modelMatrix, object.rotation[0]);
+                        m4.rotateY(modelMatrix, object.rotation[1]);
+                        m4.rotateZ(modelMatrix, object.rotation[2]);
+                    }
+                    if(object.scale) m4.scale(modelMatrix, ...object.scale);
+                    
+                    // Calcola modelViewMatrix in modo sicuro
+                    const viewMatrix = this.getCameraViewMatrix();
+                    const modelViewMatrix = m4.multiply(
+                        viewMatrix || m4.identity(), 
+                        modelMatrix || m4.identity()
+                    );
+                    
+                    gl.uniformMatrix4fv(
+                        gl.getUniformLocation(program, 'uModelViewMatrix'),
+                        false,
+                        modelViewMatrix
+                    );
+                    
                     const modelMatrix = m4.identity();
-                    m4.translate(modelMatrix, object.position[0], object.position[1], object.position[2]);
+                    m4.translate(modelMatrix, ...object.position);
                     m4.rotateX(modelMatrix, object.rotation[0]);
                     m4.rotateY(modelMatrix, object.rotation[1]);
                     m4.rotateZ(modelMatrix, object.rotation[2]);
-                    m4.scale(modelMatrix, object.scale[0], object.scale[1], object.scale[2]);
+                    m4.scale(modelMatrix, ...object.scale);
                     
                     gl.uniformMatrix4fv(
                         gl.getUniformLocation(program, 'uModelMatrix'),
@@ -442,16 +509,18 @@ class Renderer {
                         modelMatrix
                     );
                     
-                    // Calculate and set normal matrix
-                    const normalMatrix = m4.inverse(m4.transpose(modelMatrix));
-                    gl.uniformMatrix4fv(
-                        gl.getUniformLocation(program, 'uNormalMatrix'),
-                        false,
-                        normalMatrix
-                    );
-                    
                     // Draw the object
                     gl.drawElements(gl.TRIANGLES, mesh.numIndices, gl.UNSIGNED_SHORT, 0);
+                }
+                
+                updateCameraFOV(delta) {
+                    this.camera.fov = Math.max(
+                        Math.PI/180 * 30, 
+                        Math.min(
+                            Math.PI/180 * 120, 
+                            this.camera.fov + delta
+                        )
+                    );
                 }
                 
                 renderObjectShadow(object, program) {
