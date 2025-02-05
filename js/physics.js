@@ -19,7 +19,7 @@ class PhysicsSystem {
             radius: 0.35
         };
     }
-
+    
     initializeCollisionGeometry(roomWidth, roomHeight, roomDepth, wallThickness) {
         // Aggiungi bounding box per le pareti
         this.boundingBoxes = [
@@ -55,11 +55,11 @@ class PhysicsSystem {
             }
         ];
     }
-
+    
     addCollisionBox(min, max) {
         this.boundingBoxes.push({ min, max });
     }
-
+    
     checkCapsuleCollision(capsule, box) {
         // Controlla collisione tra una capsula (player) e una box (ambiente)
         const closestPoint = this.getClosestPointOnSegment(box, capsule.start, capsule.end);
@@ -80,34 +80,42 @@ class PhysicsSystem {
         
         return null;
     }
-
+    
     getClosestPointOnSegment(box, start, end) {
-        // Trova il punto più vicino sul segmento della capsula alla box
+        // Prima troviamo il punto più vicino della box alla linea
+        const closest = [
+            Math.max(box.min[0], Math.min(Math.max(start[0], end[0]), box.max[0])),
+            Math.max(box.min[1], Math.min(Math.max(start[1], end[1]), box.max[1])),
+            Math.max(box.min[2], Math.min(Math.max(start[2], end[2]), box.max[2]))
+        ];
+        
+        // Per il pavimento, forza l'altezza minima
+        if (closest[1] <= 0.35) {
+            closest[1] = 0.35;
+            this.playerOnFloor = true;
+            return closest;
+        }
+        
+        // Calcola la direzione del segmento della capsula
         const direction = this.normalize([
             end[0] - start[0],
             end[1] - start[1],
             end[2] - start[2]
         ]);
         
-        let closest = [
-            Math.max(box.min[0], Math.min(start[0], box.max[0])),
-            Math.max(box.min[1], Math.min(start[1], box.max[1])),
-            Math.max(box.min[2], Math.min(start[2], box.max[2]))
+        // Proietta il punto più vicino sul segmento
+        const toClosest = [
+            closest[0] - start[0],
+            closest[1] - start[1],
+            closest[2] - start[2]
         ];
         
-        const dot = this.dot(
-            [closest[0] - start[0], closest[1] - start[1], closest[2] - start[2]],
-            direction
-        );
-        
-        if (dot < 0) {
-            return start;
-        }
-        
+        const dot = this.dot(toClosest, direction);
         const length = this.getDistance(start, end);
-        if (dot > length) {
-            return end;
-        }
+        
+        // Limita il punto al segmento
+        if (dot < 0) return start;
+        if (dot > length) return end;
         
         return [
             start[0] + direction[0] * dot,
@@ -115,7 +123,7 @@ class PhysicsSystem {
             start[2] + direction[2] * dot
         ];
     }
-
+    
     getDistance(a, b) {
         return Math.sqrt(
             (b[0] - a[0]) * (b[0] - a[0]) +
@@ -123,7 +131,7 @@ class PhysicsSystem {
             (b[2] - a[2]) * (b[2] - a[2])
         );
     }
-
+    
     normalize(vector) {
         const length = Math.sqrt(
             vector[0] * vector[0] +
@@ -139,12 +147,19 @@ class PhysicsSystem {
             vector[2] / length
         ];
     }
-
+    
     dot(a, b) {
         return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     }
-
+    
     update(deltaTime, playerPosition) {
+        // Forza altezza minima
+        if (playerPosition[1] < 0.35) {
+            playerPosition[1] = 0.35;
+            this.playerOnFloor = true;
+            this.playerVelocity[1] = 0;
+        }
+        
         // Applica gravità
         if (!this.playerOnFloor) {
             this.playerVelocity[1] -= this.GRAVITY * deltaTime;
@@ -203,20 +218,20 @@ class PhysicsSystem {
         
         return finalPosition;
     }
-
+    
     jump() {
         if (this.playerOnFloor) {
             this.playerVelocity[1] = 10;
             this.playerOnFloor = false;
         }
     }
-
+    
     addImpulse(direction, force) {
         this.playerVelocity[0] += direction[0] * force;
         this.playerVelocity[1] += direction[1] * force;
         this.playerVelocity[2] += direction[2] * force;
     }
-
+    
     getForwardVector(camera) {
         // Calcola il vettore forward basato sulla rotazione della camera
         const forward = [0, 0, -1];
@@ -229,7 +244,7 @@ class PhysicsSystem {
             forward[0] * siny + forward[2] * cosy
         ];
     }
-
+    
     getRightVector(camera) {
         // Calcola il vettore right basato sulla rotazione della camera
         const forward = this.getForwardVector(camera);
@@ -239,32 +254,32 @@ class PhysicsSystem {
             forward[0]
         ];
     }
-
+    
     movePlayer(direction, camera, speed) {
         let moveVector;
         
         switch (direction) {
             case 'forward':
-                moveVector = this.getForwardVector(camera);
-                break;
+            moveVector = this.getForwardVector(camera);
+            break;
             case 'backward':
-                moveVector = this.getForwardVector(camera);
-                moveVector = moveVector.map(v => -v);
-                break;
+            moveVector = this.getForwardVector(camera);
+            moveVector = moveVector.map(v => -v);
+            break;
             case 'left':
-                moveVector = this.getRightVector(camera);
-                moveVector = moveVector.map(v => -v);
-                break;
+            moveVector = this.getRightVector(camera);
+            moveVector = moveVector.map(v => -v);
+            break;
             case 'right':
-                moveVector = this.getRightVector(camera);
-                break;
+            moveVector = this.getRightVector(camera);
+            break;
             default:
-                return;
+            return;
         }
         
         this.addImpulse(moveVector, speed);
     }
-
+    
     teleportPlayerIfOob(playerPosition) {
         // Teleport player if they fall out of bounds
         if (playerPosition[1] <= -20) {

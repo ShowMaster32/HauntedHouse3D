@@ -242,61 +242,13 @@
     
     <!-- File sorgente del gioco -->
     <script src="js/constants.js"></script>
+    <script src="js/shader-loader.js"></script>
     <script src="js/math-utils.js"></script>
     <script src="js/input.js"></script>
     <script src="js/audio.js"></script>
     <script src="js/physics.js"></script>
     <script src="js/renderer.js"></script>
     <script src="js/game.js"></script>
-    <script src="js/main.js"></script>
-    
-    <!-- Shaders -->
-    <script id="vertex-shader" type="x-shader/x-vertex">
-        attribute vec4 aPosition;
-        attribute vec2 aTextureCoord;
-        attribute vec3 aNormal;
-        
-        uniform mat4 uModelViewMatrix;
-        uniform mat4 uProjectionMatrix;
-        uniform mat4 uNormalMatrix;
-        
-        varying vec2 vTextureCoord;
-        varying vec3 vNormal;
-        varying vec3 vPosition;
-        
-        void main() {
-            vTextureCoord = aTextureCoord;
-            vNormal = (uNormalMatrix * vec4(aNormal, 0.0)).xyz;
-            vec4 position = uModelViewMatrix * aPosition;
-            vPosition = position.xyz;
-            gl_Position = uProjectionMatrix * position;
-        }
-    </script>
-    
-    <script id="fragment-shader" type="x-shader/x-fragment">
-        precision mediump float;
-        
-        varying vec2 vTextureCoord;
-        varying vec3 vNormal;
-        varying vec3 vPosition;
-        
-        uniform sampler2D uSampler;
-        uniform vec3 uLightPosition;
-        uniform vec3 uLightColor;
-        uniform float uLightIntensity;
-        
-        void main() {
-            vec3 normal = normalize(vNormal);
-            vec3 lightDir = normalize(uLightPosition - vPosition);
-            float diff = max(dot(normal, lightDir), 0.0);
-            
-            vec4 texColor = texture2D(uSampler, vTextureCoord);
-            vec3 ambient = 0.3 * texColor.rgb;
-            vec3 diffuse = 0.7 * diff * texColor.rgb * uLightColor * uLightIntensity;
-            
-            gl_FragColor = vec4(ambient + diffuse, texColor.a);
-        }
-    </script>
-    
+    <script src="js/main.js"></script>    
 </body>
 </html>

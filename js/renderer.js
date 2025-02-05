@@ -11,6 +11,18 @@ class Renderer {
         this.textures = new Map();
         this.programs = new Map();
         
+        this.settings = {
+            shadows: true,
+            reflections: true,
+            advancedRendering: false,
+            debug: {
+                meshLoading: true,
+                renderingSteps: true,
+                sceneObjects: true,
+                playerPosition: true
+            }
+        };
+        
         // Camera setup
         this.camera = {
             position: [0, 4, 10],
@@ -30,21 +42,68 @@ class Renderer {
             enabled: true
         };
         
-        // Rendering settings
-        this.settings = {
-            shadows: true,
-            reflections: true,
-            advancedRendering: false
-        };
-        
         this.setupGL();
         this.meshes.set('plane', this.createPlaneMesh());
-        this.setupShaders();
-        this.setupShadowMapping();
+        this.setupLighting();
         this.setupGUI();
         
-        // Bind resize handler
         window.addEventListener('resize', this.onWindowResize.bind(this));
+    }
+    
+    async initialize() {
+        try {
+            console.log('Initializing renderer...');
+            
+            // Carica gli shader dai file corretti
+            const vertexShaderText = await fetch('shaders/vertex-shader.glsl').then(r => r.text());
+            const fragmentShaderText = await fetch('shaders/fragment-shader.glsl').then(r => r.text());
+            const shadowVertexShaderText = await fetch('shaders/shadow-vertex-shader.glsl').then(r => r.text());
+            const shadowFragmentShaderText = await fetch('shaders/shadow-fragment-shader.glsl').then(r => r.text());
+            
+            // Crea i programmi shader
+            this.programs.set('main', this.createProgram(vertexShaderText, fragmentShaderText));
+            this.programs.set('shadow', this.createProgram(shadowVertexShaderText, shadowFragmentShaderText));
+            
+            this.setupShadowMapping();
+            
+            console.log('Renderer initialized successfully');
+            return true;
+        } catch (error) {
+            console.error('Failed to initialize renderer:', error);
+            throw error;
+        }
+    }
+    
+    setupLighting() {
+        // Luce principale (lampadario)
+        if (!this.scene) {
+            this.scene = {
+                lights: new Map()
+            };
+        }
+        
+        this.scene.lights.set('mainLight', {
+            type: 'point',
+            position: [0, 8, 0],
+            color: [1, 1, 1],
+            intensity: 300,
+            enabled: true
+        });
+        
+        // Luce ambientale più intensa
+        this.scene.lights.set('ambient', {
+            type: 'ambient',
+            color: [0.3, 0.3, 0.3],
+            intensity: 0.5
+        });
+        
+        // Aggiorna anche la luce principale della classe
+        this.light = {
+            position: [0, 8, 0],
+            color: [1, 1, 1],
+            intensity: 300,
+            enabled: true
+        };
     }
     
     setupGL() {
@@ -52,107 +111,6 @@ class Renderer {
         gl.enable(gl.DEPTH_TEST);
         gl.enable(gl.CULL_FACE);
         gl.clearColor(0.0, 0.0, 0.0, 1.0);
-    }
-    
-    setupShaders() {
-        // Main rendering program
-        const mainVertexShader = `#version 300 es
-            in vec4 aPosition;
-            in vec2 aTextureCoord;
-            in vec3 aNormal;
-            
-            uniform mat4 uModelViewMatrix;
-            uniform mat4 uProjectionMatrix;
-            uniform mat4 uNormalMatrix;
-            uniform mat4 uLightSpaceMatrix;
-            
-            out vec2 vTextureCoord;
-            out vec3 vNormal;
-            out vec3 vPosition;
-            out vec4 vPositionFromLight;
-            
-            void main() {
-                vTextureCoord = aTextureCoord;
-                vNormal = (uNormalMatrix * vec4(aNormal, 0.0)).xyz;
-                vec4 position = uModelViewMatrix * aPosition;
-                vPosition = position.xyz;
-                vPositionFromLight = uLightSpaceMatrix * aPosition;
-                gl_Position = uProjectionMatrix * position;
-            }`;
-        
-        const mainFragmentShader = `#version 300 es
-            precision highp float;
-            
-            in vec2 vTextureCoord;
-            in vec3 vNormal;
-            in vec3 vPosition;
-            in vec4 vPositionFromLight;
-            
-            uniform sampler2D uSampler;
-            uniform sampler2D uShadowMap;
-            uniform vec3 uLightPosition;
-            uniform vec3 uLightColor;
-            uniform float uLightIntensity;
-            uniform bool uShadowsEnabled;
-            uniform bool uReflectionsEnabled;
-            
-            out vec4 fragColor;
-            
-            float calculateShadow() {
-                vec3 projCoords = vPositionFromLight.xyz / vPositionFromLight.w;
-                projCoords = projCoords * 0.5 + 0.5;
-                
-                float closestDepth = texture(uShadowMap, projCoords.xy).r;
-                float currentDepth = projCoords.z;
-                
-                float bias = 0.005;
-                float shadow = currentDepth - bias > closestDepth ? 0.5 : 1.0;
-                
-                return shadow;
-            }
-            
-            void main() {
-                vec3 normal = normalize(vNormal);
-                vec3 lightDir = normalize(uLightPosition - vPosition);
-                float diff = max(dot(normal, lightDir), 0.0);
-                
-                vec4 texColor = texture(uSampler, vTextureCoord);
-                float shadow = uShadowsEnabled ? calculateShadow() : 1.0;
-                
-                vec3 ambient = 0.3 * texColor.rgb * uLightColor;
-                vec3 diffuse = 0.7 * diff * texColor.rgb * uLightColor * uLightIntensity;
-                
-                if (uReflectionsEnabled) {
-                    vec3 viewDir = normalize(-vPosition);
-                    vec3 reflectDir = reflect(-lightDir, normal);
-                    float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
-                    vec3 specular = 0.2 * spec * uLightColor;
-                    fragColor = vec4((ambient + shadow * (diffuse + specular)), texColor.a);
-                } else {
-                    fragColor = vec4((ambient + shadow * diffuse), texColor.a);
-                }
-            }`;
-        
-        // Shadow mapping program
-        const shadowVertexShader = `#version 300 es
-            in vec4 aPosition;
-            uniform mat4 uLightSpaceMatrix;
-            uniform mat4 uModelMatrix;
-            
-            void main() {
-                gl_Position = uLightSpaceMatrix * uModelMatrix * aPosition;
-            }`;
-        
-        const shadowFragmentShader = `#version 300 es
-            precision highp float;
-            out vec4 fragColor;
-            
-            void main() {
-                fragColor = vec4(gl_FragCoord.z, 0.0, 0.0, 1.0);
-            }`;
-        
-        this.programs.set('main', this.createProgram(mainVertexShader, mainFragmentShader));
-        this.programs.set('shadow', this.createProgram(shadowVertexShader, shadowFragmentShader));
     }
     
     createProgram(vertexSource, fragmentSource) {
@@ -220,7 +178,7 @@ class Renderer {
                     if (typeof window.glmUtils === 'undefined') {
                         throw new Error('glmUtils non è stato caricato correttamente');
                     }
-            
+                    
                     const mesh = window.glmUtils.loadObj(objText);
                     const gl = this.gl;
                     
@@ -243,7 +201,7 @@ class Renderer {
                     throw error;
                 }
             }
-
+            
             createBuffer(data, target = null) {
                 const gl = this.gl;
                 target = target || gl.ARRAY_BUFFER;
@@ -252,7 +210,7 @@ class Renderer {
                 gl.bindBuffer(target, buffer);
                 
                 const typedArray = target === gl.ARRAY_BUFFER ? 
-                    new Float32Array(data) : new Uint16Array(data);
+                new Float32Array(data) : new Uint16Array(data);
                 
                 gl.bufferData(target, typedArray, gl.STATIC_DRAW);
                 return buffer;
@@ -304,6 +262,17 @@ class Renderer {
                 render(scene) {
                     const gl = this.gl;
                     
+                    // Usa un colore di clear più chiaro per debug
+                    gl.clearColor(0.2, 0.2, 0.2, 1.0);
+                    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+                    
+                    // Posiziona la camera più in alto e indietro
+                    this.camera.position = [0, 5, 15];
+                    this.camera.target = [0, 0, 0];
+                    
+                    // Aumenta l'intensità della luce
+                    this.light.intensity = 200;
+                    
                     if (this.settings.debug.renderingSteps) {
                         console.log('Inizio rendering frame');
                     }
@@ -332,7 +301,7 @@ class Renderer {
                             }
                         });
                     }
-                
+                    
                     // Render lights if they exist
                     if (scene.lights && scene.lights instanceof Map) {
                         scene.lights.forEach((light, key) => {
@@ -566,7 +535,7 @@ class Renderer {
                     lightFolder.add(this.light, 'intensity', 0, 200).name('Light Intensity');
                     lightFolder.addColor(this.light, 'color').name('Light Color');
                     lightFolder.open();
-                
+                    
                     // Aggiungi cartella per i debug log
                     const debugFolder = gui.addFolder('Debug Settings');
                     this.settings.debug = {
@@ -638,34 +607,34 @@ class Renderer {
                     
                     flicker();
                 }
-
+                
                 createPlaneMesh() {
                     const vertices = new Float32Array([
                         -1, 0, -1,  // bottom-left
-                         1, 0, -1,  // bottom-right
-                         1, 0,  1,  // top-right
+                        1, 0, -1,  // bottom-right
+                        1, 0,  1,  // top-right
                         -1, 0,  1,  // top-left
                     ]);
-                
+                    
                     const normals = new Float32Array([
                         0, 1, 0,
                         0, 1, 0,
                         0, 1, 0,
                         0, 1, 0,
                     ]);
-                
+                    
                     const texCoords = new Float32Array([
                         0, 0,
                         1, 0,
                         1, 1,
                         0, 1,
                     ]);
-                
+                    
                     const indices = new Uint16Array([
                         0, 1, 2,
                         0, 2, 3,
                     ]);
-                
+                    
                     return {
                         vertices: this.createBuffer(vertices),
                         normals: this.createBuffer(normals),
