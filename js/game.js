@@ -24,20 +24,20 @@ class Game {
         
         // Stato del giocatore - modifica posizione iniziale per vedere meglio la stanza
         this.player = {
-            position: [0, 2, 10], // Mettiamo il player a un'altezza più ragionevole e più indietro
-            rotation: [0, 0, 0],
+            position: [0, 5, -30], // Z < -ROOM_DEPTH/2
+            rotation: [0, 0, 0],   // Guarda verso +Z
             onFloor: true
         };
         
         // Imposta la camera iniziale
         this.camera = {
-            position: [0, 2, 10],
-            target: [0, 2, 0], // Guarda verso il centro della stanza
+            position: [0, 2, this.ROOM_DEPTH/2 - 2],
+            target: [0, 2, 0],  // Guarda verso il centro della stanza
             up: [0, 1, 0],
             fov: 70 * Math.PI / 180,
             near: 0.1,
             far: 1000,
-            rotation: [0, 0, 0]
+            rotation: [0, Math.PI, 0]  // Match con la rotazione del player
         };
         
         // Modifica l'intensità della luce
@@ -138,7 +138,7 @@ class Game {
     }
     
     setupScene() {
-        // Configura la stanza base
+        // Pavimento a Y=0
         this.scene.objects.set('floor', {
             mesh: 'plane',
             texture: 'floor',
@@ -146,18 +146,22 @@ class Game {
             rotation: [0, 0, 0],
             scale: [this.ROOM_WIDTH, 1, this.ROOM_DEPTH]
         });
-        
+    
+        // Soffitto a Y=ROOM_HEIGHT (10)  
+        this.scene.objects.set('ceiling', {
+            mesh: 'plane',
+            texture: 'floor',
+            position: [0, this.ROOM_HEIGHT, 0],
+            rotation: [Math.PI, 0, 0],
+            scale: [this.ROOM_WIDTH, 1, this.ROOM_DEPTH]
+        });
+    
         // Aggiungi pareti
         this.setupWalls();
-        
+    
         // Aggiungi illuminazione
         this.setupLighting();
-        
-        // Aggiungi questa riga per inizializzare la modelMatrix
-        this.scene.objects.forEach(obj => {
-            obj.modelMatrix = m4.identity();
-        });
-        
+    
         // Inizializza modelMatrix per tutti gli oggetti
         this.scene.objects.forEach(obj => {
             obj.modelMatrix = m4.identity();

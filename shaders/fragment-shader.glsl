@@ -43,6 +43,8 @@ void main() {
 
     // Vectors
     vec3 normal = normalize(vNormal);
+    // Inverti la normale se necessario per il soffitto
+    if(normal.y < 0.0) normal = -normal;
     vec3 lightDir = normalize(uLightPosition - vWorldPosition);
     vec3 viewDir = normalize(uViewPosition - vWorldPosition);
     vec3 reflectDir = reflect(-lightDir, normal);

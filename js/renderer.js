@@ -456,15 +456,22 @@ class Renderer {
                 }
                 
                 renderObject(object, program) {
-                    if (!object || !object.mesh) {
-                        return;
-                    }
+                    if (!object || !object.mesh) return;
                     const mesh = this.meshes.get(object.mesh);
                     if (!mesh) {
                         console.error(`Mesh non trovata: ${object.mesh}`);
                         return;
                     }
                     const gl = this.gl;
+                
+                    // Se l'oggetto è double-sided, disabilitiamo temporaneamente il culling
+                    if (mesh.doubleSided) {
+                        gl.disable(gl.CULL_FACE);
+                    }
+
+                    // Setup standard degli attributi e delle uniforms
+                    this.setupVertexAttributes(program, mesh);
+
                     const modelMatrix = m4.identity();
                     
                     // Set up vertex attributes
@@ -516,8 +523,13 @@ class Renderer {
                         modelMatrix
                     );
                     
-                    // Draw the object
+                    // Rendering
                     gl.drawElements(gl.TRIANGLES, mesh.numIndices, gl.UNSIGNED_SHORT, 0);
+
+                    // Ripristina il culling se era stato disabilitato
+                    if (mesh.doubleSided) {
+                        gl.enable(gl.CULL_FACE);
+                    }
                 }
                 
                 updateCameraFOV(delta) {
@@ -687,11 +699,12 @@ class Renderer {
                 createPlaneMesh() {
                     const vertices = new Float32Array([
                         -1, 0, -1,  // bottom-left
-                        1, 0, -1,  // bottom-right
-                        1, 0,  1,  // top-right
+                        1, 0, -1,   // bottom-right
+                        1, 0,  1,   // top-right
                         -1, 0,  1,  // top-left
                     ]);
                     
+                    // Normali puntano verso l'alto di default
                     const normals = new Float32Array([
                         0, 1, 0,
                         0, 1, 0,
@@ -710,13 +723,18 @@ class Renderer {
                         0, 1, 2,
                         0, 2, 3,
                     ]);
+                
+                    // Abilita backface culling
+                    this.gl.enable(this.gl.CULL_FACE);
+                    this.gl.cullFace(this.gl.BACK);
                     
                     return {
                         vertices: this.createBuffer(vertices),
                         normals: this.createBuffer(normals),
                         texCoords: this.createBuffer(texCoords),
                         indices: this.createBuffer(indices, this.gl.ELEMENT_ARRAY_BUFFER),
-                        numIndices: indices.length
+                        numIndices: indices.length,
+                        doubleSided: true  // flag per indicare se rendere entrambi i lati
                     };
                 }
             }
