@@ -389,6 +389,13 @@ class Renderer {
                         }
                         return mat;
                     };
+                
+                    const modelMatrix = m4.identity(); // Crea una nuova model matrix identità
+                    gl.uniformMatrix4fv(
+                        gl.getUniformLocation(program, 'uModelMatrix'),
+                        false,
+                        validateMatrix(modelMatrix, 'model')
+                    );
                     
                     gl.uniformMatrix4fv(
                         gl.getUniformLocation(program, 'uViewMatrix'),
@@ -458,6 +465,7 @@ class Renderer {
                         return;
                     }
                     const gl = this.gl;
+                    const modelMatrix = m4.identity();
                     
                     // Set up vertex attributes
                     this.setupVertexAttributes(program, mesh);
@@ -496,7 +504,6 @@ class Renderer {
                         modelViewMatrix
                     );
                     
-                    const modelMatrix = m4.identity();
                     m4.translate(modelMatrix, ...object.position);
                     m4.rotateX(modelMatrix, object.rotation[0]);
                     m4.rotateY(modelMatrix, object.rotation[1]);

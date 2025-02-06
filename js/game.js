@@ -104,8 +104,8 @@ class Game {
             // Aggiungi gli oggetti interattivi
             this.addInteractiveObjects();
             
-            // Imposta l'audio di intro
-            this.audio.playIntroMusic();
+            // NON avviare l'audio qui
+            // this.audio.playIntroMusic(); <- rimuovi questa linea
             
         } catch (error) {
             console.error('Errore durante l\'inizializzazione del gioco:', error);
@@ -488,6 +488,7 @@ class Game {
                             document.getElementById('top-bar').style.display = 'flex';
                             
                             // Avvia la musica e il gioco
+                            this.audio.playIntroMusic();
                             this.audio.stopIntroMusic();
                             this.audio.playStartMusic();
                             
