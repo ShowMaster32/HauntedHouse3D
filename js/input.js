@@ -58,9 +58,14 @@ class InputHandler {
 
         document.addEventListener('mousemove', (event) => {
             if (this.isPointerLocked) {
+                console.log('Mouse move:', {
+                    movementX: event.movementX,
+                    movementY: event.movementY
+                });
+                
                 this.game.updateCameraRotation(
-                    -event.movementX * 0.002,
-                    -event.movementY * 0.002
+                    event.movementX * 0.002,
+                    event.movementY * 0.002
                 );
             }
         });

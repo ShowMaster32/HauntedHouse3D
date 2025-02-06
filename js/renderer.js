@@ -698,21 +698,20 @@ class Renderer {
                 
                 createPlaneMesh() {
                     const vertices = new Float32Array([
-                        -1, 0, -1,  // bottom-left
-                        1, 0, -1,   // bottom-right
-                        1, 0,  1,   // top-right
-                        -1, 0,  1,  // top-left
+                        -1, 0, -1,   
+                        1, 0, -1,    
+                        1, 0, 1,     
+                        -1, 0, 1,    
                     ]);
                     
-                    // Normali puntano verso l'alto di default
                     const normals = new Float32Array([
-                        0, 1, 0,
-                        0, 1, 0,
-                        0, 1, 0,
-                        0, 1, 0,
+                        0, -1, 0,
+                        0, -1, 0,
+                        0, -1, 0,
+                        0, -1, 0,
                     ]);
                     
-                    const texCoords = new Float32Array([
+                    const texCoords = new Float32Array([  // Aggiungiamo questa parte
                         0, 0,
                         1, 0,
                         1, 1,
@@ -720,21 +719,17 @@ class Renderer {
                     ]);
                     
                     const indices = new Uint16Array([
-                        0, 1, 2,
-                        0, 2, 3,
+                        0, 2, 1,
+                        0, 3, 2
                     ]);
                 
-                    // Abilita backface culling
-                    this.gl.enable(this.gl.CULL_FACE);
-                    this.gl.cullFace(this.gl.BACK);
-                    
                     return {
                         vertices: this.createBuffer(vertices),
                         normals: this.createBuffer(normals),
                         texCoords: this.createBuffer(texCoords),
                         indices: this.createBuffer(indices, this.gl.ELEMENT_ARRAY_BUFFER),
                         numIndices: indices.length,
-                        doubleSided: true  // flag per indicare se rendere entrambi i lati
+                        doubleSided: true
                     };
                 }
             }
