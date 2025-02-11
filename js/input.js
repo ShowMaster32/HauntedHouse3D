@@ -58,14 +58,17 @@ class InputHandler {
 
         document.addEventListener('mousemove', (event) => {
             if (this.isPointerLocked) {
-                console.log('Mouse move:', {
-                    movementX: event.movementX,
-                    movementY: event.movementY
-                });
+                const sensitivityX = 0.002;
+                const sensitivityY = 0.004; // Raddoppiata la sensibilità verticale
                 
+                console.log('Mouse sensitivity:', {
+                    deltaX: event.movementX * sensitivityX,
+                    deltaY: event.movementY * sensitivityY
+                });
+        
                 this.game.updateCameraRotation(
-                    event.movementX * 0.002,
-                    event.movementY * 0.002
+                    event.movementX * sensitivityX,
+                    event.movementY * sensitivityY
                 );
             }
         });

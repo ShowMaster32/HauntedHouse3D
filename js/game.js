@@ -112,27 +112,42 @@ class Game {
     }
     
     async loadMeshes() {
-        // Carica tutte le mesh necessarie
+        // Carica tutte le mesh necessarie con i loro materiali
         await Promise.all([
-            this.renderer.loadMesh('clock', 'models/pendent-clock.obj'),
-            this.renderer.loadMesh('doll', 'models/doll.obj'),
-            this.renderer.loadMesh('wheelchair1', 'models/kurumaisu.unity_1.obj'),
-            this.renderer.loadMesh('wheelchair2', 'models/UnsavedScene_1.obj'),
-            this.renderer.loadMesh('skull', 'models/12140_Skull_v3_L2.obj'),
+            // Clock con materiali
+            this.renderer.loadMesh('clock', 'models/pendent-clock.obj', 'models/pendent-clock.mtl'),
+            
+            // Doll con materiali
+            this.renderer.loadMesh('doll', 'models/doll.obj', 'models/Doll.mtl'),
+            
+            // Wheelchair1 con materiali
+            this.renderer.loadMesh('wheelchair1', 'models/kurumaisu.unity_1.obj', 'models/kurumaisu.unity_1.mtl'),
+            
+            // Wheelchair2 con materiali
+            this.renderer.loadMesh('wheelchair2', 'models/UnsavedScene_1.obj', 'models/UnsavedScene_1.mtl'),
+            
+            // Skull con materiali
+            this.renderer.loadMesh('skull', 'models/12140_Skull_v3_L2.obj', 'models/12140_Skull_v3_L2.mtl'),
+            
+            // Switch con materiali (FBX ha già i materiali incorporati)
             this.renderer.loadMesh('switch', 'models/Switch.fbx'),
-            this.renderer.loadMesh('lamp', 'models/lamp.obj')
+            
+            // Lamp con materiali
+            this.renderer.loadMesh('lamp', 'models/lamp.obj', 'models/lamp.mtl')
         ]);
     }
     
     async loadTextures() {
-        // Carica tutte le texture necessarie
         await Promise.all([
             this.renderer.loadTexture('wall', 'textures/wall.jpg'),
             this.renderer.loadTexture('floor', 'textures/wood.jpg'),
             this.renderer.loadTexture('door', 'textures/door.png'),
             this.renderer.loadTexture('clock', 'models/orologio-horror_baseColor.jpg'),
             this.renderer.loadTexture('doll', 'models/Doll_Doll_BaseColor.png'),
-            this.renderer.loadTexture('switch', 'textures/DefaultMaterial_Base_color.png')
+            this.renderer.loadTexture('switch', 'textures/DefaultMaterial_Base_color.png'),
+            this.renderer.loadTexture('skull', 'models/Skull.jpg'),
+            // Usa la stessa texture della bambola per le sedie a rotelle
+            this.renderer.loadTexture('wheelchair', 'models/Doll_Doll_BaseColor.png')
         ]);
     }
     
@@ -215,19 +230,88 @@ class Game {
     }
     
     setupLighting() {
-        this.scene.lights.set('mainLight', {
+        console.log('Initializing horror lighting setup...');
+    
+        if (!this.scene) {
+            this.scene = {
+                lights: new Map(),
+                objects: new Map()
+            };
+            console.log('Created new scene with lights and objects maps');
+        }
+    
+        const mainLight = {
             type: 'point',
-            position: [0, this.ROOM_HEIGHT - 1, 0], // Abbassa un po' la luce
-            color: [1, 0.95, 0.8],
-            intensity: 2.0, // Aumenta intensità
+            position: [0, 5, 0],
+            color: [1, 1, 1],
+            intensity: 100.0,
             enabled: true
-        });
-        
-        this.scene.lights.set('ambient', {
+        };
+    
+        const ambientLight = {
             type: 'ambient',
-            color: [0.3, 0.3, 0.3], // Aumenta luce ambientale
-            intensity: 0.5
+            color: [0.5, 0.5, 0.5],
+            intensity: 1.0
+        };
+    
+        // Aggiungi controlli al pannello laterale
+        const gui = new dat.GUI({ autoPlace: false });
+        document.getElementById('gui-container').appendChild(gui.domElement);
+    
+        const lightFolder = gui.addFolder('Light Settings');
+        lightFolder.add(mainLight, 'intensity', 0, 200).name('Main Light Intensity')
+            .onChange((value) => {
+                mainLight.intensity = value;
+                this.light.intensity = value;
+                console.log('Light intensity changed:', {
+                    newIntensity: value,
+                    mainLight: mainLight,
+                    rendererLight: this.light
+                });
+            });
+    
+        lightFolder.add(mainLight, 'enabled').name('Light Enabled')
+            .onChange((value) => {
+                mainLight.enabled = value;
+                this.light.enabled = value;
+                console.log('Light enabled state changed:', {
+                    enabled: value,
+                    mainLight: mainLight,
+                    rendererLight: this.light
+                });
+            });
+    
+        lightFolder.open();
+    
+        console.log('Light setup parameters:', {
+            mainLight: {
+                position: mainLight.position,
+                intensity: mainLight.intensity,
+                enabled: mainLight.enabled,
+                color: mainLight.color
+            },
+            ambientLight: {
+                intensity: ambientLight.intensity,
+                color: ambientLight.color
+            },
+            roomDimensions: {
+                height: this.ROOM_HEIGHT,
+                width: this.ROOM_WIDTH,
+                depth: this.ROOM_DEPTH
+            }
         });
+    
+        this.scene.lights.set('mainLight', mainLight);
+        this.scene.lights.set('ambient', ambientLight);
+    
+        this.light = {
+            position: mainLight.position,
+            color: mainLight.color,
+            intensity: mainLight.intensity,
+            enabled: mainLight.enabled
+        };
+    
+        console.log('Horror lighting setup completed');
     }
     
     addInteractiveObjects() {
@@ -240,13 +324,14 @@ class Game {
     }
     
     addDoll() {
-        const xPos = (Math.random() - 0.5) * (this.ROOM_WIDTH - 2); // -2 per stare lontano dai muri
-        const zPos = (Math.random() - 0.5) * (this.ROOM_DEPTH - 2);
-        
         this.scene.objects.set('doll', {
             mesh: 'doll',
             texture: 'doll',
-            position: [xPos, 0, zPos], // Y a 0 per metterla sul pavimento
+            position: [
+                (Math.random() - 0.5) * (this.ROOM_WIDTH - 2), 
+                0,  // Y a 0 per metterla sul pavimento
+                (Math.random() - 0.5) * (this.ROOM_DEPTH - 2)
+            ],
             rotation: [0, Math.random() * Math.PI * 2, 0],
             scale: [1, 1, 1],
             interactive: true,
@@ -262,7 +347,7 @@ class Game {
             rotation: [0, -Math.PI/2, 0],
             scale: [0.2, 0.2, 0.2]
         });
-    
+        
         this.scene.objects.set('wheelchair2', {
             mesh: 'wheelchair2',
             texture: 'wheelchair',
@@ -284,9 +369,8 @@ class Game {
     
     addSkulls() {
         const skullPositions = [
-            { pos: [-8, 0, -11.0], rot: [-Math.PI/2, 0, 0] },  // Sul pavimento
-            { pos: [-8, 2, -10.8], rot: [-Math.PI/2 + 0.4, 0.2, 0.5] }, // Sul muro
-            // TODO ... altri teschi
+            { pos: [-8, 0, -11.0], rot: [-Math.PI/2, 0, 0] },  // Y a 0
+            { pos: [-8, 2, -10.8], rot: [-Math.PI/2 + 0.4, 0.2, 0.5] }, // Questo sul muro
         ];
         
         skullPositions.forEach((skull, index) => {
@@ -483,18 +567,22 @@ class Game {
         }
      }
     
-    updateCameraRotation(deltaX, deltaY) {
-        console.log('Camera rotation before:', {
-            x: this.player.rotation[0],
-            y: this.player.rotation[1]
+     updateCameraRotation(deltaX, deltaY) {
+        console.log('Pre-rotation:', {
+            rotX: this.player.rotation[0],
+            rotY: this.player.rotation[1],
+            deltaX: deltaX,
+            deltaY: deltaY
         });
     
         this.player.rotation[1] += deltaX;
-        this.player.rotation[0] = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.player.rotation[0] + deltaY));
+        // Modifichiamo i limiti verticali
+        const maxVerticalRot = Math.PI / 2.5; // Limita un po' meno
+        this.player.rotation[0] = Math.max(-maxVerticalRot, Math.min(maxVerticalRot, this.player.rotation[0] + deltaY));
     
-        console.log('Camera rotation after:', {
-            x: this.player.rotation[0],
-            y: this.player.rotation[1]
+        console.log('Post-rotation:', {
+            rotX: this.player.rotation[0],
+            rotY: this.player.rotation[1]
         });
     }
     

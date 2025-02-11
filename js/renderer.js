@@ -76,41 +76,57 @@ class Renderer {
     }
     
     setupLighting() {
-        // Inizializza scene se non esiste
+        console.log('Initializing lighting setup...');
+    
         if (!this.scene) {
             this.scene = {
                 lights: new Map(),
-                objects: new Map() // Aggiungi anche objects per sicurezza
+                objects: new Map()
             };
         }
-        // Garantisci che lights sia sempre una Map
+    
         if (!this.scene.lights || !(this.scene.lights instanceof Map)) {
             this.scene.lights = new Map();
         }
         
-        // Luce principale
-        this.scene.lights.set('mainLight', {
+        // Luce principale posizionata al centro della stanza, leggermente spostata
+        const mainLight = {
             type: 'point',
-            position: [0, 8, 0],
-            color: [1, 0.95, 0.8],
-            intensity: 1.5,
-            enabled: true
-        });
-        
-        // Luce ambientale
-        this.scene.lights.set('ambient', {
-            type: 'ambient',
-            color: [0.2, 0.2, 0.2],
-            intensity: 0.3
-        });
-        
-        // Aggiorna la luce del renderer
-        this.light = {
-            position: [0, 8, 0],
-            color: [1, 0.95, 0.8],
-            intensity: 1.5,
+            // x: leggero offset, y: 80% dell'altezza, z: leggero offset
+            position: [2, this.ROOM_HEIGHT * 0.8, -2],  
+            color: [0.9, 0.8, 0.7],                    // Luce più giallastra/inquietante
+            intensity: 15.0,                           // Intensità aumentata significativamente
             enabled: true
         };
+        
+        // Luce ambientale molto debole per atmosfera horror
+        const ambientLight = {
+            type: 'ambient',
+            color: [0.1, 0.1, 0.15],                  // Blu scuro per atmosfera notturna
+            intensity: 0.3                            // Bassa per mantenere le ombre profonde
+        };
+    
+        console.log('Setting up horror lights:', {
+            mainLight: mainLight,
+            ambientLight: ambientLight,
+            roomDimensions: {
+                width: this.ROOM_WIDTH,
+                height: this.ROOM_HEIGHT,
+                depth: this.ROOM_DEPTH
+            }
+        });
+        
+        this.scene.lights.set('mainLight', mainLight);
+        this.scene.lights.set('ambient', ambientLight);
+        
+        this.light = {
+            position: mainLight.position,
+            color: mainLight.color,
+            intensity: mainLight.intensity,
+            enabled: mainLight.enabled
+        };
+    
+        console.log('Horror lighting setup completed');
     }
     
     setupGL() {
@@ -456,6 +472,12 @@ class Renderer {
                 }
                 
                 renderObject(object, program) {
+                    console.log('Detailed object rendering:', {
+                        object: object,
+                        hasTexture: this.textures.get(object.texture) !== undefined,
+                        textureBinding: !!this.textures.get(object.texture),
+                        availableTextures: Array.from(this.textures.keys())
+                    });
                     if (!object || !object.mesh) return;
                     const mesh = this.meshes.get(object.mesh);
                     if (!mesh) {
@@ -630,13 +652,32 @@ class Renderer {
                         meshLoading: true,
                         renderingSteps: true,
                         sceneObjects: true,
-                        playerPosition: true
+                        playerPosition: true,
+                        lightingStatus: true
                     };
                     
                     debugFolder.add(this.settings.debug, 'meshLoading').name('Mesh Loading Logs');
                     debugFolder.add(this.settings.debug, 'renderingSteps').name('Rendering Logs');
                     debugFolder.add(this.settings.debug, 'sceneObjects').name('Scene Objects Logs');
                     debugFolder.add(this.settings.debug, 'playerPosition').name('Player Position Logs');
+                    debugFolder.add(this.settings.debug, 'lightingStatus').name('Lighting Status Logs')
+                        .onChange(() => {
+                            if(this.settings.debug.lightingStatus) {
+                                // Start light monitoring
+                                this.lightMonitorInterval = setInterval(() => {
+                                    console.log('Light status:', {
+                                        mainLightEnabled: this.scene.lights.get('mainLight').enabled,
+                                        mainLightIntensity: this.scene.lights.get('mainLight').intensity,
+                                        rendererLightEnabled: this.light.enabled,
+                                        rendererLightIntensity: this.light.intensity
+                                    });
+                                }, 5000);
+                            } else if(this.lightMonitorInterval) {
+                                // Stop light monitoring
+                                clearInterval(this.lightMonitorInterval);
+                            }
+                        });
+
                     debugFolder.open();
                 }
                 
