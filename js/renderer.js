@@ -76,21 +76,46 @@ class Renderer {
         }
     }
     
+    // Aggiungere questo al metodo initialize della classe Renderer
     async initialize() {
         try {
             console.log('Initializing renderer...');
             
-            // Carica gli shader dai file corretti
+            // Esegui i test solo se ShaderTestUtils è disponibile e siamo in debug mode
+            if (this.settings.debug.renderingSteps && typeof ShaderTestUtils !== 'undefined') {
+                try {
+                    const tester = new ShaderTestUtils(this);
+                    await tester.runTests();
+                } catch (testError) {
+                    console.warn('Shader tests skipped:', testError);
+                }
+            }
+            
+            // Carica gli shader
             const vertexShaderText = await fetch('shaders/vertex-shader.glsl').then(r => r.text());
             const fragmentShaderText = await fetch('shaders/fragment-shader.glsl').then(r => r.text());
-            const shadowVertexShaderText = await fetch('shaders/shadow-vertex-shader.glsl').then(r => r.text());
             const shadowFragmentShaderText = await fetch('shaders/shadow-fragment-shader.glsl').then(r => r.text());
             
             // Crea i programmi shader
             this.programs.set('main', this.createProgram(vertexShaderText, fragmentShaderText));
-            this.programs.set('shadow', this.createProgram(shadowVertexShaderText, shadowFragmentShaderText));
+            this.programs.set('shadow', this.createProgram(vertexShaderText, shadowFragmentShaderText));
             
+            // Setup shadow mapping
             this.setupShadowMapping();
+    
+            // Verifica finale
+            const mainProgram = this.programs.get('main');
+            const shadowProgram = this.programs.get('shadow');
+            
+            if (!mainProgram || !shadowProgram) {
+                throw new Error('Failed to create shader programs');
+            }
+    
+            // Test delle uniforms principali
+            this.gl.useProgram(mainProgram);
+            if (!this.setMainProgramUniforms(mainProgram)) {
+                throw new Error('Failed to set main program uniforms');
+            }
             
             console.log('Renderer initialized successfully');
             return true;
