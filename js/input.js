@@ -57,19 +57,23 @@ class InputHandler {
         });
 
         document.addEventListener('mousemove', (event) => {
-            if (this.isPointerLocked) {
-                const sensitivityX = 0.002;
-                const sensitivityY = 0.004; // Raddoppiata la sensibilità verticale
-                
-                console.log('Mouse sensitivity:', {
-                    deltaX: event.movementX * sensitivityX,
-                    deltaY: event.movementY * sensitivityY
-                });
-        
-                this.game.updateCameraRotation(
-                    event.movementX * sensitivityX,
-                    event.movementY * sensitivityY
-                );
+            if (document.pointerLockElement === canvas) {
+                const deltaX = event.movementX / 500;
+                const deltaY = event.movementY / 500;
+
+                // Usa la camera del game
+                if (this.game && this.game.camera) {
+                    this.game.camera.rotation.y -= deltaX;
+                    this.game.camera.rotation.x -= deltaY;
+                    this.game.camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.game.camera.rotation.x));
+                }
+
+                if (this.game.renderer && this.game.renderer.settings.debug.playerPosition) {
+                    console.log('Mouse sensitivity:', {
+                        deltaX: event.movementX / 500,
+                        deltaY: event.movementY / 500
+                    });
+                }
             }
         });
     }

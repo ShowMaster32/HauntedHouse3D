@@ -3,76 +3,63 @@ precision highp float;
 
 in vec2 vTextureCoord;
 in vec3 vNormal;
-in vec3 vWorldPosition;
-in vec4 vPositionFromLight;
+in vec3 vFragPos;
 
 uniform sampler2D uSampler;
-uniform sampler2D uShadowMap;
+
+// Uniforms per la luce principale
 uniform vec3 uLightPosition;
 uniform vec3 uLightColor;
 uniform float uLightIntensity;
-uniform bool uShadowsEnabled;
-uniform vec3 uViewPosition;
+uniform vec3 uAttenuation;  // x: constant, y: linear, z: quadratic
+
+// Uniforms per la luce ambientale
+uniform vec3 uAmbientColor;
+uniform float uAmbientIntensity;
 uniform float uAmbientStrength;
+
+// Altri parametri di illuminazione
+uniform vec3 uViewPosition;
 uniform float uSpecularStrength;
 uniform float uShininess;
 
 out vec4 fragColor;
 
-float calculateShadow() {
-    vec3 projCoords = vPositionFromLight.xyz / vPositionFromLight.w;
-    projCoords = projCoords * 0.5 + 0.5;
-    
-    if(projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
-        return 1.0;
-
-    float closestDepth = texture(uShadowMap, projCoords.xy).r;
-    float currentDepth = projCoords.z;
-    
-    vec3 normal = normalize(vNormal);
-    vec3 lightDir = normalize(uLightPosition - vWorldPosition);
-    float bias = max(0.005 * (1.0 - dot(normal, lightDir)), 0.001);
-    
-    return currentDepth - bias > closestDepth ? 0.5 : 1.0;
-}
-
 void main() {
-    // Base color from texture
+    // Ottieni il colore della texture
     vec4 texColor = texture(uSampler, vTextureCoord);
-    if(texColor.a < 0.5) discard;
-
-    // Vectors
+    
+    // Calcola le direzioni necessarie
     vec3 normal = normalize(vNormal);
-    // Inverti la normale se necessario per il soffitto
-    if(normal.y < 0.0) normal = -normal;
-    vec3 lightDir = normalize(uLightPosition - vWorldPosition);
-    vec3 viewDir = normalize(uViewPosition - vWorldPosition);
-    vec3 reflectDir = reflect(-lightDir, normal);
+    vec3 lightDir = normalize(uLightPosition - vFragPos);
+    vec3 viewDir = normalize(uViewPosition - vFragPos);
+    vec3 halfwayDir = normalize(lightDir + viewDir);
 
-    // Ambient
-    vec3 ambient = uAmbientStrength * texColor.rgb;
+    // Calcola l'attenuazione
+    float distance = length(uLightPosition - vFragPos);
+    float attenuation = 1.0 / (uAttenuation.x + 
+                              uAttenuation.y * distance +
+                              uAttenuation.z * distance * distance);
 
-    // Diffuse
+    // Luce ambientale migliorata
+    vec3 ambient = uAmbientColor * uAmbientIntensity * uAmbientStrength * texColor.rgb;
+
+    // Luce diffusa con intensità aumentata
     float diff = max(dot(normal, lightDir), 0.0);
-    vec3 diffuse = diff * uLightColor * uLightIntensity * texColor.rgb;
+    vec3 diffuse = uLightColor * diff * texColor.rgb * uLightIntensity;
 
-    // Specular (Blinn-Phong)
-    vec3 halfwayDir = normalize(lightDir + viewDir); 
+    // Luce speculare con controllo migliore
     float spec = pow(max(dot(normal, halfwayDir), 0.0), uShininess);
-    vec3 specular = uSpecularStrength * spec * uLightColor;
+    vec3 specular = uLightColor * spec * uSpecularStrength * uLightIntensity;
 
-    // Attenuation
-    float distance = length(uLightPosition - vWorldPosition);
-    float attenuation = 1.0 / (1.0 + 0.09 * distance + 0.032 * (distance * distance));
-
-    // Shadow
-    float shadow = uShadowsEnabled ? calculateShadow() : 1.0;
-
-    // Final color
-    vec3 result = (ambient + (shadow * (diffuse + specular))) * attenuation;
+    // Combina tutte le componenti con attenzione all'attenuazione
+    vec3 result = ambient + (diffuse + specular) * attenuation;
     
-    // Gamma correction
+    // Boost generale per aumentare la luminosità
+    result *= 1.2;
+
+    // Gamma correction per un risultato più realistico
     result = pow(result, vec3(1.0/2.2));
-    
+
     fragColor = vec4(result, texColor.a);
 }

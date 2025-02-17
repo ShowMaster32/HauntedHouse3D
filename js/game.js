@@ -4,11 +4,6 @@ class Game {
         this.canvas = document.getElementById('canvas');
         this.container = document.getElementById('container');
         
-        // Inizializza i sottosistemi
-        this.physics = new PhysicsSystem();
-        this.audio = new AudioManager();
-        this.input = new InputHandler(this);
-        
         // Stato del gioco
         this.isRunning = false;
         this.isPaused = false;
@@ -29,15 +24,19 @@ class Game {
             onFloor: true
         };
         
+        // Inizializza la camera come nell'originale
         this.camera = {
             position: [0, 1.7, 0],
-            target: [0, 1.7, -1],  // Guarda in avanti
-            up: [0, 1, 0],
+            rotation: { x: 0, y: 0, z: 0 },
             fov: 70 * Math.PI / 180,
             near: 0.1,
-            far: 1000,
-            rotation: [0, 0, 0]
+            far: 1000
         };
+
+        // Inizializza i sottosistemi
+        this.physics = new PhysicsSystem();
+        this.audio = new AudioManager();
+        this.input = new InputHandler(this);
         
         // Modifica l'intensità della luce
         this.light = {
@@ -138,6 +137,7 @@ class Game {
     }
     
     async loadTextures() {
+        console.log('Loading textures...');
         await Promise.all([
             this.renderer.loadTexture('wall', 'textures/wall.jpg'),
             this.renderer.loadTexture('floor', 'textures/wood.jpg'),
@@ -242,16 +242,17 @@ class Game {
     
         const mainLight = {
             type: 'point',
-            position: [0, 5, 0],
-            color: [1, 1, 1],
-            intensity: 100.0,
+            position: [0, this.ROOM_HEIGHT * 0.8, 0], // 80% dell'altezza della stanza
+            color: [1.0, 0.95, 0.8], // Luce calda
+            intensity: 150,       // Aumentata intensità
             enabled: true
         };
-    
+        
+        // Aggiunta luce ambientale più forte
         const ambientLight = {
             type: 'ambient',
-            color: [0.5, 0.5, 0.5],
-            intensity: 1.0
+            color: [0.3, 0.3, 0.35], // Colore ambientale leggermente bluastro
+            intensity: 0.5          // Aumentata intensità ambientale
         };
     
         // Aggiungi controlli al pannello laterale
@@ -324,13 +325,14 @@ class Game {
     }
     
     addDoll() {
+        // Posizione più definita per la bambola
         this.scene.objects.set('doll', {
             mesh: 'doll',
             texture: 'doll',
             position: [
-                (Math.random() - 0.5) * (this.ROOM_WIDTH - 2), 
-                0,  // Y a 0 per metterla sul pavimento
-                (Math.random() - 0.5) * (this.ROOM_DEPTH - 2)
+                this.ROOM_WIDTH/4,  // Un quarto della larghezza della stanza
+                -this.ROOM_HEIGHT/2 + 0.5,  // Mezzo metro sopra il pavimento
+                -this.ROOM_DEPTH/4  // Un quarto della profondità della stanza
             ],
             rotation: [0, Math.random() * Math.PI * 2, 0],
             scale: [1, 1, 1],
@@ -496,17 +498,51 @@ class Game {
     }
     
     updateCamera() {
-        if(!this.player || !this.player.position) return;
-        // Aggiorna la posizione della camera in base al giocatore
+        // Usa la rotazione per guardare nella direzione corretta
+        const target = [
+            this.player.position[0] + Math.sin(this.camera.rotation.y),
+            this.player.position[1] + Math.sin(this.camera.rotation.x),
+            this.player.position[2] - Math.cos(this.camera.rotation.y)
+        ];
+    
+        // Aggiorna la matrice di vista usando m4
         this.renderer.updateCamera(
             this.player.position,
-            [
-                this.player.position[0] + Math.sin(this.player.rotation[1]),
-                this.player.position[1],
-                this.player.position[2] - Math.cos(this.player.rotation[1])
-            ],
+            target,
             [0, 1, 0]
         );
+    
+        if (this.renderer.settings.debug.playerPosition) {
+            console.log('Player position:', this.player.position);
+        }
+    }
+    
+    setupMouseControls() {
+        const canvas = document.getElementById('canvas');
+    
+        canvas.addEventListener('click', () => {
+            if (!document.pointerLockElement) {
+                canvas.requestPointerLock();
+            }
+        });
+    
+        document.addEventListener('pointerlockchange', () => {
+            if (document.pointerLockElement === canvas) {
+                document.body.style.cursor = 'none';
+                this.isPaused = false;
+            } else if (!document.getElementById('side-panel').classList.contains('visible')) {
+                document.body.style.cursor = 'default';
+                this.isPaused = true;
+            }
+        });
+    
+        document.addEventListener('mousemove', (event) => {
+            if (document.pointerLockElement === canvas) {
+                this.camera.rotation.y -= event.movementX / 500;
+                this.camera.rotation.x -= event.movementY / 500;
+                this.camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.camera.rotation.x));
+            }
+        });
     }
     
     render() {
@@ -568,26 +604,66 @@ class Game {
      }
     
      updateCameraRotation(deltaX, deltaY) {
-        console.log('Pre-rotation:', {
-            rotX: this.player.rotation[0],
-            rotY: this.player.rotation[1],
-            deltaX: deltaX,
-            deltaY: deltaY
-        });
+        if(this.renderer.settings.debug.playerPosition) {
+            console.log('FPS rotation update:', {
+                prePitch: this.player.rotation[0] * (180/Math.PI),
+                preYaw: this.player.rotation[1] * (180/Math.PI),
+                deltaX: deltaX * (180/Math.PI),
+                deltaY: deltaY * (180/Math.PI)
+            });
+        }
     
-        this.player.rotation[1] += deltaX;
-        // Modifichiamo i limiti verticali
-        const maxVerticalRot = Math.PI / 2.5; // Limita un po' meno
-        this.player.rotation[0] = Math.max(-maxVerticalRot, Math.min(maxVerticalRot, this.player.rotation[0] + deltaY));
+        // Yaw (rotazione orizzontale) - può ruotare liberamente 360°
+        this.player.rotation[1] = (this.player.rotation[1] + deltaX) % (Math.PI * 2);
+        if (this.player.rotation[1] < 0) {
+            this.player.rotation[1] += Math.PI * 2;
+        }
     
-        console.log('Post-rotation:', {
-            rotX: this.player.rotation[0],
-            rotY: this.player.rotation[1]
-        });
+        // Pitch (rotazione verticale) - limitata a ±85 gradi
+        const MAX_PITCH = (85 * Math.PI) / 180; // 85 gradi in radianti
+        this.player.rotation[0] = Math.max(-MAX_PITCH, 
+                                         Math.min(MAX_PITCH, 
+                                                this.player.rotation[0] - deltaY));
+    
+        if(this.renderer.settings.debug.playerPosition) {
+            console.log('Post FPS rotation:', {
+                postPitch: this.player.rotation[0] * (180/Math.PI),
+                postYaw: this.player.rotation[1] * (180/Math.PI)
+            });
+        }
     }
     
     movePlayer(direction, speed) {
-        this.physics.movePlayer(direction, this.player, speed);
+        // Calcola la direzione di movimento sul piano XZ
+        const yaw = this.player.rotation[1];
+        let moveX = 0;
+        let moveZ = 0;
+    
+        switch(direction) {
+            case 'forward':
+                moveX = Math.sin(yaw) * speed;
+                moveZ = -Math.cos(yaw) * speed;
+                break;
+            case 'backward':
+                moveX = -Math.sin(yaw) * speed;
+                moveZ = Math.cos(yaw) * speed;
+                break;
+            case 'left':
+                moveX = -Math.cos(yaw) * speed;
+                moveZ = -Math.sin(yaw) * speed;
+                break;
+            case 'right':
+                moveX = Math.cos(yaw) * speed;
+                moveZ = Math.sin(yaw) * speed;
+                break;
+        }
+    
+        // Aggiorna solo le coordinate X e Z, mantenendo Y costante
+        this.player.position[0] += moveX;
+        this.player.position[2] += moveZ;
+    
+        // La Y viene gestita solo per salti/cadute dalla fisica
+        this.physics.addImpulse([moveX, 0, moveZ], 1);
     }
     
     playerJump() {

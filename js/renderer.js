@@ -2,7 +2,10 @@
 class Renderer {
     constructor(canvas) {
         this.canvas = canvas;
-        this.scene = null; 
+        this.scene = {  // Inizializzato subito invece che null
+            lights: new Map(),
+            objects: new Map()
+        }; 
         this.gl = canvas.getContext('webgl2');
         if (!this.gl) {
             throw new Error('WebGL 2 not available');
@@ -20,11 +23,12 @@ class Renderer {
                 meshLoading: true,
                 renderingSteps: true,
                 sceneObjects: true,
-                playerPosition: true
+                playerPosition: true,
+                lightingStatus: true
             }
         };
         
-        // Camera setup
+        // Camera setup (invariato)
         this.camera = {
             position: [0, 4, 10],
             target: [0, 0, 0],
@@ -35,12 +39,24 @@ class Renderer {
             rotation: [0, 0, 0]
         };
         
-        // Light setup
+        // Light setup modificato
         this.light = {
             position: [0, 8, 0],
             color: [1, 0.95, 0.8],
-            intensity: 300,       
-            enabled: true
+            intensity: 500,       // Aumentato
+            enabled: true,
+            attenuation: {        // Aggiunta configurazione attenuazione
+                constant: 1.0,
+                linear: 0.014,    // Ridotto per maggiore portata
+                quadratic: 0.0007 // Ridotto per maggiore portata
+            }
+        };
+        
+        // Aggiunta luce ambientale
+        this.ambientLight = {
+            color: [0.3, 0.3, 0.35], // Colore ambiente bluastro
+            intensity: 0.5,          // Aumentata per vedere meglio gli oggetti
+            strength: 0.5            // Forza ambientale complessiva
         };
         
         this.setupGL();
@@ -49,6 +65,15 @@ class Renderer {
         this.setupGUI();
         
         window.addEventListener('resize', this.onWindowResize.bind(this));
+        
+        // Log della configurazione iniziale
+        if (this.settings.debug.renderingSteps) {
+            console.log('Renderer initialized with:', {
+                light: this.light,
+                camera: this.camera,
+                settings: this.settings
+            });
+        }
     }
     
     async initialize() {
@@ -74,59 +99,98 @@ class Renderer {
             throw error;
         }
     }
-    
+
     setupLighting() {
-        console.log('Initializing lighting setup...');
-    
-        if (!this.scene) {
-            this.scene = {
-                lights: new Map(),
-                objects: new Map()
-            };
+        if (this.settings.debug.renderingSteps) {
+            console.log('Setting up lighting with debug...');
         }
-    
-        if (!this.scene.lights || !(this.scene.lights instanceof Map)) {
-            this.scene.lights = new Map();
+
+        // Setup dei parametri di rendering
+        const gl = this.gl;
+        gl.enable(gl.DEPTH_TEST);
+        gl.enable(gl.CULL_FACE);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+        if (this.settings.debug.renderingSteps) {
+            console.log('Light settings:', {
+                main: this.light,
+                ambient: this.ambientLight
+            });
         }
-        
-        // Luce principale posizionata al centro della stanza, leggermente spostata
+
+        return true;
+    }
+    
+    setupRoomLighting(gl, program) {
+        // Luce principale (lampadario)
         const mainLight = {
-            type: 'point',
-            // x: leggero offset, y: 80% dell'altezza, z: leggero offset
-            position: [2, this.ROOM_HEIGHT * 0.8, -2],  
-            color: [0.9, 0.8, 0.7],                    // Luce più giallastra/inquietante
-            intensity: 15.0,                           // Intensità aumentata significativamente
+            position: [0, 9, 0], // Posizione più alta per illuminare meglio
+            color: [1.0, 0.95, 0.8], // Colore caldo
+            intensity: 200.0, // Intensità aumentata
             enabled: true
         };
-        
-        // Luce ambientale molto debole per atmosfera horror
+    
+        // Luce ambientale per evitare zone completamente nere
         const ambientLight = {
-            type: 'ambient',
-            color: [0.1, 0.1, 0.15],                  // Blu scuro per atmosfera notturna
-            intensity: 0.3                            // Bassa per mantenere le ombre profonde
+            color: [0.3, 0.3, 0.35], // Blu scuro per atmosfera notturna
+            intensity: 0.5 // Aumentata per vedere meglio gli oggetti
         };
     
-        console.log('Setting up horror lights:', {
-            mainLight: mainLight,
-            ambientLight: ambientLight,
-            roomDimensions: {
-                width: this.ROOM_WIDTH,
-                height: this.ROOM_HEIGHT,
-                depth: this.ROOM_DEPTH
-            }
-        });
+        // Setup delle uniform per la luce principale
+        const lightPosLoc = gl.getUniformLocation(program, 'uLightPosition');
+        const lightColorLoc = gl.getUniformLocation(program, 'uLightColor');
+        const lightIntensityLoc = gl.getUniformLocation(program, 'uLightIntensity');
         
-        this.scene.lights.set('mainLight', mainLight);
-        this.scene.lights.set('ambient', ambientLight);
-        
-        this.light = {
-            position: mainLight.position,
-            color: mainLight.color,
-            intensity: mainLight.intensity,
-            enabled: mainLight.enabled
-        };
+        gl.uniform3fv(lightPosLoc, mainLight.position);
+        gl.uniform3fv(lightColorLoc, mainLight.color);
+        gl.uniform1f(lightIntensityLoc, mainLight.intensity);
     
-        console.log('Horror lighting setup completed');
+        // Setup delle uniform per la luce ambientale
+        const ambientColorLoc = gl.getUniformLocation(program, 'uAmbientColor');
+        const ambientIntensityLoc = gl.getUniformLocation(program, 'uAmbientIntensity');
+        
+        gl.uniform3fv(ambientColorLoc, ambientLight.color);
+        gl.uniform1f(ambientIntensityLoc, ambientLight.intensity);
+    
+        // Setup dei parametri di rendering
+        gl.enable(gl.DEPTH_TEST);
+        gl.enable(gl.CULL_FACE);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    
+        return { mainLight, ambientLight };
+    }
+    
+    // Funzione per aggiornare l'illuminazione
+    updateLighting(program) {
+        const gl = this.gl;
+
+        // Aggiorna uniforms luce principale
+        const lightPosLoc = gl.getUniformLocation(program, 'uLightPosition');
+        const lightColorLoc = gl.getUniformLocation(program, 'uLightColor');
+        const lightIntensityLoc = gl.getUniformLocation(program, 'uLightIntensity');
+        
+        gl.uniform3fv(lightPosLoc, this.light.position);
+        gl.uniform3fv(lightColorLoc, this.light.color);
+        gl.uniform1f(lightIntensityLoc, this.light.intensity);
+
+        // Aggiorna uniforms luce ambientale
+        const ambientColorLoc = gl.getUniformLocation(program, 'uAmbientColor');
+        const ambientIntensityLoc = gl.getUniformLocation(program, 'uAmbientIntensity');
+        const ambientStrengthLoc = gl.getUniformLocation(program, 'uAmbientStrength');
+        
+        gl.uniform3fv(ambientColorLoc, this.ambientLight.color);
+        gl.uniform1f(ambientIntensityLoc, this.ambientLight.intensity);
+        gl.uniform1f(ambientStrengthLoc, this.ambientLight.strength);
+
+        // Aggiorna parametri di attenuazione
+        const attenuationLoc = gl.getUniformLocation(program, 'uAttenuation');
+        gl.uniform3f(attenuationLoc, 
+            this.light.attenuation.constant,
+            this.light.attenuation.linear,
+            this.light.attenuation.quadratic
+        );
     }
     
     setupGL() {
@@ -386,89 +450,89 @@ class Renderer {
                 
                 setMainProgramUniforms(program) {
                     const gl = this.gl;
-                    
-                    // Aggiungi controlli di validità
-                    if(!this.camera || !this.light) {
-                        console.error('Camera or light not initialized!');
-                        return;
+            
+                    // Verifica il programma
+                    if (!program) {
+                        console.error('Invalid shader program');
+                        return false;
                     }
-                    
-                    const viewMatrix = this.getCameraViewMatrix();
-                    const projectionMatrix = this.getCameraProjectionMatrix();
-                    const lightSpaceMatrix = this.getLightSpaceMatrix();
-                    
-                    // Verifica le matrici prima dell'uso
-                    const validateMatrix = (mat, name) => {
-                        if(!mat || mat.length !== 16) {
-                            console.error(`Invalid ${name} matrix:`, mat);
-                            return m4.identity();
+            
+                    try {
+                        if (this.settings.debug.renderingSteps) {
+                            console.log('Setting up lighting uniforms:', {
+                                lights: Array.from(this.scene.lights.entries()),
+                                mainLight: this.light,
+                                ambient: this.ambientLight,
+                                shadows: this.settings.shadows,
+                                reflections: this.settings.reflections
+                            });
                         }
-                        return mat;
-                    };
-                
-                    const modelMatrix = m4.identity(); // Crea una nuova model matrix identità
-                    gl.uniformMatrix4fv(
-                        gl.getUniformLocation(program, 'uModelMatrix'),
-                        false,
-                        validateMatrix(modelMatrix, 'model')
-                    );
-                    
-                    gl.uniformMatrix4fv(
-                        gl.getUniformLocation(program, 'uViewMatrix'),
-                        false,
-                        validateMatrix(viewMatrix, 'view')
-                    );
-                    
-                    gl.uniformMatrix4fv(
-                        gl.getUniformLocation(program, 'uProjectionMatrix'),
-                        false,
-                        validateMatrix(projectionMatrix, 'projection')
-                    );
-                    
-                    gl.uniform3fv(
-                        gl.getUniformLocation(program, 'uLightPosition'),
-                        this.light.position
-                    );
-                    
-                    gl.uniform3fv(
-                        gl.getUniformLocation(program, 'uLightColor'),
-                        this.light.color
-                    );
-                    
-                    gl.uniform1f(
-                        gl.getUniformLocation(program, 'uLightIntensity'),
-                        this.light.intensity
-                    );
-                    
-                    gl.uniform1i(
-                        gl.getUniformLocation(program, 'uShadowsEnabled'),
-                        this.settings.shadows
-                    );
-                    
-                    gl.uniform1i(
-                        gl.getUniformLocation(program, 'uReflectionsEnabled'),
-                        this.settings.reflections
-                    );
-                    
-                    gl.uniform1f(
-                        gl.getUniformLocation(program, 'uAmbientStrength'),
-                        0.2  // Aumenta l'ambient strength
-                    );
-                    
-                    gl.uniform1f(
-                        gl.getUniformLocation(program, 'uSpecularStrength'),
-                        0.5  // Mantenuto come nel fragment shader
-                    );
-                    
-                    gl.uniform1f(
-                        gl.getUniformLocation(program, 'uShininess'),
-                        32.0  // Coerente con lo shader
-                    );
-                    
-                    gl.uniform3fv(
-                        gl.getUniformLocation(program, 'uViewPosition'),
-                        this.camera.position
-                    );
+            
+                        // Ottieni tutte le location delle uniform
+                        const locations = {
+                            // Matrici
+                            modelMatrix: gl.getUniformLocation(program, 'uModelMatrix'),
+                            viewMatrix: gl.getUniformLocation(program, 'uViewMatrix'),
+                            projectionMatrix: gl.getUniformLocation(program, 'uProjectionMatrix'),
+                            normalMatrix: gl.getUniformLocation(program, 'uNormalMatrix'),
+            
+                            // Luce principale
+                            lightPosition: gl.getUniformLocation(program, 'uLightPosition'),
+                            lightColor: gl.getUniformLocation(program, 'uLightColor'),
+                            lightIntensity: gl.getUniformLocation(program, 'uLightIntensity'),
+                            
+                            // Attenuazione
+                            attenuation: gl.getUniformLocation(program, 'uAttenuation'),
+                            
+                            // Luce ambientale
+                            ambientColor: gl.getUniformLocation(program, 'uAmbientColor'),
+                            ambientIntensity: gl.getUniformLocation(program, 'uAmbientIntensity'),
+                            ambientStrength: gl.getUniformLocation(program, 'uAmbientStrength'),
+                            
+                            // Parametri di rendering
+                            viewPosition: gl.getUniformLocation(program, 'uViewPosition'),
+                            specularStrength: gl.getUniformLocation(program, 'uSpecularStrength'),
+                            shininess: gl.getUniformLocation(program, 'uShininess')
+                        };
+            
+                        // Imposta le matrici
+                        const modelMatrix = m4.identity();
+                        const viewMatrix = this.getCameraViewMatrix();
+                        const projectionMatrix = this.getCameraProjectionMatrix();
+                        const normalMatrix = m4.transpose(m4.inverse(modelMatrix));
+            
+                        gl.uniformMatrix4fv(locations.modelMatrix, false, modelMatrix);
+                        gl.uniformMatrix4fv(locations.viewMatrix, false, viewMatrix);
+                        gl.uniformMatrix4fv(locations.projectionMatrix, false, projectionMatrix);
+                        gl.uniformMatrix4fv(locations.normalMatrix, false, normalMatrix);
+            
+                        // Imposta i parametri della luce principale
+                        gl.uniform3fv(locations.lightPosition, new Float32Array(this.light.position));
+                        gl.uniform3fv(locations.lightColor, new Float32Array(this.light.color));
+                        gl.uniform1f(locations.lightIntensity, this.light.intensity);
+            
+                        // Imposta l'attenuazione della luce
+                        gl.uniform3f(locations.attenuation,
+                            this.light.attenuation.constant,
+                            this.light.attenuation.linear,
+                            this.light.attenuation.quadratic
+                        );
+            
+                        // Imposta i parametri della luce ambientale
+                        gl.uniform3fv(locations.ambientColor, new Float32Array(this.ambientLight.color));
+                        gl.uniform1f(locations.ambientIntensity, this.ambientLight.intensity);
+                        gl.uniform1f(locations.ambientStrength, this.ambientLight.strength);
+            
+                        // Imposta altri parametri di rendering
+                        gl.uniform3fv(locations.viewPosition, new Float32Array(this.camera.position));
+                        gl.uniform1f(locations.specularStrength, 1.0);
+                        gl.uniform1f(locations.shininess, 32.0);
+            
+                        return true;
+                    } catch (error) {
+                        console.error('Error setting uniforms:', error);
+                        return false;
+                    }
                 }
                 
                 renderObject(object, program) {
