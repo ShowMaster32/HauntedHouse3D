@@ -1,4 +1,6 @@
-// shader-loader.js
+// Gestione del caricamento degli shader da file
+// Questo script deve essere integrato o sostituito nella classe ShaderLoader
+
 class ShaderLoader {
     constructor(gl) {
         this.gl = gl;
@@ -7,10 +9,10 @@ class ShaderLoader {
     async loadShaders() {
         try {
             // Carica gli shader da file
-            const vertexShader = await this.loadShaderFile('vertex-shader.glsl');
-            const fragmentShader = await this.loadShaderFile('fragment-shader.glsl');
-            const shadowVertexShader = await this.loadShaderFile('shadow-vertex-shader.glsl');
-            const shadowFragmentShader = await this.loadShaderFile('shadow-fragment-shader.glsl');
+            const vertexShader = await this.loadShaderFile('shaders/vertex-shader.glsl');
+            const fragmentShader = await this.loadShaderFile('shaders/fragment-shader.glsl');
+            const shadowVertexShader = await this.loadShaderFile('shaders/shadow-vertex-shader.glsl');
+            const shadowFragmentShader = await this.loadShaderFile('shaders/shadow-fragment-shader.glsl');
 
             // Crea i programmi shader
             const mainProgram = this.createProgram(vertexShader, fragmentShader);

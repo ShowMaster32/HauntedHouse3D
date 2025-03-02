@@ -1,75 +1,105 @@
-# HauntedHouse3D
+# Progetto HauntedHouse - Computer Graphics A.A. 2023/2024
 
 ## Descrizione
-
-**HauntedHouse3D** è un'applicazione 3D interattiva che simula una casa infestata. L'utente può esplorare la casa, interagire con vari oggetti e vivere un'esperienza immersiva grazie all'uso di WebGL per la grafica 3D. Il progetto è stato sviluppato come parte di un corso di Computer Graphics all'Università di Bologna.
-
-### Caratteristiche
-
-- **Visualizzazione 3D in proiezione prospettica**: La scena viene resa con una telecamera prospettica, fornendo un'esperienza realistica.
-- **Illuminazione dinamica e ombre**: L'applicazione utilizza fonti di luce dinamiche e calcoli delle ombre per creare un'atmosfera inquietante.
-- **Texture mapping avanzato**: Gli oggetti della scena sono dotati di texture realistiche, migliorando la qualità visiva.
-- **Interazione utente**: L'utente può esplorare l'ambiente 3D con la tastiera (tasti WASD per muoversi) e il mouse per controllare la visuale. È possibile accendere e spegnere luci e interagire con oggetti specifici.
-- **Pannello di controllo interattivo**: Attraverso il tasto `P`, è possibile aprire un pannello di controllo che consente di attivare o disattivare ombre, riflessioni e il contatore di FPS.
-- **Supporto per dispositivi mobili**: Il progetto è ottimizzato per l'uso su dispositivi mobili, con il supporto per gesture touch come swipe e pinch-to-zoom.
-- **Effetti audio**: Suoni inquietanti vengono riprodotti casualmente durante l'esplorazione per intensificare l'atmosfera.
+HauntedHouse è un'applicazione 3D interattiva che simula l'esplorazione di una casa infestata. L'utente può muoversi nello spazio e interagire con diversi elementi dell'ambiente come interruttori della luce e oggetti inquietanti.
 
 ## Requisiti
+- Browser con supporto WebGL 2
+- Consigliato: Google Chrome (ultima versione)
+- Supporto per Web Audio API
+- Supporto per Pointer Lock API
 
-- **Browser moderno**: Il progetto è stato testato su Chrome, ma può funzionare anche su altri browser che supportano WebGL.
-- **Node.js e npm**: Per eseguire il server locale tramite il plugin *Live Server* di Visual Studio Code.
+## Struttura del Progetto
+```
+project/
+│
+├── index.html              # File HTML principale
+├── main2.css               # File CSS per lo stile
+│
+├── shaders/                # Cartella per gli shader GLSL
+│   ├── vertex-shader.glsl
+│   ├── fragment-shader.glsl
+│   ├── shadow-vertex-shader.glsl
+│   └── shadow-fragment-shader.glsl
+│
+├── js/                     # Cartella per i file JavaScript
+│   ├── shader-loader.js    # Caricamento degli shader
+│   ├── renderer.js         # Rendering WebGL
+│   ├── physics.js          # Sistema fisico
+│   ├── audio.js            # Gestione audio
+│   ├── input.js            # Gestione input utente
+│   ├── game.js             # Logica di gioco
+│   ├── main.js             # Inizializzazione
+│   ├── constants.js        # Costanti di gioco
+│   ├── math-utils.js       # Utility matematiche
+│   └── shader-test.js      # Test degli shader
+│
+├── lib/                    # Librerie consentite
+│   ├── webgl-utils.js
+│   ├── m4.js
+│   ├── glm_utils.js
+│   ├── mesh_utils.js
+│   ├── dat.gui.js
+│   └── jquery-3.6.0.js
+│
+├── models/                 # Modelli 3D (OBJ e MTL)
+├── textures/               # Texture
+├── sounds/                 # File audio
+└── images/                 # Immagini UI
+```
 
-## Installazione
+## Istruzioni per l'esecuzione
+1. Assicurarsi che tutti i file siano nella struttura corretta
+2. Aprire il file `index.html` con un server web locale
+   - Consigliato: utilizzare Live Server di Visual Studio Code
+   - In alternativa: Python SimpleHTTPServer (`python -m http.server`)
+3. Fare clic sul pulsante "START" per iniziare l'esplorazione
 
-1. **Clone del repository**:
-    ```bash
-    git clone https://github.com/tuo-utente/HauntedHouse3D.git
-    cd HauntedHouse3D
-    ```
+## Comandi
+- **W, A, S, D**: Movimento del personaggio
+- **Mouse**: Rotazione della visuale
+- **F**: Accensione/spegnimento luci
+- **P**: Apri/chiudi pannello di controllo
+- **Spazio**: Salto (se implementato)
 
-2. **Avvio del server locale**:
-   - Apri il progetto in *Visual Studio Code*.
-   - Installa il plugin **Live Server**.
-   - Avvia il server locale tramite il comando "Go Live" disponibile nel plugin.
+## Funzionalità Principali
+1. **Rendering 3D**: Proiezione prospettica con WebGL
+2. **Illuminazione**: Sistema di illuminazione con ombre
+3. **Texture**: Mapping delle texture su oggetti 3D
+4. **Interazione**: Controlli utente e interazione con l'ambiente
+5. **Mobile**: Supporto per dispositivi touch
+6. **Audio**: Sistema audio spaziale per l'atmosfera
+7. **Rendering Avanzato**: Tecniche di ombre, riflessi e altro (attivabili dal pannello)
 
-## Utilizzo
+## Pannello di Controllo
+Premere **P** per accedere al pannello di controllo che permette di:
+- Attivare/disattivare le ombre
+- Attivare/disattivare i riflessi
+- Attivare/disattivare il contatore FPS
+- Attivare/disattivare il rendering avanzato
 
-- **Movimento**: Utilizza i tasti `W`, `A`, `S`, `D` per muovere il personaggio.
-- **Interazione**: Premi `F` per accendere e spegnere le luci quando sei vicino agli interruttori.
-- **Pannello di controllo**: Premi `P` per aprire il pannello di controllo e attivare/disattivare ombre, riflessioni e il contatore di FPS.
-- **Esperienza audio**: Alcuni oggetti interattivi nella casa, come una bambola o un orologio a pendolo, emettono suoni inquietanti quando ti avvicini.
+## Caratteristiche Tecniche
+- Utilizzo di WebGL nativo per il rendering 3D
+- Shader GLSL personalizzati per effetti visivi
+- Sistema di caricamento dinamico di mesh OBJ
+- Gestione completa di texture e materiali
+- Sistema fisico di collisione per la navigazione
+- Gestione della luce con effetti di sfarfallio
 
-## Struttura del progetto
+## Dispositivi Mobili
+L'applicazione supporta dispositivi mobili con:
+- Controlli touch per movimento e rotazione
+- Rilevamento del pinch per lo zoom
+- Interfaccia utente adattiva
 
-- **`index.html`**: Il file principale HTML che gestisce la struttura della pagina e l'integrazione con WebGL.
-- **`main.css`**: Contiene tutti gli stili per rendere l'interfaccia coerente e responsiva.
-- **`/models`**: Include i modelli 3D (in formato OBJ e MTL) utilizzati nella scena.
-- **`/textures`**: Include tutte le texture mappate sugli oggetti 3D.
-- **`/sounds`**: Contiene i file audio utilizzati per l'atmosfera.
+## Tecniche Avanzate Implementate
+- Shadow mapping per la proiezione di ombre dinamiche
+- Effetti di attenuazione della luce
+- Gestione della trasparenza
+- Effetti di riflesso per superfici lucide
+- Caricamento asincrono delle risorse
 
-## Tecnologie utilizzate
-
-- **WebGL**: Utilizzato per il rendering della grafica 3D direttamente nel browser.
-- **Three.js**: Libreria utilizzata per semplificare l'uso di WebGL e gestire le scene 3D.
-- **JavaScript**: Linguaggio di scripting principale per gestire logiche di interazione, animazione e rendering.
-- **HTML5/CSS3**: Struttura della pagina e stili responsivi.
-- **GLSL**: Utilizzato per la gestione avanzata del rendering come ombre e trasparenze.
-
-## Funzionalità aggiuntive (opzionali)
-
-- **Rendering avanzato**: È possibile attivare il rendering avanzato, che include effetti di riflessione e ombre più realistiche, tramite il pannello di controllo.
-- **Effetti speciali**: L'orologio a pendolo e la bambola della casa sono oggetti interattivi che attivano suoni particolari in determinate condizioni (ad esempio, quando la luce è spenta).
-
-## Problemi conosciuti
-
-- Alcuni modelli potrebbero non caricare correttamente tutte le texture se i percorsi non sono configurati correttamente nel file `.mtl`.
-- Le performance possono variare a seconda del dispositivo mobile o browser in uso.
-
-## Conclusioni
-
-**HauntedHouse3D** è stato sviluppato come progetto individuale per il corso di *Computer Graphics* e soddisfa tutti i requisiti proposti dal docente. L'obiettivo principale era creare un'applicazione interattiva in 3D che sfruttasse WebGL per gestire la grafica e l'interazione in tempo reale.
-
-## Crediti
-
-- **Modelli 3D**: Creati tramite Blender e risorse esterne gratuite.
-- **Suoni e texture**: Prelevati da fonti royalty-free o creati appositamente per il progetto.
+## Note di Implementazione
+- L'applicazione è stata sviluppata utilizzando esclusivamente le librerie consentite dal docente
+- Non sono state utilizzate librerie di alto livello come Three.js o Babylon.js
+- Tutte le funzionalità sono implementate usando WebGL nativo e librerie di utilità permesse

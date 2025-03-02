@@ -475,13 +475,13 @@ class Renderer {
                 
                 setMainProgramUniforms(program) {
                     const gl = this.gl;
-            
+                
                     // Verifica il programma
                     if (!program) {
                         console.error('Invalid shader program');
                         return false;
                     }
-            
+                
                     try {
                         if (this.settings.debug.renderingSteps) {
                             console.log('Setting up lighting uniforms:', {
@@ -492,15 +492,16 @@ class Renderer {
                                 reflections: this.settings.reflections
                             });
                         }
-            
-                        // Ottieni tutte le location delle uniform
+                
+                        // Ottieni tutte le location delle uniform per gli shader esistenti
                         const locations = {
                             // Matrici
                             modelMatrix: gl.getUniformLocation(program, 'uModelMatrix'),
                             viewMatrix: gl.getUniformLocation(program, 'uViewMatrix'),
                             projectionMatrix: gl.getUniformLocation(program, 'uProjectionMatrix'),
                             normalMatrix: gl.getUniformLocation(program, 'uNormalMatrix'),
-            
+                            lightSpaceMatrix: gl.getUniformLocation(program, 'uLightSpaceMatrix'),
+                
                             // Luce principale
                             lightPosition: gl.getUniformLocation(program, 'uLightPosition'),
                             lightColor: gl.getUniformLocation(program, 'uLightColor'),
@@ -517,42 +518,62 @@ class Renderer {
                             // Parametri di rendering
                             viewPosition: gl.getUniformLocation(program, 'uViewPosition'),
                             specularStrength: gl.getUniformLocation(program, 'uSpecularStrength'),
-                            shininess: gl.getUniformLocation(program, 'uShininess')
+                            shininess: gl.getUniformLocation(program, 'uShininess'),
+                            
+                            // Flag per tecniche avanzate
+                            advancedRendering: gl.getUniformLocation(program, 'uAdvancedRendering'),
+                            shadowsEnabled: gl.getUniformLocation(program, 'uShadowsEnabled'),
+                            reflectionsEnabled: gl.getUniformLocation(program, 'uReflectionsEnabled')
                         };
-            
+                
                         // Imposta le matrici
                         const modelMatrix = m4.identity();
                         const viewMatrix = this.getCameraViewMatrix();
                         const projectionMatrix = this.getCameraProjectionMatrix();
                         const normalMatrix = m4.transpose(m4.inverse(modelMatrix));
-            
+                        const lightSpaceMatrix = this.getLightSpaceMatrix();
+                
                         gl.uniformMatrix4fv(locations.modelMatrix, false, modelMatrix);
                         gl.uniformMatrix4fv(locations.viewMatrix, false, viewMatrix);
                         gl.uniformMatrix4fv(locations.projectionMatrix, false, projectionMatrix);
                         gl.uniformMatrix4fv(locations.normalMatrix, false, normalMatrix);
-            
+                        if (locations.lightSpaceMatrix) {
+                            gl.uniformMatrix4fv(locations.lightSpaceMatrix, false, lightSpaceMatrix);
+                        }
+                
                         // Imposta i parametri della luce principale
                         gl.uniform3fv(locations.lightPosition, new Float32Array(this.light.position));
                         gl.uniform3fv(locations.lightColor, new Float32Array(this.light.color));
                         gl.uniform1f(locations.lightIntensity, this.light.intensity);
-            
+                
                         // Imposta l'attenuazione della luce
                         gl.uniform3f(locations.attenuation,
                             this.light.attenuation.constant,
                             this.light.attenuation.linear,
                             this.light.attenuation.quadratic
                         );
-            
+                
                         // Imposta i parametri della luce ambientale
                         gl.uniform3fv(locations.ambientColor, new Float32Array(this.ambientLight.color));
                         gl.uniform1f(locations.ambientIntensity, this.ambientLight.intensity);
                         gl.uniform1f(locations.ambientStrength, this.ambientLight.strength);
-            
+                
                         // Imposta altri parametri di rendering
                         gl.uniform3fv(locations.viewPosition, new Float32Array(this.camera.position));
                         gl.uniform1f(locations.specularStrength, 1.0);
                         gl.uniform1f(locations.shininess, 32.0);
-            
+                        
+                        // Imposta i flag per il rendering avanzato (se presenti negli shader)
+                        if (locations.advancedRendering) {
+                            gl.uniform1i(locations.advancedRendering, this.settings.advancedRendering ? 1 : 0);
+                        }
+                        if (locations.shadowsEnabled) {
+                            gl.uniform1i(locations.shadowsEnabled, this.settings.shadows ? 1 : 0);
+                        }
+                        if (locations.reflectionsEnabled) {
+                            gl.uniform1i(locations.reflectionsEnabled, this.settings.reflections ? 1 : 0);
+                        }
+                
                         return true;
                     } catch (error) {
                         console.error('Error setting uniforms:', error);
@@ -690,7 +711,7 @@ class Renderer {
                         return;
                     }
                     
-                    // Position attribute
+                    // Position attribute - verifica che corrisponda al nome nello shader (aPosition)
                     const positionLocation = gl.getAttribLocation(program, 'aPosition');
                     if (positionLocation !== -1 && mesh.vertices) {
                         gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vertices);
@@ -698,7 +719,7 @@ class Renderer {
                         gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0);
                     }
                     
-                    // Normal attribute
+                    // Normal attribute - verifica che corrisponda al nome nello shader (aNormal)
                     const normalLocation = gl.getAttribLocation(program, 'aNormal');
                     if (normalLocation !== -1 && mesh.normals) {
                         gl.bindBuffer(gl.ARRAY_BUFFER, mesh.normals);
@@ -706,7 +727,7 @@ class Renderer {
                         gl.vertexAttribPointer(normalLocation, 3, gl.FLOAT, false, 0, 0);
                     }
                     
-                    // Texture coordinate attribute
+                    // Texture coordinate attribute - verifica che corrisponda al nome nello shader (aTextureCoord)
                     const texCoordLocation = gl.getAttribLocation(program, 'aTextureCoord');
                     if (texCoordLocation !== -1 && mesh.texCoords) {
                         gl.bindBuffer(gl.ARRAY_BUFFER, mesh.texCoords);

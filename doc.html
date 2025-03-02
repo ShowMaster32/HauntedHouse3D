@@ -1,124 +1,393 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Documentazione Progetto: Haunted House - CG A.A. 2023/2024</title>
-    <link href="https://fonts.googleapis.com/css2?family=Creepster&display=swap" rel="stylesheet">
+    <title>HauntedHouse - Documentazione Progetto</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            background-color: #f7f7f7;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
             color: #333;
-            margin: 0;
-            padding: 0;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
         }
         header {
-            background-color: #222;
+            background-color: #800000;
             color: white;
             padding: 20px;
             text-align: center;
-            font-size: 2rem;
-            font-family: 'Creepster', cursive;
+            border-radius: 10px;
+            margin-bottom: 20px;
         }
-        section {
-            margin: 20px;
+        h1, h2, h3 {
+            color: #800000;
+        }
+        header h1 {
+            color: white;
         }
         h2 {
-            font-size: 1.5rem;
-            color: #ff3333;
+            border-bottom: 2px solid #800000;
+            padding-bottom: 10px;
+            margin-top: 30px;
         }
-        p {
-            line-height: 1.6;
+        h3 {
+            margin-top: 20px;
         }
-        ul {
-            margin-left: 20px;
+        code {
+            background-color: #f0f0f0;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-family: Consolas, Monaco, 'Andale Mono', monospace;
+            font-size: 0.9em;
         }
-        .code-block {
-            background-color: #eaeaea;
-            padding: 10px;
-            border-left: 5px solid #ccc;
-            font-family: monospace;
-            font-size: 0.9rem;
-            white-space: pre-wrap;
+        pre {
+            background-color: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: Consolas, Monaco, 'Andale Mono', monospace;
+        }
+        img {
+            max-width: 100%;
+            display: block;
+            margin: 20px auto;
+            border-radius: 5px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+        }
+        .note {
+            background-color: #ffffd9;
+            border-left: 4px solid #e7c000;
+            padding: 10px 15px;
+            margin: 20px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background-color: #800000;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        .screenshots {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+            margin-top: 20px;
+        }
+        .screenshot {
+            width: 45%;
+            margin-bottom: 20px;
+        }
+        .screenshot img {
+            width: 100%;
+        }
+        .screenshot p {
+            text-align: center;
+            margin-top: 5px;
+            font-style: italic;
         }
     </style>
 </head>
 <body>
     <header>
-        Haunted House - Progetto di Computer Graphics A.A. 2023/2024
+        <h1>HauntedHouse</h1>
+        <p>Progetto per il corso di Computer Graphics A.A. 2023/2024</p>
     </header>
 
-    <section>
-        <h2>1. Descrizione Generale</h2>
+    <section id="descrizione">
+        <h2>Descrizione del Progetto</h2>
         <p>
-            Il progetto <strong>Haunted House</strong> è una WebApp 3D interattiva sviluppata in HTML, CSS e JavaScript, con l'uso della libreria WebGL e Three.js.
-            L'obiettivo del progetto è creare un ambiente spaventoso e coinvolgente, rappresentando una casa infestata da oggetti poligonali caricati da file esterni.
-            L'utente può interagire con l'ambiente tramite tastiera e mouse, tramite smartphone e comandi "touche", attivare effetti di luce, e visualizzare vari oggetti interattivi
-            come bambole possedute (attenzione a non spegnere la luce!), teschi, carrozzine e un orologio stregato.
+            HauntedHouse è un'applicazione 3D interattiva che simula l'esplorazione di una casa infestata. L'applicazione permette all'utente di muoversi all'interno di un ambiente 3D inquietante, interagire con diversi elementi della scena e sperimentare effetti di illuminazione realistici.
+        </p>
+        <p>
+            L'obiettivo principale è creare un'esperienza immersiva e atmosferica, utilizzando tecniche di computer graphics come illuminazione dinamica, ombre, texture mapping e interazioni con gli oggetti.
         </p>
     </section>
 
-    <section>
-        <h2>2. Scelte Progettuali</h2>
+    <section id="utilizzazione">
+        <h2>Utilizzazione dell'Applicazione</h2>
         <p>
-            Le scelte progettuali hanno tenuto conto dei requisiti richiesti dal progetto, utilizzando Three.js per il rendering 3D e il caricamento di modelli OBJ, FBX e MTL.
-            La scena è stata illuminata e arricchita con texture per migliorare l'aspetto visivo e rendere l'ambiente più realistico e coinvolgente.
+            All'avvio dell'applicazione, viene presentata una schermata iniziale con il pulsante "START". Cliccando su questo pulsante, si accede all'ambiente 3D della casa infestata.
+        </p>
+
+        <h3>Controlli di Base</h3>
+        <table>
+            <tr>
+                <th>Comando</th>
+                <th>Funzione</th>
+            </tr>
+            <tr>
+                <td>W</td>
+                <td>Movimento in avanti</td>
+            </tr>
+            <tr>
+                <td>S</td>
+                <td>Movimento indietro</td>
+            </tr>
+            <tr>
+                <td>A</td>
+                <td>Movimento a sinistra</td>
+            </tr>
+            <tr>
+                <td>D</td>
+                <td>Movimento a destra</td>
+            </tr>
+            <tr>
+                <td>Mouse</td>
+                <td>Rotazione della visuale</td>
+            </tr>
+            <tr>
+                <td>F</td>
+                <td>Accensione/spegnimento luci</td>
+            </tr>
+            <tr>
+                <td>P</td>
+                <td>Apertura/chiusura pannello di controllo</td>
+            </tr>
+            <tr>
+                <td>Spazio</td>
+                <td>Salto (se implementato)</td>
+            </tr>
+        </table>
+
+        <h3>Pannello di Controllo</h3>
+        <p>
+            Premendo il tasto "P" si accede al pannello di controllo laterale che permette di:
         </p>
         <ul>
-            <li>**Geometria 3D**: Visualizzazione in proiezione prospettica.</li>
-            <li>**Illuminazione**: Utilizzo di una luce emisferica e una luce puntuale per illuminare l’ambiente.</li>
-            <li>**Texture Mapping**: Applicazione di texture per i muri, il pavimento, e alcuni oggetti (bambola, orologio).</li>
-            <li>**Input Utente**: Controllo del movimento tramite W, A, S, D (o smartphone) e interazione con gli oggetti con il tasto F.</li>
-            <li>**Pannello di controllo**: Permette di abilitare/disabilitare ombre, riflessi e contatore FPS con un semplice tasto P.</li>
+            <li>Attivare/disattivare le ombre</li>
+            <li>Attivare/disattivare i riflessi</li>
+            <li>Attivare/disattivare il contatore FPS</li>
+            <li>Attivare/disattivare il rendering avanzato</li>
+        </ul>
+
+        <h3>Interazione con l'Ambiente</h3>
+        <p>
+            All'interno della casa è possibile interagire con diversi elementi:
+        </p>
+        <ul>
+            <li><strong>Interruttore della luce</strong>: Avvicinandosi all'interruttore, appare un messaggio che invita a premere "F" per accendere/spegnere la luce.</li>
+            <li><strong>Bambola inquietante</strong>: Avvicinandosi alla bambola con la luce spenta, si attivano suoni spaventosi.</li>
+        </ul>
+
+        <div class="note">
+            <p><strong>Nota</strong>: Per la migliore esperienza, si consiglia di utilizzare cuffie o altoparlanti e giocare in un ambiente scarsamente illuminato.</p>
+        </div>
+    </section>
+
+    <section id="scelte">
+        <h2>Scelte Implementative</h2>
+
+        <h3>Architettura del Software</h3>
+        <p>
+            L'applicazione è stata realizzata seguendo un'architettura a componenti, dove ogni aspetto del gioco è gestito da una classe specifica:
+        </p>
+        <ul>
+            <li><code>GameApplication</code>: Punto di ingresso principale che gestisce l'inizializzazione e gli errori</li>
+            <li><code>Game</code>: Gestisce la logica di gioco, l'aggiornamento dello stato e la comunicazione tra componenti</li>
+            <li><code>Renderer</code>: Responsabile del rendering WebGL, shader e gestione delle risorse grafiche</li>
+            <li><code>PhysicsSystem</code>: Gestisce le collisioni e la fisica dei movimenti</li>
+            <li><code>InputHandler</code>: Processa gli input da tastiera, mouse e touch</li>
+            <li><code>AudioManager</code>: Gestisce la riproduzione dei suoni e degli effetti audio</li>
+            <li><code>ShaderLoader</code>: Carica e compila gli shader GLSL</li>
+        </ul>
+
+        <h3>Illuminazione</h3>
+        <p>
+            Il sistema di illuminazione implementa:
+        </p>
+        <ul>
+            <li>Luce principale puntuale al centro della stanza</li>
+            <li>Illuminazione ambientale configurabile</li>
+            <li>Effetto di sfarfallio quando la luce viene accesa</li>
+            <li>Attenuazione della luce in base alla distanza</li>
+            <li>Calcolo delle ombre tramite shadow mapping</li>
+        </ul>
+
+        <h3>Sistema di Rendering</h3>
+        <p>
+            Il sistema di rendering implementa:
+        </p>
+        <ul>
+            <li>Rendering di mesh poligonali caricate da file OBJ</li>
+            <li>Texture mapping con supporto per trasparenza</li>
+            <li>Calcolo delle normali per l'illuminazione</li>
+            <li>Shadow mapping per la proiezione delle ombre</li>
+            <li>Tecniche di post-processing quando è attivato il rendering avanzato</li>
+        </ul>
+
+        <h3>Shader GLSL</h3>
+        <p>
+            Gli shader implementati offrono:
+        </p>
+        <ul>
+            <li>Illuminazione di Phong con supporto per luci puntuali</li>
+            <li>Calcolo delle ombre con PCF (Percentage Closer Filtering)</li>
+            <li>Gestione dell'attenuazione della luce</li>
+            <li>Correzione gamma per un rendering più realistico</li>
+        </ul>
+        <p>
+            Esempio di frammento dello shader per il calcolo delle ombre:
+        </p>
+        <pre><code>// Calcolo dell'ombra con PCF
+float shadow = 0.0;
+vec2 texelSize = 1.0 / vec2(1024.0, 1024.0);
+for(int x = -1; x <= 1; ++x) {
+    for(int y = -1; y <= 1; ++y) {
+        float pcfDepth = texture2D(uShadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
+        shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;
+    }
+}
+shadow /= 9.0;</code></pre>
+
+        <h3>Sistema Fisico</h3>
+        <p>
+            Il sistema fisico gestisce:
+        </p>
+        <ul>
+            <li>Collisioni con le pareti e gli oggetti della stanza</li>
+            <li>Movimento del giocatore con attrito e gravità</li>
+            <li>Rilevazione della prossimità agli oggetti interattivi</li>
+        </ul>
+
+        <h3>Sistema Audio</h3>
+        <p>
+            Il sistema audio gestisce:
+        </p>
+        <ul>
+            <li>Musica di sottofondo all'avvio</li>
+            <li>Effetti sonori casuali (suoni di fantasmi)</li>
+            <li>Suoni specifici in base alla prossimità con oggetti inquietanti</li>
+            <li>Audio condizionato dallo stato delle luci</li>
         </ul>
     </section>
 
-    <section>
-        <h2>3. Funzionalità Implementate</h2>
+    <section id="funzionalita-webgl">
+        <h2>Funzionalità WebGL Utilizzate</h2>
         <p>
-            Il progetto include le seguenti funzionalità principali:
+            Questo progetto sfrutta le seguenti funzionalità di WebGL:
+        </p>
+        <table>
+            <tr>
+                <th>Funzionalità</th>
+                <th>Utilizzo nel Progetto</th>
+            </tr>
+            <tr>
+                <td>Shader Programs</td>
+                <td>Implementati shader personalizzati per illuminazione, ombre e effetti</td>
+            </tr>
+            <tr>
+                <td>Vertex Buffer Objects</td>
+                <td>Utilizzati per memorizzare e rendere i dati della mesh efficacemente</td>
+            </tr>
+            <tr>
+                <td>Texture Objects</td>
+                <td>Impiegati per il texture mapping su tutti gli oggetti della scena</td>
+            </tr>
+            <tr>
+                <td>Framebuffer Objects</td>
+                <td>Utilizzati per il rendering delle shadow maps</td>
+            </tr>
+            <tr>
+                <td>Uniform Variables</td>
+                <td>Impiegate per la comunicazione di parametri agli shader</td>
+            </tr>
+            <tr>
+                <td>Matrix Operations</td>
+                <td>Utilizzate per le trasformazioni geometriche e le proiezioni</td>
+            </tr>
+            <tr>
+                <td>Per-Fragment Lighting</td>
+                <td>Implementata per un'illuminazione realistica</td>
+            </tr>
+            <tr>
+                <td>Depth Testing</td>
+                <td>Utilizzato per il rendering corretto della profondità</td>
+            </tr>
+        </table>
+    </section>
+
+    <section id="particolarita">
+        <h2>Particolarità del Progetto</h2>
+        <h3>Rendering Avanzato</h3>
+        <p>
+            Il progetto implementa diverse tecniche di rendering avanzato attivabili dal pannello di controllo:
         </p>
         <ul>
-            <li>**Movimento della Camera**: La camera può essere controllata tramite tastiera e mouse per muoversi nell'ambiente 3D.</li>
-            <li>**Interazione con l'Ambiente**: Gli utenti possono accendere e spegnere le luci della casa infestata e ascoltare suoni spaventosi che variano in base alla loro vicinanza con certi oggetti (bambola).</li>
-            <li>**Pannello di controllo**: Un pannello laterale consente di abilitare o disabilitare funzionalità avanzate come ombre, riflessi e rendering avanzato.</li>
-            <li>**Supporto Mobile**: L'app è ottimizzata per il touch screen e consente di interagire anche su dispositivi mobili con gesture touch.</li>
+            <li><strong>Shadow Mapping</strong>: Tecnica per generare ombre dinamiche in base alla posizione della luce. Implementata con PCF per ombre più morbide.</li>
+            <li><strong>Riflessioni</strong>: Simulazione di superfici riflettenti attraverso il tone mapping avanzato.</li>
+            <li><strong>Effetto Sfarfallio</strong>: Implementazione di un effetto di sfarfallio della luce quando viene accesa, aumentando l'atmosfera inquietante.</li>
+        </ul>
+
+        <h3>Ottimizzazioni</h3>
+        <p>
+            Sono state implementate diverse ottimizzazioni per garantire prestazioni fluide:
+        </p>
+        <ul>
+            <li>Gestione efficiente delle risorse grafiche con caricamento asincrono</li>
+            <li>Frustum culling per renderizzare solo gli oggetti visibili</li>
+            <li>Ottimizzazione delle shadow map con dimensione adeguata</li>
+            <li>Gestione dinamica della qualità grafica basata sulle prestazioni</li>
+        </ul>
+
+        <h3>Supporto Mobile</h3>
+        <p>
+            L'applicazione è stata progettata per funzionare anche su dispositivi mobili, con:
+        </p>
+        <ul>
+            <li>Controlli touch adattivi per il movimento e la rotazione</li>
+            <li>Pinch-to-zoom per modificare il campo visivo</li>
+            <li>Interfaccia utente responsiva</li>
+            <li>Ottimizzazione delle prestazioni per dispositivi meno potenti</li>
         </ul>
     </section>
 
-    <section>
-        <h2>4. Struttura del Progetto</h2>
+    <section id="conclusioni">
+        <h2>Conclusioni</h2>
         <p>
-            Il progetto è organizzato in due cartelle:
+            Il progetto HauntedHouse dimostra l'applicazione pratica di diverse tecniche di computer graphics studiate durante il corso. L'utilizzo di WebGL nativo ha permesso di implementare funzionalità avanzate come shadow mapping, illuminazione dinamica e texture mapping, creando un'esperienza interattiva e coinvolgente.
+        </p>
+        <p>
+            Le principali difficoltà incontrate durante lo sviluppo sono state:
         </p>
         <ul>
-            <li><strong>project</strong>: contiene tutto il codice sorgente, inclusi i file HTML, CSS, JavaScript e le risorse multimediali (immagini, modelli 3D, suoni).</li>
-            <li><strong>doc</strong>: contiene questa documentazione, descrivendo le funzionalità e le scelte progettuali.</li>
+            <li>Implementazione del sistema di collisioni accurato per la navigazione</li>
+            <li>Ottimizzazione del shadow mapping per evitare artefatti visivi</li>
+            <li>Gestione efficiente della memoria e delle risorse grafiche</li>
+            <li>Adattamento dell'esperienza utente per dispositivi mobile</li>
+        </ul>
+        <p>
+            Come sviluppi futuri, sarebbe interessante espandere il progetto con:
+        </p>
+        <ul>
+            <li>Implementazione di sistemi particellari per effetti atmosferici (polvere, nebbia)</li>
+            <li>Animazioni per gli oggetti nella scena</li>
+            <li>Miglioramento dell'intelligenza artificiale per elementi interattivi</li>
+            <li>Implementazione di physics-based rendering per materiali più realistici</li>
         </ul>
     </section>
 
-    <section>
-        <h2>5. Dettagli Tecnici</h2>
-        <p>
-            L'implementazione tecnica del progetto prevede l'utilizzo di WebGL attraverso la libreria Three.js. Di seguito alcuni aspetti tecnici implementati:
-        </p>
+    <section id="riferimenti">
+        <h2>Riferimenti</h2>
         <ul>
-            <li><strong>Caricamento modelli 3D</strong>: I modelli OBJ sono stati caricati nella scena tramite Three.js usando OBJLoader e MTLLoader.</li>
-            <li><strong>Illuminazione</strong>: Due sorgenti di luce: emisferica e puntuale, per garantire una corretta illuminazione della scena.</li>
-            <li><strong>Interazione</strong>: L'interazione con gli oggetti è gestita tramite il sistema di eventi keydown e keyup per la tastiera.</li>
-            <li><strong>Effetti Sonori</strong>: Suoni sono riprodotti in momenti casuali o in prossimità di oggetti specifici (bambola) quando la luce è spenta.</li>
-            <li><strong>Gestione del rendering avanzato</strong>: Tramite il pannello laterale, l'utente può attivare o disattivare il rendering avanzato come le ombre e le riflessioni.</li>
+            <li>Documentazione WebGL: <a href="https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API">MDN Web Docs</a></li>
+            <li>WebGL Fundamentals: <a href="https://webglfundamentals.org/">webglfundamentals.org</a></li>
+            <li>Shadow Mapping Techniques: <a href="https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping">Learn OpenGL</a></li>
+            <li>OBJ File Format: <a href="https://en.wikipedia.org/wiki/Wavefront_.obj_file">Wikipedia</a></li>
+            <li>WebGL 2 Samples: <a href="https://github.com/WebGL-Samples/WebGL2Samples">GitHub</a></li>
         </ul>
     </section>
-
-    <section>
-        <h2>6. Conclusioni</h2>
-        <p>
-            Il progetto Haunted House ha richiesto l'implementazione di una scena 3D complessa, con illuminazione, texture e modelli poligonali. L'interazione utente e la gestione delle luci e dei suoni hanno reso l'applicazione coinvolgente, riuscendo a creare un'atmosfera da casa infestata. 
-            La realizzazione del progetto ha richiesto circa 40 ore di lavoro, con particolare attenzione alla resa grafica e all'ottimizzazione per i dispositivi mobili.
-        </p>
-    </section>
-
 </body>
 </html>

@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
     <link rel="icon" type="image/x-icon" href="images/favicon.ico">
     <link href="https://fonts.googleapis.com/css2?family=Creepster&display=swap" rel="stylesheet">
-    <link type="text/css" rel="stylesheet" href="main.css">
+    <link type="text/css" rel="stylesheet" href="main2.css">
 </head>
 <body>
     <!-- Start Menu -->
@@ -33,10 +33,14 @@
         <span id="game-controls" style="margin-left: 20px;"></span>
     </div>
     
-    <!-- Pannello laterale -->
+    <!-- Pannello laterale nascosto all'inizio -->
     <div id="side-panel" class="hidden">
         <h2>Control Panel</h2>
         <div id="gui-container"></div>
+        <button id="toggleShadows">Toggle Shadows</button>
+        <button id="toggleReflections">Toggle Reflections</button>
+        <button id="toggleFPS">Toggle FPS Counter</button>
+        <button id="advancedRendering">Toggle Advanced Rendering</button>
     </div>
     
     <!-- Audio -->
@@ -46,33 +50,26 @@
     <audio id="la-la-la" src="sounds/la-la-la.mp3"></audio>
     <audio id="demon-laugh" src="sounds/demon-laugh.mp3"></audio>
     
-    <!-- Librerie necessarie -->
+    <!-- Librerie consentite dal professore -->
     <script src="lib/webgl-utils.js"></script>
     <script src="lib/m4.js"></script>
-    <script src="lib/m4.js"></script>
+    
+    <!-- Adapter per m4.js - crea gli alias necessari -->
     <script>
-        // Estendi m4 con le funzioni di trasformazione mancanti
+        // Crea un alias per m4.orthographic come m4.ortho
+        if (typeof m4 !== 'undefined' && typeof m4.orthographic === 'function' && typeof m4.ortho !== 'function') {
+            m4.ortho = m4.orthographic;
+            console.log('Successfully created alias m4.ortho for m4.orthographic');
+        }
+        
+        // Ridefinisci le funzioni di rotazione per risolvere gli errori
         if (typeof m4 !== 'undefined') {
-            m4.identity = function() {
-                return [
-                1, 0, 0, 0,
-                0, 1, 0, 0,
-                0, 0, 1, 0,
-                0, 0, 0, 1,
-                ];
-            };
-            
-            m4.translate = function(m, tx, ty, tz) {
-                m[12] = m[0] * tx + m[4] * ty + m[8] * tz + m[12];
-                m[13] = m[1] * tx + m[5] * ty + m[9] * tz + m[13];
-                m[14] = m[2] * tx + m[6] * ty + m[10] * tz + m[14];
-                m[15] = m[3] * tx + m[7] * ty + m[11] * tz + m[15];
-                return m;
-            };
-            
+            // Reimplementa le funzioni di rotazione
             m4.rotateX = function(m, angleInRadians) {
+                // Questa è l'implementazione che garantisce la compatibilità
                 const c = Math.cos(angleInRadians);
                 const s = Math.sin(angleInRadians);
+                
                 const m10 = m[4];
                 const m11 = m[5];
                 const m12 = m[6];
@@ -82,21 +79,26 @@
                 const m22 = m[10];
                 const m23 = m[11];
                 
-                m[4] = m10 * c + m20 * s;
-                m[5] = m11 * c + m21 * s;
-                m[6] = m12 * c + m22 * s;
-                m[7] = m13 * c + m23 * s;
-                m[8] = m10 * -s + m20 * c;
-                m[9] = m11 * -s + m21 * c;
-                m[10] = m12 * -s + m22 * c;
-                m[11] = m13 * -s + m23 * c;
+                // Risultato
+                const result = Array.isArray(m) ? [...m] : new Float32Array(m);
                 
-                return m;
+                // Aggiorna elementi che cambiano con la rotazione
+                result[4] = c * m10 + s * m20;
+                result[5] = c * m11 + s * m21;
+                result[6] = c * m12 + s * m22;
+                result[7] = c * m13 + s * m23;
+                result[8] = c * m20 - s * m10;
+                result[9] = c * m21 - s * m11;
+                result[10] = c * m22 - s * m12;
+                result[11] = c * m23 - s * m13;
+                
+                return result;
             };
             
             m4.rotateY = function(m, angleInRadians) {
                 const c = Math.cos(angleInRadians);
                 const s = Math.sin(angleInRadians);
+                
                 const m00 = m[0];
                 const m01 = m[1];
                 const m02 = m[2];
@@ -106,21 +108,26 @@
                 const m22 = m[10];
                 const m23 = m[11];
                 
-                m[0] = m00 * c - m20 * s;
-                m[1] = m01 * c - m21 * s;
-                m[2] = m02 * c - m22 * s;
-                m[3] = m03 * c - m23 * s;
-                m[8] = m00 * s + m20 * c;
-                m[9] = m01 * s + m21 * c;
-                m[10] = m02 * s + m22 * c;
-                m[11] = m03 * s + m23 * c;
+                // Risultato
+                const result = Array.isArray(m) ? [...m] : new Float32Array(m);
                 
-                return m;
+                // Aggiorna elementi che cambiano con la rotazione
+                result[0] = c * m00 - s * m20;
+                result[1] = c * m01 - s * m21;
+                result[2] = c * m02 - s * m22;
+                result[3] = c * m03 - s * m23;
+                result[8] = c * m20 + s * m00;
+                result[9] = c * m21 + s * m01;
+                result[10] = c * m22 + s * m02;
+                result[11] = c * m23 + s * m03;
+                
+                return result;
             };
             
             m4.rotateZ = function(m, angleInRadians) {
                 const c = Math.cos(angleInRadians);
                 const s = Math.sin(angleInRadians);
+                
                 const m00 = m[0];
                 const m01 = m[1];
                 const m02 = m[2];
@@ -130,168 +137,449 @@
                 const m12 = m[6];
                 const m13 = m[7];
                 
-                m[0] = m00 * c + m10 * s;
-                m[1] = m01 * c + m11 * s;
-                m[2] = m02 * c + m12 * s;
-                m[3] = m03 * c + m13 * s;
-                m[4] = m00 * -s + m10 * c;
-                m[5] = m01 * -s + m11 * c;
-                m[6] = m02 * -s + m12 * c;
-                m[7] = m03 * -s + m13 * c;
+                // Risultato
+                const result = Array.isArray(m) ? [...m] : new Float32Array(m);
                 
-                return m;
+                // Aggiorna elementi che cambiano con la rotazione
+                result[0] = c * m00 + s * m10;
+                result[1] = c * m01 + s * m11;
+                result[2] = c * m02 + s * m12;
+                result[3] = c * m03 + s * m13;
+                result[4] = c * m10 - s * m00;
+                result[5] = c * m11 - s * m01;
+                result[6] = c * m12 - s * m02;
+                result[7] = c * m13 - s * m03;
+                
+                return result;
             };
             
-            m4.scale = function(m, sx, sy, sz) {
-                m[0] *= sx;
-                m[1] *= sx;
-                m[2] *= sx;
-                m[3] *= sx;
-                m[4] *= sy;
-                m[5] *= sy;
-                m[6] *= sy;
-                m[7] *= sy;
-                m[8] *= sz;
-                m[9] *= sz;
-                m[10] *= sz;
-                m[11] *= sz;
-                return m;
-            };
-            
-            m4.ortho = function(left, right, bottom, top, near, far) {
-                const width = right - left;
-                const height = top - bottom;
-                const depth = far - near;
-                
-                return [
-                2 / width, 0, 0, 0,
-                0, 2 / height, 0, 0,
-                0, 0, -2 / depth, 0,
-                -(right + left) / width,
-                -(top + bottom) / height,
-                -(far + near) / depth,
-                1
-                ];
-            };
-            
-            m4.multiply = function(a, b) {
-                if(!a || !b || a.length !== 16 || b.length !== 16) {
-                    console.error('Matrix multiplication error:', {
-                        a: a ? `Matrix[${a.length}]` : 'undefined',
-                        b: b ? `Matrix[${b.length}]` : 'undefined'
-                    });
-                    return m4.identity();
-                }
-                
-                const out = new Array(16);
-                const a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
-                const a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
-                const a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11];
-                const a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
-                
-                let b0 = b[0], b1 = b[1], b2 = b[2], b3 = b[3];
-                out[0] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
-                out[1] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
-                out[2] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
-                out[3] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
-                
-                b0 = b[4]; b1 = b[5]; b2 = b[6]; b3 = b[7];
-                out[4] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
-                out[5] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
-                out[6] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
-                out[7] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
-                
-                b0 = b[8]; b1 = b[9]; b2 = b[10]; b3 = b[11];
-                out[8] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
-                out[9] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
-                out[10] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
-                out[11] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
-                
-                b0 = b[12]; b1 = b[13]; b2 = b[14]; b3 = b[15];
-                out[12] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
-                out[13] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
-                out[14] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
-                out[15] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
-                
-                return out;
-            };
+            console.log('Funzioni di rotazione m4 sostituite con successo!');
         }
     </script>
-    <script>
-        // Inizializza glmUtils con un oggetto base
-        window.glmUtils = {
-            // Parser OBJ base
-            parseOBJ: function(text) {
-                const vertices = [];
-                const texcoords = [];
-                const normals = [];
-                const indices = [];
-                
-                // Split into lines
-                const lines = text.split('\n');
-                
-                lines.forEach(line => {
-                    line = line.trim();
-                    const parts = line.split(' ');
-                    
-                    if (parts[0] === 'v') {
-                        // Vertice
-                        vertices.push(
-                        parseFloat(parts[1]),
-                        parseFloat(parts[2]),
-                        parseFloat(parts[3])
-                        );
-                    } else if (parts[0] === 'vt') {
-                        // Texture coordinate
-                        texcoords.push(
-                        parseFloat(parts[1]),
-                        parseFloat(parts[2])
-                        );
-                    } else if (parts[0] === 'vn') {
-                        // Normale
-                        normals.push(
-                        parseFloat(parts[1]),
-                        parseFloat(parts[2]),
-                        parseFloat(parts[3])
-                        );
-                    } else if (parts[0] === 'f') {
-                        // Faccia
-                        for (let i = 1; i <= 3; i++) {
-                            const vertexData = parts[i].split('/');
-                            indices.push(parseInt(vertexData[0]) - 1);
-                        }
-                    }
-                });
-                
-                return {
-                    vertices: new Float32Array(vertices),
-                    texCoords: new Float32Array(texcoords),
-                    normals: new Float32Array(normals),
-                    indices: new Uint16Array(indices)
-                };
-            },
-            
-            // Funzione di compatibilità
-            loadObj: function(text) {
-                return this.parseOBJ(text);
-            }
-        };
-    </script>
+    
     <script src="lib/glm_utils.js"></script>
     <script src="lib/mesh_utils.js"></script>
     <script src="lib/dat.gui.js"></script>
     <script src="lib/jquery-3.6.0.js"></script>
     
+    <!-- Definizioni preliminari -->
+    <script>
+        // Definisci Stats come classe base per il contatore FPS
+        class Stats {
+            constructor() {
+                this.dom = document.createElement('div');
+                this.dom.className = 'stats';
+                this.dom.style.position = 'absolute';
+                this.dom.style.top = '0px';
+                this.dom.style.left = '0px';
+                this.dom.style.zIndex = '100';
+                this.dom.style.backgroundColor = 'rgba(0,0,0,0.5)';
+                this.dom.style.color = '#0ff';
+                this.dom.style.padding = '5px';
+                this.dom.style.fontFamily = 'Courier New, monospace';
+                this.dom.style.fontSize = '12px';
+                this.dom.innerHTML = 'FPS: 0';
+                
+                this.lastTime = performance.now();
+                this.frames = 0;
+                this.fps = 0;
+            }
+            
+            showPanel(mode) {
+                // mode 0 = fps, 1 = ms, 2 = mb (ignoriamo mode per semplicità)
+            }
+            
+            update() {
+                const time = performance.now();
+                this.frames++;
+                
+                if (time >= this.lastTime + 1000) {
+                    this.fps = Math.round((this.frames * 1000) / (time - this.lastTime));
+                    this.lastTime = time;
+                    this.frames = 0;
+                    this.dom.innerHTML = 'FPS: ' + this.fps;
+                }
+            }
+            
+            getFPS() {
+                return this.fps;
+            }
+            
+            begin() {
+                // start timing
+            }
+            
+            end() {
+                this.update();
+            }
+        }
+        
+        window.Stats = Stats;
+        
+        // Definisci il Clock
+        class Clock {
+            constructor(autoStart = true) {
+                this.autoStart = autoStart;
+                this.startTime = autoStart ? performance.now() : 0;
+                this.oldTime = this.startTime;
+                this.elapsedTime = 0;
+                this.running = autoStart;
+            }
+            
+            start() {
+                this.startTime = performance.now();
+                this.oldTime = this.startTime;
+                this.elapsedTime = 0;
+                this.running = true;
+            }
+            
+            stop() {
+                this.getElapsedTime();
+                this.running = false;
+            }
+            
+            getElapsedTime() {
+                this.getDelta();
+                return this.elapsedTime;
+            }
+            
+            getDelta() {
+                let diff = 0;
+                
+                if (this.autoStart && !this.running) {
+                    this.start();
+                    return 0;
+                }
+                
+                if (this.running) {
+                    const newTime = performance.now();
+                    diff = (newTime - this.oldTime) / 1000;
+                    this.oldTime = newTime;
+                    this.elapsedTime += diff;
+                }
+                
+                return diff;
+            }
+        }
+        
+        window.Clock = Clock;
+        
+        // Definisci la costante STEPS_PER_FRAME
+        const STEPS_PER_FRAME = 5;
+        
+        // Definisci Capsule e Octree per la fisica
+        class Capsule {
+            constructor(start, end, radius) {
+                this.start = start;
+                this.end = end;
+                this.radius = radius;
+            }
+            
+            translate(vector) {
+                this.start[0] += vector[0];
+                this.start[1] += vector[1];
+                this.start[2] += vector[2];
+                
+                this.end[0] += vector[0];
+                this.end[1] += vector[1];
+                this.end[2] += vector[2];
+            }
+        }
+        
+        window.Capsule = Capsule;
+        
+        class Octree {
+            constructor() {
+                this.nodes = [];
+            }
+            
+            fromGraphNode(scene) {
+                console.log("Octree initialized from scene");
+                // Implementazione semplificata
+            }
+            
+            capsuleIntersect(capsule) {
+                // Implementazione base per simulare collisioni con il pavimento
+                if (capsule.end[1] < 0.35) {
+                    return {
+                        normal: [0, 1, 0],
+                        depth: 0.35 - capsule.end[1]
+                    };
+                }
+                return null;
+            }
+        }
+        
+        window.Octree = Octree;
+        
+        // Definisci le costanti GAME_CONSTANTS
+        window.GAME_CONSTANTS = {
+            GAME_VERSION: '1.0.0',
+            DEBUG_MODE: true,
+            ERROR_MESSAGES: {
+                WEBGL_NOT_SUPPORTED: 'WebGL 2 non è supportato da questo browser.',
+                AUDIO_NOT_SUPPORTED: 'Web Audio API non supportata.',
+                LOAD_ERROR: 'Errore durante il caricamento delle risorse.',
+                GENERIC_ERROR: 'Si è verificato un errore. Ricarica la pagina per riprovare.'
+            }
+        };
+    </script>
+    
+    <!-- Implementazione di base di glmUtils se non è definito correttamente -->
+    <script>
+        // Implementazione di base di glmUtils se non è definito correttamente
+        if (typeof glmUtils === 'undefined' || !glmUtils.loadObj) {
+            window.glmUtils = window.glmUtils || {};
+            
+            window.glmUtils.loadObj = function(text) {
+                const vertices = [];
+                const normals = [];
+                const texCoords = [];
+                const indices = [];
+                
+                const lines = text.split('\n');
+                let indexOffset = 0;
+                const vertexMap = new Map();
+                
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    const parts = line.split(/\s+/);
+                    
+                    if (line.startsWith('v ')) {
+                        // Vertice
+                        vertices.push(
+                            parseFloat(parts[1]),
+                            parseFloat(parts[2]),
+                            parseFloat(parts[3])
+                        );
+                    } else if (line.startsWith('vt ')) {
+                        // Coordinate texture
+                        texCoords.push(
+                            parseFloat(parts[1]),
+                            parseFloat(parts[2])
+                        );
+                    } else if (line.startsWith('vn ')) {
+                        // Normale
+                        normals.push(
+                            parseFloat(parts[1]),
+                            parseFloat(parts[2]),
+                            parseFloat(parts[3])
+                        );
+                    } else if (line.startsWith('f ')) {
+                        // Faccia - gestione dei formati: v/vt/vn, v//vn, v/vt, v
+                        for (let j = 1; j <= 3; j++) {
+                            const vertexData = parts[j].split('/');
+                            const vertexIndex = parseInt(vertexData[0]) - 1;
+                            
+                            indices.push(vertexIndex);
+                        }
+                    }
+                }
+                
+                return {
+                    vertices: new Float32Array(vertices),
+                    texCoords: new Float32Array(texCoords),
+                    normals: new Float32Array(normals),
+                    indices: new Uint16Array(indices)
+                };
+            };
+        }
+    </script>
+    
     <!-- File sorgente del gioco -->
     <script src="js/shader-test.js"></script>
-    <script src="js/constants.js"></script>
     <script src="js/shader-loader.js"></script>
     <script src="js/math-utils.js"></script>
-    <script src="js/input.js"></script>
     <script src="js/audio.js"></script>
     <script src="js/physics.js"></script>
     <script src="js/renderer.js"></script>
+    <script src="js/input.js"></script>
     <script src="js/game.js"></script>
-    <script src="js/main.js"></script>    
+    <script src="js/main.js"></script>
+    
+    <!-- Script di setup principale -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log("Initializing HauntedHouse v1.0.0");
+            
+            // Setup elementi di base
+            const startButton = document.getElementById('start-button');
+            const startMenu = document.getElementById('start-menu');
+            const canvas = document.getElementById('canvas');
+            const container = document.getElementById('container');
+            const controlPanel = document.getElementById('side-panel');
+            const instructions = document.getElementById('instructions');
+            const crosshair = document.getElementById('crosshair');
+            const introMusic = document.getElementById('intro-music');
+            const startMusic = document.getElementById('start-music');
+            const randomGhostSound = document.getElementById('random-ghost');
+            const laLaLaSound = document.getElementById('la-la-la');
+            const demonLaughSound = document.getElementById('demon-laugh');
+            
+            // Definizione della funzione per avviare la riproduzione del suono a intervalli casuali
+            function playRandomGhostSound() {
+                const randomDelay = Math.random() * (30000 - 10000) + 10000; // Intervallo casuale tra 10s e 30s
+                setTimeout(() => {
+                    randomGhostSound.play().catch(e => console.warn('Failed to play sound:', e));
+                    playRandomGhostSound();  // Richiama la funzione per continuare a riprodurre il suono
+                }, randomDelay);
+            }
+            
+            function showGameControls() {
+                const gameControls = document.getElementById('game-controls');
+                gameControls.innerHTML = `
+                    W: Move Forward | 
+                    S: Move Backward | 
+                    A: Move Left | 
+                    D: Move Right | 
+                    F: Toggle Light | 
+                    P: Open/Close Control Panel
+                `;
+            }
+            
+            // Avvia la musica dell'intro quando viene caricata la pagina (con gestione dell'errore audio)
+            window.onload = () => {
+                introMusic.play().catch(e => {
+                    console.warn('Audio autoplay blocked by browser policy. Click anywhere to enable sounds.');
+                    document.addEventListener('click', () => {
+                        introMusic.play();
+                    }, { once: true });
+                });
+            };
+            
+// Evento click per avviare il gioco
+startButton.addEventListener('click', () => {
+                // Ferma l'audio di intro e avvia la musica di gioco
+                introMusic.pause();
+                startMusic.play().catch(e => console.warn('Failed to play start music:', e));
+                
+                // Nascondi il menu e mostra gli elementi di gioco
+                startMenu.style.display = 'none';
+                canvas.style.display = 'block';
+                container.style.display = 'block';
+                controlPanel.style.display = 'block';
+                instructions.style.visibility = 'visible';
+                crosshair.style.display = 'block';
+                
+                // Mostra la barra superiore con la legenda dei comandi
+                const topBar = document.getElementById('top-bar');
+                topBar.style.display = 'flex';
+                showGameControls();
+                
+                // Avvia l'audio a intervalli casuali
+                playRandomGhostSound();
+                
+                // Blocca il puntatore con un piccolo ritardo
+                setTimeout(() => {
+                    try {
+                        canvas.requestPointerLock();
+                    } catch (e) {
+                        console.warn('Pointer lock not supported or permission denied:', e);
+                    }
+                }, 100);
+                
+                document.body.style.cursor = 'none';
+                
+                // Inizializza l'applicazione di gioco
+                if (typeof GameApplication !== 'undefined') {
+                    const app = new GameApplication();
+                    window.gameApp = app;  // Rendi disponibile globalmente per debug
+                    app.initialize().catch(error => {
+                        console.error('Failed to initialize game:', error);
+                    });
+                }
+            });
+            
+            // Aggiungi il controllo del pannello laterale quando si preme P
+            document.addEventListener('keydown', (event) => {
+                if (event.code === 'KeyP') {
+                    const panel = document.getElementById('side-panel');
+                    const isPanelOpen = !panel.classList.contains('hidden');
+                    
+                    if (!isPanelOpen) {
+                        // Mostra il pannello e sgancia il mouse
+                        panel.classList.remove('hidden');
+                        panel.classList.add('visible');
+                        document.exitPointerLock();
+                        document.body.style.cursor = 'default';
+                    } else {
+                        // Chiudi il pannello e blocca nuovamente il mouse
+                        panel.classList.remove('visible');
+                        panel.classList.add('hidden');
+                        canvas.requestPointerLock();
+                        document.body.style.cursor = 'none';
+                    }
+                }
+            });
+            
+            // Gestione dei pulsanti nel pannello di controllo
+            document.getElementById('toggleShadows').addEventListener('click', () => {
+                if (window.gameApp && window.gameApp.game && window.gameApp.game.renderer) {
+                    window.gameApp.game.renderer.toggleShadows();
+                }
+            });
+            
+            document.getElementById('toggleReflections').addEventListener('click', () => {
+                if (window.gameApp && window.gameApp.game && window.gameApp.game.renderer) {
+                    window.gameApp.game.renderer.toggleReflections();
+                }
+            });
+            
+            document.getElementById('toggleFPS').addEventListener('click', () => {
+                if (window.gameApp && window.gameApp.stats) {
+                    const statsElement = window.gameApp.stats.dom;
+                    statsElement.style.display = statsElement.style.display === 'none' ? 'block' : 'none';
+                }
+            });
+            
+            document.getElementById('advancedRendering').addEventListener('click', () => {
+                if (window.gameApp && window.gameApp.game && window.gameApp.game.renderer) {
+                    window.gameApp.game.renderer.toggleAdvancedRendering();
+                }
+            });
+            
+            // Gestione responsiva per il canvas
+            window.addEventListener('resize', () => {
+                if (canvas) {
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                    
+                    // Aggiorna posizione top-bar
+                    const topBar = document.getElementById('top-bar');
+                    if (topBar) {
+                        topBar.style.left = '50%';
+                        topBar.style.transform = 'translateX(-50%)';
+                    }
+                    
+                    // Aggiorna il renderer se esiste
+                    if (window.gameApp && window.gameApp.game && window.gameApp.game.renderer) {
+                        window.gameApp.game.renderer.onWindowResize();
+                    }
+                }
+            });
+            
+            // Gestione degli errori globali
+            window.addEventListener('error', (event) => {
+                console.error('Global error:', event.error);
+                // Mostra un messaggio di errore all'utente ma solo se è un errore critico
+                if (event.error && event.error.message && 
+                    (event.error.message.includes('WebGL') || 
+                     event.error.message.includes('shader') ||
+                     event.error.message.includes('initialize'))) {
+                    
+                    const errorMessage = document.createElement('div');
+                    errorMessage.className = 'error-message';
+                    errorMessage.innerHTML = `
+                        <div class="error-content">
+                            <h2>Errore</h2>
+                            <p>${GAME_CONSTANTS.ERROR_MESSAGES.GENERIC_ERROR}</p>
+                            <button onclick="location.reload()">Ricarica gioco</button>
+                        </div>
+                    `;
+                    document.body.appendChild(errorMessage);
+                }
+            });
+        });
+    </script>
 </body>
 </html>
