@@ -1,11 +1,13 @@
 #version 300 es
 precision highp float;
 
+// Input dal vertex shader
 in vec2 vTextureCoord;
 in vec3 vNormal;
 in vec3 vFragPos;
 in vec4 vFragPosLightSpace;
 
+// Texture samplers
 uniform sampler2D uSampler;
 uniform sampler2D uShadowMap;
 
@@ -25,14 +27,28 @@ uniform vec3 uViewPosition;
 uniform float uSpecularStrength;
 uniform float uShininess;
 
+// Flag per rendering avanzato
+uniform bool uShadowsEnabled;
+uniform bool uReflectionsEnabled;
+uniform bool uAdvancedRendering;
+
+// Output
 out vec4 fragColor;
 
+// Calcola l'ombra usando PCF (Percentage Closer Filtering)
 float calculateShadow(vec4 fragPosLightSpace) {
     // Esegue la proiezione prospettica
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
     
     // Trasforma nell'intervallo [0,1]
     projCoords = projCoords * 0.5 + 0.5;
+    
+    // Se fuori dalla shadow map, nessuna ombra
+    if(projCoords.x < 0.0 || projCoords.x > 1.0 ||
+       projCoords.y < 0.0 || projCoords.y > 1.0 ||
+       projCoords.z < 0.0 || projCoords.z > 1.0) {
+        return 0.0;
+    }
     
     // Ottieni la profondità più vicina dal punto di vista della luce
     float closestDepth = texture(uShadowMap, projCoords.xy).r;
@@ -45,7 +61,7 @@ float calculateShadow(vec4 fragPosLightSpace) {
     vec3 lightDir = normalize(uLightPosition - vFragPos);
     float bias = max(0.05 * (1.0 - dot(normal, lightDir)), 0.005);
     
-    // PCF (Percentage Closer Filtering) per ombre più morbide
+    // PCF per ombre più morbide
     float shadow = 0.0;
     vec2 texelSize = 1.0 / vec2(textureSize(uShadowMap, 0));
     for(int x = -1; x <= 1; ++x) {
@@ -56,15 +72,18 @@ float calculateShadow(vec4 fragPosLightSpace) {
     }
     shadow /= 9.0;
     
-    return shadow;
+    // Limita l'effetto dell'ombra per evitare aree troppo scure
+    return min(shadow, 0.75);
 }
 
 void main() {
     // Ottieni il colore dalla texture
     vec4 texColor = texture(uSampler, vTextureCoord);
-    if(texColor.a < 0.1) discard;  // Gestione trasparenza
+    
+    // Gestione trasparenza semplice
+    if(texColor.a < 0.1) discard;
 
-    // Vettori per calcoli di illuminazione
+    // Normalizza i vettori per calcoli di illuminazione
     vec3 normal = normalize(vNormal);
     vec3 lightDir = normalize(uLightPosition - vFragPos);
     vec3 viewDir = normalize(uViewPosition - vFragPos);
@@ -88,12 +107,28 @@ void main() {
     // Luce speculare
     float spec = pow(max(dot(normal, halfwayDir), 0.0), uShininess);
     vec3 specular = uLightColor * spec * uSpecularStrength * uLightIntensity;
+    
+    // Se i riflessi sono abilitati, aumentiamo l'effetto speculare
+    if (uReflectionsEnabled) {
+        specular *= 1.5;
+    }
 
-    // Calcola l'ombra
-    float shadow = calculateShadow(vFragPosLightSpace);
+    // Calcola l'ombra se abilitata
+    float shadow = uShadowsEnabled ? calculateShadow(vFragPosLightSpace) : 0.0;
     
     // Risultato finale con attenuazione e ombre
     vec3 result = ambient + (1.0 - shadow) * (diffuse + specular) * attenuation;
+
+    // Se il rendering avanzato è abilitato, aggiungiamo effetti extra
+    if (uAdvancedRendering) {
+        // Aumenta il contrasto
+        result = pow(result, vec3(1.1));
+        
+        // Leggero vignettaggio
+        vec2 centeredUV = vTextureCoord * 2.0 - 1.0;
+        float vignette = 1.0 - dot(centeredUV, centeredUV) * 0.1;
+        result *= vignette;
+    }
 
     // Boost generale per luminosità
     result *= 1.2;

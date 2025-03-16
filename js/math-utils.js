@@ -1,4 +1,5 @@
 // math-utils.js
+// Utilità matematiche per rendering 3D e fisica
 
 // Funzioni vettoriali
 window.Vector3 = {
@@ -107,8 +108,8 @@ window.Interpolation = {
 window.Collision = {
     pointInBox: (point, boxMin, boxMax) => {
         return point[0] >= boxMin[0] && point[0] <= boxMax[0] &&
-        point[1] >= boxMin[1] && point[1] <= boxMax[1] &&
-        point[2] >= boxMin[2] && point[2] <= boxMax[2];
+               point[1] >= boxMin[1] && point[1] <= boxMax[1] &&
+               point[2] >= boxMin[2] && point[2] <= boxMax[2];
     },
     
     sphereIntersectsBox: (center, radius, boxMin, boxMax) => {
@@ -190,7 +191,7 @@ window.Collision = {
     }
 };
 
-// Funzioni per matrici 4x4
+// Funzioni per matrici 4x4 (integrazione con m4.js)
 window.Matrix4 = {
     create: () => new Float32Array(16),
     
@@ -200,7 +201,12 @@ window.Matrix4 = {
         return out;
     },
     
+    // Utilizza m4.multiply se disponibile, altrimenti implementa la propria versione
     multiply: (a, b, out = new Float32Array(16)) => {
+        if (typeof m4 !== 'undefined' && typeof m4.multiply === 'function') {
+            return m4.multiply(a, b);
+        }
+        
         const a00 = a[0],  a01 = a[1],  a02 = a[2],  a03 = a[3];
         const a10 = a[4],  a11 = a[5],  a12 = a[6],  a13 = a[7];
         const a20 = a[8],  a21 = a[9],  a22 = a[10], a23 = a[11];
@@ -233,7 +239,12 @@ window.Matrix4 = {
         return out;
     },
     
+    // Matrice di proiezione prospettica
     perspective: (fovy, aspect, near, far, out = new Float32Array(16)) => {
+        if (typeof m4 !== 'undefined' && typeof m4.perspective === 'function') {
+            return m4.perspective(fovy, aspect, near, far);
+        }
+        
         const f = 1.0 / Math.tan(fovy / 2);
         out[0] = f / aspect;
         out[1] = 0;
@@ -257,7 +268,12 @@ window.Matrix4 = {
         return out;
     },
     
+    // Matrice lookAt per la camera
     lookAt: (eye, center, up, out = new Float32Array(16)) => {
+        if (typeof m4 !== 'undefined' && typeof m4.lookAt === 'function') {
+            return m4.lookAt(eye, center, up);
+        }
+        
         const z = Vector3.normalize(Vector3.subtract(eye, center));
         const x = Vector3.normalize(Vector3.cross(up, z));
         const y = Vector3.cross(z, x);
@@ -293,22 +309,87 @@ window.Random = {
             r * Math.sin(phi) * Math.sin(theta),
             r * Math.cos(phi)
         );
+    },
+    
+    // Genera un quaternione casuale per rotazioni random
+    randomQuaternion: () => {
+        const u1 = Math.random();
+        const u2 = Math.random();
+        const u3 = Math.random();
+        
+        return Quaternion.create(
+            Math.sqrt(1 - u1) * Math.sin(2 * Math.PI * u2),
+            Math.sqrt(1 - u1) * Math.cos(2 * Math.PI * u2),
+            Math.sqrt(u1) * Math.sin(2 * Math.PI * u3),
+            Math.sqrt(u1) * Math.cos(2 * Math.PI * u3)
+        );
     }
 };
 
-/*export default {
-    Vector3,
-    Quaternion,
-    Matrix4,
-    Interpolation,
-    Collision,
-    Random
-};*/
+// Utility per conversione tra gradi e radianti
+window.MathUtils = {
+    DEG_TO_RAD: Math.PI / 180,
+    RAD_TO_DEG: 180 / Math.PI,
+    
+    toRadians: (degrees) => degrees * (Math.PI / 180),
+    toDegrees: (radians) => radians * (180 / Math.PI),
+    
+    // Interpolazione sferica di quaternioni
+    slerp: (qa, qb, t) => {
+        // Copiamo i quaternioni per non modificarli
+        let a = Quaternion.create(qa[0], qa[1], qa[2], qa[3]);
+        let b = Quaternion.create(qb[0], qb[1], qb[2], qb[3]);
+        
+        // Calcola coseno dell'angolo tra i quaternioni
+        let cosHalfTheta = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
+        
+        // Se i quaternioni sono troppo simili, fai interpolazione lineare
+        if (Math.abs(cosHalfTheta) >= 1.0) {
+            return a;
+        }
+        
+        // Assicurati di prendere il percorso più breve
+        if (cosHalfTheta < 0) {
+            b[0] = -b[0];
+            b[1] = -b[1];
+            b[2] = -b[2];
+            b[3] = -b[3];
+            cosHalfTheta = -cosHalfTheta;
+        }
+        
+        // Calcola coefficienti di interpolazione
+        const halfTheta = Math.acos(cosHalfTheta);
+        const sinHalfTheta = Math.sqrt(1.0 - cosHalfTheta * cosHalfTheta);
+        
+        // Se l'angolo è troppo piccolo, fai interpolazione lineare
+        if (Math.abs(sinHalfTheta) < 0.001) {
+            return Quaternion.create(
+                (a[0] * 0.5 + b[0] * 0.5),
+                (a[1] * 0.5 + b[1] * 0.5),
+                (a[2] * 0.5 + b[2] * 0.5),
+                (a[3] * 0.5 + b[3] * 0.5)
+            );
+        }
+        
+        // Calcola ratios
+        const ratioA = Math.sin((1 - t) * halfTheta) / sinHalfTheta;
+        const ratioB = Math.sin(t * halfTheta) / sinHalfTheta;
+        
+        // Crea risultato
+        return Quaternion.create(
+            (a[0] * ratioA + b[0] * ratioB),
+            (a[1] * ratioA + b[1] * ratioB),
+            (a[2] * ratioA + b[2] * ratioB),
+            (a[3] * ratioA + b[3] * ratioB)
+        );
+    }
+};
 
-// Esporta la classe
+// Esporta gli oggetti nel window
 window.Vector3 = Vector3;
 window.Quaternion = Quaternion;
 window.Matrix4 = Matrix4;
 window.Interpolation = Interpolation;
 window.Collision = Collision;
 window.Random = Random;
+window.MathUtils = MathUtils;

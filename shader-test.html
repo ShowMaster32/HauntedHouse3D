@@ -1,834 +1,222 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebGL Shader Test</title>
-    <style>
-        body { margin: 0; overflow: hidden; }
-        canvas { display: block; }
-        #info {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: rgba(0,0,0,0.7);
-            color: white;
-            padding: 10px;
-            font-family: monospace;
-            z-index: 100;
-        }
-        #log {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            right: 10px;
-            max-height: 200px;
-            overflow: auto;
-            background: rgba(0,0,0,0.7);
-            color: white;
-            padding: 10px;
-            font-family: monospace;
-            font-size: 12px;
-        }
-        .success { color: #4CAF50; }
-        .error { color: #F44336; }
-    </style>
-</head>
-<body>
-    <canvas id="canvas"></canvas>
-    <div id="info">WebGL Shader Test</div>
-    <div id="log"></div>
+// shader-test.js
+// Utility per verificare che gli shader funzionino correttamente
 
-    <script src="lib/webgl-utils.js"></script>
-    <script src="lib/m4.js"></script>
-    
-    <!-- Aggiunte funzioni necessarie per m4 -->
-    <script>
-    // Aggiungi le funzioni mancanti a m4 se non esistono
-    if (typeof m4 !== 'undefined') {
-        // Funzione perspective per creare una matrice di proiezione prospettica
-        if (typeof m4.perspective !== 'function') {
-            m4.perspective = function(fieldOfViewInRadians, aspect, near, far) {
-                const f = Math.tan(Math.PI * 0.5 - 0.5 * fieldOfViewInRadians);
-                const rangeInv = 1.0 / (near - far);
+class ShaderTestUtils {
+    constructor(renderer) {
+        this.renderer = renderer;
+        this.gl = renderer.gl;
+        this.testResults = {
+            shaderCompilation: false,
+            uniformLocations: false,
+            textureBinding: false,
+            lightingSetup: false
+        };
+        this.shaderProgram = null;
+        this.debugLog = true;
+    }
 
-                return [
-                    f / aspect, 0, 0, 0,
-                    0, f, 0, 0,
-                    0, 0, (near + far) * rangeInv, -1,
-                    0, 0, near * far * rangeInv * 2, 0
-                ];
-            };
-            console.log('Funzione m4.perspective creata');
-        }
-        
-        // Funzione ortho per la proiezione ortografica (usata per le shadow map)
-        if (typeof m4.ortho !== 'function' && typeof m4.orthographic === 'function') {
-            m4.ortho = m4.orthographic;
-            console.log('Alias m4.ortho creato da m4.orthographic');
-        } else if (typeof m4.ortho !== 'function') {
-            m4.ortho = function(left, right, bottom, top, near, far) {
-                // Calcola le dimensioni
-                const width = right - left;
-                const height = top - bottom;
-                const depth = far - near;
-                
-                // Crea la matrice di proiezione ortografica
-                const result = [
-                    2 / width, 0, 0, 0,
-                    0, 2 / height, 0, 0,
-                    0, 0, -2 / depth, 0,
-                    -(right + left) / width, -(top + bottom) / height, -(far + near) / depth, 1
-                ];
-                
-                return result;
-            };
-            console.log('Funzione m4.ortho creata');
-        }
-        
-        // Funzione lookAt per creare una vista da un punto a un altro
-        if (typeof m4.lookAt !== 'function') {
-            m4.lookAt = function(cameraPosition, target, up) {
-                // Calcola l'asse Z (direzione dalla camera al target, negata)
-                const zAxis = [
-                    cameraPosition[0] - target[0],
-                    cameraPosition[1] - target[1],
-                    cameraPosition[2] - target[2]
-                ];
-                // Normalizza l'asse Z
-                const zLength = Math.sqrt(
-                    zAxis[0] * zAxis[0] + 
-                    zAxis[1] * zAxis[1] + 
-                    zAxis[2] * zAxis[2]);
-                if (zLength > 0.00001) {
-                    zAxis[0] = zAxis[0] / zLength;
-                    zAxis[1] = zAxis[1] / zLength;
-                    zAxis[2] = zAxis[2] / zLength;
-                }
-                
-                // Calcola l'asse X (prodotto vettoriale di up e zAxis)
-                const xAxis = [
-                    up[1] * zAxis[2] - up[2] * zAxis[1],
-                    up[2] * zAxis[0] - up[0] * zAxis[2],
-                    up[0] * zAxis[1] - up[1] * zAxis[0]
-                ];
-                // Normalizza l'asse X
-                const xLength = Math.sqrt(
-                    xAxis[0] * xAxis[0] + 
-                    xAxis[1] * xAxis[1] + 
-                    xAxis[2] * xAxis[2]);
-                if (xLength > 0.00001) {
-                    xAxis[0] = xAxis[0] / xLength;
-                    xAxis[1] = xAxis[1] / xLength;
-                    xAxis[2] = xAxis[2] / xLength;
-                }
-                
-                // Calcola l'asse Y (prodotto vettoriale di zAxis e xAxis)
-                const yAxis = [
-                    zAxis[1] * xAxis[2] - zAxis[2] * xAxis[1],
-                    zAxis[2] * xAxis[0] - zAxis[0] * xAxis[2],
-                    zAxis[0] * xAxis[1] - zAxis[1] * xAxis[0]
-                ];
-                
-                // Costruisci la matrice di view
-                const result = [
-                    xAxis[0], yAxis[0], zAxis[0], 0,
-                    xAxis[1], yAxis[1], zAxis[1], 0,
-                    xAxis[2], yAxis[2], zAxis[2], 0,
-                    -(xAxis[0] * cameraPosition[0] + xAxis[1] * cameraPosition[1] + xAxis[2] * cameraPosition[2]),
-                    -(yAxis[0] * cameraPosition[0] + yAxis[1] * cameraPosition[1] + yAxis[2] * cameraPosition[2]),
-                    -(zAxis[0] * cameraPosition[0] + zAxis[1] * cameraPosition[1] + zAxis[2] * cameraPosition[2]),
-                    1
-                ];
-                
-                return result;
-            };
-            console.log('Funzione m4.lookAt creata');
-        }
-        
-        // Funzione transpose per trasporre una matrice
-        if (typeof m4.transpose !== 'function') {
-            m4.transpose = function(m) {
-                return [
-                    m[0], m[4], m[8], m[12],
-                    m[1], m[5], m[9], m[13],
-                    m[2], m[6], m[10], m[14],
-                    m[3], m[7], m[11], m[15]
-                ];
-            };
-            console.log('Funzione m4.transpose creata');
-        }
-        
-        // Funzione inverse per invertire una matrice
-        if (typeof m4.inverse !== 'function') {
-            m4.inverse = function(m) {
-                const m00 = m[0 * 4 + 0];
-                const m01 = m[0 * 4 + 1];
-                const m02 = m[0 * 4 + 2];
-                const m03 = m[0 * 4 + 3];
-                const m10 = m[1 * 4 + 0];
-                const m11 = m[1 * 4 + 1];
-                const m12 = m[1 * 4 + 2];
-                const m13 = m[1 * 4 + 3];
-                const m20 = m[2 * 4 + 0];
-                const m21 = m[2 * 4 + 1];
-                const m22 = m[2 * 4 + 2];
-                const m23 = m[2 * 4 + 3];
-                const m30 = m[3 * 4 + 0];
-                const m31 = m[3 * 4 + 1];
-                const m32 = m[3 * 4 + 2];
-                const m33 = m[3 * 4 + 3];
-                
-                const tmp_0 = m22 * m33;
-                const tmp_1 = m32 * m23;
-                const tmp_2 = m12 * m33;
-                const tmp_3 = m32 * m13;
-                const tmp_4 = m12 * m23;
-                const tmp_5 = m22 * m13;
-                const tmp_6 = m02 * m33;
-                const tmp_7 = m32 * m03;
-                const tmp_8 = m02 * m23;
-                const tmp_9 = m22 * m03;
-                const tmp_10 = m02 * m13;
-                const tmp_11 = m12 * m03;
-                const tmp_12 = m20 * m31;
-                const tmp_13 = m30 * m21;
-                const tmp_14 = m10 * m31;
-                const tmp_15 = m30 * m11;
-                const tmp_16 = m10 * m21;
-                const tmp_17 = m20 * m11;
-                const tmp_18 = m00 * m31;
-                const tmp_19 = m30 * m01;
-                const tmp_20 = m00 * m21;
-                const tmp_21 = m20 * m01;
-                const tmp_22 = m00 * m11;
-                const tmp_23 = m10 * m01;
-                
-                const t0 = (tmp_0 * m11 + tmp_3 * m21 + tmp_4 * m31) -
-                         (tmp_1 * m11 + tmp_2 * m21 + tmp_5 * m31);
-                const t1 = (tmp_1 * m01 + tmp_6 * m21 + tmp_9 * m31) -
-                         (tmp_0 * m01 + tmp_7 * m21 + tmp_8 * m31);
-                const t2 = (tmp_2 * m01 + tmp_7 * m11 + tmp_10 * m31) -
-                         (tmp_3 * m01 + tmp_6 * m11 + tmp_11 * m31);
-                const t3 = (tmp_5 * m01 + tmp_8 * m11 + tmp_11 * m21) -
-                         (tmp_4 * m01 + tmp_9 * m11 + tmp_10 * m21);
-                
-                const d = 1.0 / (m00 * t0 + m10 * t1 + m20 * t2 + m30 * t3);
-                
-                return [
-                    d * t0,
-                    d * t1,
-                    d * t2,
-                    d * t3,
-                    d * ((tmp_1 * m10 + tmp_2 * m20 + tmp_5 * m30) -
-                       (tmp_0 * m10 + tmp_3 * m20 + tmp_4 * m30)),
-                    d * ((tmp_0 * m00 + tmp_7 * m20 + tmp_8 * m30) -
-                       (tmp_1 * m00 + tmp_6 * m20 + tmp_9 * m30)),
-                    d * ((tmp_3 * m00 + tmp_6 * m10 + tmp_11 * m30) -
-                       (tmp_2 * m00 + tmp_7 * m10 + tmp_10 * m30)),
-                    d * ((tmp_4 * m00 + tmp_9 * m10 + tmp_10 * m20) -
-                       (tmp_5 * m00 + tmp_8 * m10 + tmp_11 * m20)),
-                    d * ((tmp_12 * m13 + tmp_15 * m23 + tmp_16 * m33) -
-                       (tmp_13 * m13 + tmp_14 * m23 + tmp_17 * m33)),
-                    d * ((tmp_13 * m03 + tmp_18 * m23 + tmp_21 * m33) -
-                       (tmp_12 * m03 + tmp_19 * m23 + tmp_20 * m33)),
-                    d * ((tmp_14 * m03 + tmp_19 * m13 + tmp_22 * m33) -
-                       (tmp_15 * m03 + tmp_18 * m13 + tmp_23 * m33)),
-                    d * ((tmp_17 * m03 + tmp_20 * m13 + tmp_23 * m23) -
-                       (tmp_16 * m03 + tmp_21 * m13 + tmp_22 * m23)),
-                    d * ((tmp_14 * m22 + tmp_17 * m32 + tmp_13 * m12) -
-                       (tmp_16 * m32 + tmp_12 * m12 + tmp_15 * m22)),
-                    d * ((tmp_20 * m32 + tmp_12 * m02 + tmp_19 * m22) -
-                       (tmp_18 * m22 + tmp_21 * m32 + tmp_13 * m02)),
-                    d * ((tmp_18 * m12 + tmp_23 * m32 + tmp_15 * m02) -
-                       (tmp_22 * m32 + tmp_14 * m02 + tmp_19 * m12)),
-                    d * ((tmp_22 * m22 + tmp_16 * m02 + tmp_21 * m12) -
-                       (tmp_20 * m12 + tmp_23 * m22 + tmp_17 * m02))
-                ];
-            };
-            console.log('Funzione m4.inverse creata');
-        }
-        
-        // Funzione identity per creare una matrice identità
-        if (typeof m4.identity !== 'function') {
-            m4.identity = function() {
-                return [
-                    1, 0, 0, 0,
-                    0, 1, 0, 0,
-                    0, 0, 1, 0,
-                    0, 0, 0, 1
-                ];
-            };
-            console.log('Funzione m4.identity creata');
-        }
-        
-        // Funzione translate per traslare una matrice
-        if (typeof m4.translate !== 'function') {
-            m4.translate = function(m, tx, ty, tz) {
-                return m4.multiply(m, m4.translation(tx, ty, tz));
-            };
-            console.log('Funzione m4.translate creata');
-        }
-        
-        // Funzione translation per creare una matrice di traslazione
-        if (typeof m4.translation !== 'function') {
-            m4.translation = function(tx, ty, tz) {
-                return [
-                    1, 0, 0, 0,
-                    0, 1, 0, 0,
-                    0, 0, 1, 0,
-                    tx, ty, tz, 1
-                ];
-            };
-            console.log('Funzione m4.translation creata');
-        }
-        
-        // Funzione per moltiplicare matrici
-        if (typeof m4.multiply !== 'function') {
-            m4.multiply = function(a, b) {
-                const a00 = a[0];
-                const a01 = a[1];
-                const a02 = a[2];
-                const a03 = a[3];
-                const a10 = a[4];
-                const a11 = a[5];
-                const a12 = a[6];
-                const a13 = a[7];
-                const a20 = a[8];
-                const a21 = a[9];
-                const a22 = a[10];
-                const a23 = a[11];
-                const a30 = a[12];
-                const a31 = a[13];
-                const a32 = a[14];
-                const a33 = a[15];
-                const b00 = b[0];
-                const b01 = b[1];
-                const b02 = b[2];
-                const b03 = b[3];
-                const b10 = b[4];
-                const b11 = b[5];
-                const b12 = b[6];
-                const b13 = b[7];
-                const b20 = b[8];
-                const b21 = b[9];
-                const b22 = b[10];
-                const b23 = b[11];
-                const b30 = b[12];
-                const b31 = b[13];
-                const b32 = b[14];
-                const b33 = b[15];
-                
-                return [
-                    a00 * b00 + a01 * b10 + a02 * b20 + a03 * b30,
-                    a00 * b01 + a01 * b11 + a02 * b21 + a03 * b31,
-                    a00 * b02 + a01 * b12 + a02 * b22 + a03 * b32,
-                    a00 * b03 + a01 * b13 + a02 * b23 + a03 * b33,
-                    a10 * b00 + a11 * b10 + a12 * b20 + a13 * b30,
-                    a10 * b01 + a11 * b11 + a12 * b21 + a13 * b31,
-                    a10 * b02 + a11 * b12 + a12 * b22 + a13 * b32,
-                    a10 * b03 + a11 * b13 + a12 * b23 + a13 * b33,
-                    a20 * b00 + a21 * b10 + a22 * b20 + a23 * b30,
-                    a20 * b01 + a21 * b11 + a22 * b21 + a23 * b31,
-                    a20 * b02 + a21 * b12 + a22 * b22 + a23 * b32,
-                    a20 * b03 + a21 * b13 + a22 * b23 + a23 * b33,
-                    a30 * b00 + a31 * b10 + a32 * b20 + a33 * b30,
-                    a30 * b01 + a31 * b11 + a32 * b21 + a33 * b31,
-                    a30 * b02 + a31 * b12 + a32 * b22 + a33 * b32,
-                    a30 * b03 + a31 * b13 + a32 * b23 + a33 * b33,
-                ];
-            };
-            console.log('Funzione m4.multiply creata');
-        }
-        
-        // Funzioni rotazione mancanti
-        if (typeof m4.rotateX !== 'function') {
-            m4.rotateX = function(m, angleInRadians) {
-                // Questa è l'implementazione che garantisce la compatibilità
-                const c = Math.cos(angleInRadians);
-                const s = Math.sin(angleInRadians);
-                
-                const m10 = m[4];
-                const m11 = m[5];
-                const m12 = m[6];
-                const m13 = m[7];
-                const m20 = m[8];
-                const m21 = m[9];
-                const m22 = m[10];
-                const m23 = m[11];
-                
-                // Risultato
-                const result = Array.isArray(m) ? [...m] : new Float32Array(m);
-                
-                // Aggiorna elementi che cambiano con la rotazione
-                result[4] = c * m10 + s * m20;
-                result[5] = c * m11 + s * m21;
-                result[6] = c * m12 + s * m22;
-                result[7] = c * m13 + s * m23;
-                result[8] = c * m20 - s * m10;
-                result[9] = c * m21 - s * m11;
-                result[10] = c * m22 - s * m12;
-                result[11] = c * m23 - s * m13;
-                
-                return result;
-            };
-            console.log('Funzione m4.rotateX creata');
-        }
-
-        if (typeof m4.rotateY !== 'function') {
-            m4.rotateY = function(m, angleInRadians) {
-                const c = Math.cos(angleInRadians);
-                const s = Math.sin(angleInRadians);
-                
-                const m00 = m[0];
-                const m01 = m[1];
-                const m02 = m[2];
-                const m03 = m[3];
-                const m20 = m[8];
-                const m21 = m[9];
-                const m22 = m[10];
-                const m23 = m[11];
-                
-                // Risultato
-                const result = Array.isArray(m) ? [...m] : new Float32Array(m);
-                
-                // Aggiorna elementi che cambiano con la rotazione
-                result[0] = c * m00 - s * m20;
-                result[1] = c * m01 - s * m21;
-                result[2] = c * m02 - s * m22;
-                result[3] = c * m03 - s * m23;
-                result[8] = c * m20 + s * m00;
-                result[9] = c * m21 + s * m01;
-                result[10] = c * m22 + s * m02;
-                result[11] = c * m23 + s * m03;
-                
-                return result;
-            };
-            console.log('Funzione m4.rotateY creata');
-        }
-
-        if (typeof m4.rotateZ !== 'function') {
-            m4.rotateZ = function(m, angleInRadians) {
-                const c = Math.cos(angleInRadians);
-                const s = Math.sin(angleInRadians);
-                
-                const m00 = m[0];
-                const m01 = m[1];
-                const m02 = m[2];
-                const m03 = m[3];
-                const m10 = m[4];
-                const m11 = m[5];
-                const m12 = m[6];
-                const m13 = m[7];
-                
-                // Risultato
-                const result = Array.isArray(m) ? [...m] : new Float32Array(m);
-                
-                // Aggiorna elementi che cambiano con la rotazione
-                result[0] = c * m00 + s * m10;
-                result[1] = c * m01 + s * m11;
-                result[2] = c * m02 + s * m12;
-                result[3] = c * m03 + s * m13;
-                result[4] = c * m10 - s * m00;
-                result[5] = c * m11 - s * m01;
-                result[6] = c * m12 - s * m02;
-                result[7] = c * m13 - s * m03;
-                
-                return result;
-            };
-            console.log('Funzione m4.rotateZ creata');
-        }
-        
-        // Funzioni di scala
-        if (typeof m4.scale !== 'function') {
-            m4.scale = function(m, sx, sy, sz) {
-                // Questa è la versione che crea una nuova matrice
-                const result = Array.isArray(m) ? [...m] : new Float32Array(m);
-                
-                result[0] *= sx;
-                result[1] *= sx;
-                result[2] *= sx;
-                result[3] *= sx;
-                result[4] *= sy;
-                result[5] *= sy;
-                result[6] *= sy;
-                result[7] *= sy;
-                result[8] *= sz;
-                result[9] *= sz;
-                result[10] *= sz;
-                result[11] *= sz;
-                
-                return result;
-            };
-            console.log('Funzione m4.scale creata');
+    // Funzione per aggiungere log
+    log(message, isError = false) {
+        if (this.debugLog) {
+            console.log(isError ? `[ERROR] ${message}` : `[INFO] ${message}`);
+            
+            if (typeof logDebug === 'function') {
+                logDebug(message, isError ? 'error' : 'info');
+            }
         }
     }
-    </script>
-    
-    <script>
-        // Funzione per aggiungere log
-        function log(message, isError = false) {
-            const logEl = document.getElementById('log');
-            const entry = document.createElement('div');
-            entry.className = isError ? 'error' : 'success';
-            entry.textContent = message;
-            logEl.appendChild(entry);
-            logEl.scrollTop = logEl.scrollHeight;
-            console.log(isError ? `ERROR: ${message}` : message);
+
+    async runTests() {
+        this.log('Starting shader and lighting tests...');
+
+        try {
+            // Test 1: Verifica compilazione shader e creazione programma
+            this.log('Test 1: Verifica compilazione shader');
+            await this.testShaderCompilation();
+
+            if (this.shaderProgram) {
+                // Test 2: Verifica location uniform
+                this.log('Test 2: Verifica uniform locations');
+                this.testUniformLocations();
+
+                // Test 3: Verifica binding texture
+                this.log('Test 3: Verifica texture binding');
+                this.testTextureBinding();
+
+                // Test 4: Verifica setup illuminazione
+                this.log('Test 4: Verifica setup illuminazione');
+                this.testLightingSetup();
+            } else {
+                this.log('Impossibile procedere con i test: programma shader non creato', true);
+            }
+
+            // Stampa risultati finali
+            this.printResults();
+        } catch (error) {
+            this.log('Errore durante i test: ' + error, true);
         }
-        
-        // Test degli shader
-        function testShaders() {
-            const canvas = document.getElementById('canvas');
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+    }
+
+    async testShaderCompilation() {
+        try {
+            // Carica e compila gli shader
+            const vertexShaderText = await fetch('shaders/vertex-shader.glsl').then(r => r.text());
+            const fragmentShaderText = await fetch('shaders/fragment-shader.glsl').then(r => r.text());
             
-            const gl = canvas.getContext('webgl2', { preserveDrawingBuffer: true });
-            if (!gl) {
-                log('WebGL 2 non è supportato da questo browser.', true);
-                return;
+            const vertexShader = this.gl.createShader(this.gl.VERTEX_SHADER);
+            this.gl.shaderSource(vertexShader, vertexShaderText);
+            this.gl.compileShader(vertexShader);
+            
+            if (!this.gl.getShaderParameter(vertexShader, this.gl.COMPILE_STATUS)) {
+                throw new Error(`Vertex shader compile error: ${this.gl.getShaderInfoLog(vertexShader)}`);
             }
+            this.log('Vertex shader compilato correttamente');
             
-            log('WebGL 2 è supportato!');
+            const fragmentShader = this.gl.createShader(this.gl.FRAGMENT_SHADER);
+            this.gl.shaderSource(fragmentShader, fragmentShaderText);
+            this.gl.compileShader(fragmentShader);
             
-            // Abilita il debug
-            gl.getExtension('WEBGL_debug_renderer_info');
-            gl.getExtension('WEBGL_debug_shaders');
-            
-            // Info renderer
-            const rendererInfo = gl.getExtension('WEBGL_debug_renderer_info');
-            if (rendererInfo) {
-                log('Renderer: ' + gl.getParameter(rendererInfo.UNMASKED_RENDERER_WEBGL));
-                log('Vendor: ' + gl.getParameter(rendererInfo.UNMASKED_VENDOR_WEBGL));
+            if (!this.gl.getShaderParameter(fragmentShader, this.gl.COMPILE_STATUS)) {
+                throw new Error(`Fragment shader compile error: ${this.gl.getShaderInfoLog(fragmentShader)}`);
             }
-            
-            // Funzione per caricare uno shader
-            function loadShader(gl, type, source) {
-                const shader = gl.createShader(type);
-                gl.shaderSource(shader, source);
-                gl.compileShader(shader);
-                
-                if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-                    const error = gl.getShaderInfoLog(shader);
-                    log(`Errore nella compilazione dello shader: ${error}`, true);
-                    gl.deleteShader(shader);
-                    return null;
-                }
-                
-                return shader;
+            this.log('Fragment shader compilato correttamente');
+
+            // Crea il programma
+            const program = this.gl.createProgram();
+            this.gl.attachShader(program, vertexShader);
+            this.gl.attachShader(program, fragmentShader);
+            this.gl.linkProgram(program);
+
+            if (!this.gl.getProgramParameter(program, this.gl.LINK_STATUS)) {
+                throw new Error(`Linking error: ${this.gl.getProgramInfoLog(program)}`);
             }
-            
-            // Funzione per creare un programma shader
-            function createProgramFromSources(gl, vertexSource, fragmentSource) {
-                const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vertexSource);
-                const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
-                
-                if (!vertexShader || !fragmentShader) {
-                    return null;
-                }
-                
-                const program = gl.createProgram();
-                gl.attachShader(program, vertexShader);
-                gl.attachShader(program, fragmentShader);
-                gl.linkProgram(program);
-                
-                if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-                    log(`Errore nel linking del programma: ${gl.getProgramInfoLog(program)}`, true);
-                    gl.deleteProgram(program);
-                    return null;
-                }
-                
-                return program;
-            }
-            
-            // Funzione per recuperare lo shader da file
-            async function fetchShaderSource(url) {
-                try {
-                    const response = await fetch(url);
-                    if (!response.ok) {
-                        throw new Error(`Impossibile caricare lo shader da ${url}`);
-                    }
-                    return await response.text();
-                } catch (error) {
-                    log(error.message, true);
-                    return null;
-                }
-            }
-            
-            // Shaders semplificati per test
-            const simpleVertexSource = `#version 300 es
-            in vec4 aPosition;
-            void main() {
-              gl_Position = aPosition;
-            }`;
-            
-            const simpleFragmentSource = `#version 300 es
-            precision highp float;
-            out vec4 fragColor;
-            void main() {
-              fragColor = vec4(1.0, 0.0, 0.0, 1.0); // Rosso
-            }`;
-            
-            // Render di un triangolo semplice per test
-            function renderSimpleTriangle(gl, program) {
-                gl.clearColor(0.0, 0.0, 0.0, 1.0);
-                gl.clear(gl.COLOR_BUFFER_BIT);
-                
-                // Vertici del triangolo (normalizzati tra -1 e 1)
-                const vertexData = new Float32Array([
-                    0.0, 0.5, 0.0,    // Top vertex
-                    -0.5, -0.5, 0.0,  // Bottom left
-                    0.5, -0.5, 0.0    // Bottom right
-                ]);
-                
-                const positionBuffer = gl.createBuffer();
-                gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-                gl.bufferData(gl.ARRAY_BUFFER, vertexData, gl.STATIC_DRAW);
-                
-                gl.useProgram(program);
-                
-                const positionLoc = gl.getAttribLocation(program, 'aPosition');
-                if (positionLoc !== -1) {
-                    gl.enableVertexAttribArray(positionLoc);
-                    gl.vertexAttribPointer(positionLoc, 3, gl.FLOAT, false, 0, 0);
-                }
-                
-                gl.drawArrays(gl.TRIANGLES, 0, 3);
-                
-                log('Triangolo semplice renderizzato con successo!');
-            }
-            
-            // Inizia il test caricando gli shader
-            async function runTest() {
-                log('Caricamento degli shader...');
-                
-                try {
-                    // Prima tenta di caricare gli shader da file
-                    const vertexSource = await fetchShaderSource('shaders/vertex-shader.glsl');
-                    const fragmentSource = await fetchShaderSource('shaders/fragment-shader.glsl');
-                    const shadowVertexSource = await fetchShaderSource('shaders/shadow-vertex-shader.glsl');
-                    const shadowFragmentSource = await fetchShaderSource('shaders/shadow-fragment-shader.glsl');
-                    
-                    // Usa gli shader semplificati per il test iniziale
-                    log('Tentativo di rendering con shader semplificati...');
-                    
-                    const simpleProg = createProgramFromSources(gl, simpleVertexSource, simpleFragmentSource);
-                    if (simpleProg) {
-                        log('Programma shader semplificato compilato con successo!');
-                        // Renderizza un triangolo semplice per verifica
-                        renderSimpleTriangle(gl, simpleProg);
-                    } else {
-                        log('Errore nella creazione del programma shader semplificato.', true);
-                    }
-                    
-                    // Se gli shader dai file sono stati caricati, procedi con quelli
-                    if (vertexSource && fragmentSource && shadowVertexSource && shadowFragmentSource) {
-                        log('Shader caricati con successo!');
-                        
-                        // Compila e link i programmi shader
-                        const mainProgram = createProgramFromSources(gl, vertexSource, fragmentSource);
-                        if (mainProgram) {
-                            log('Programma shader principale compilato e linkato con successo!');
-                        }
-                        
-                        const shadowProgram = createProgramFromSources(gl, shadowVertexSource, shadowFragmentSource);
-                        if (shadowProgram) {
-                            log('Programma shader delle ombre compilato e linkato con successo!');
-                        }
-                        
-                        if (!mainProgram || !shadowProgram) {
-                            return;
-                        }
-                        
-                        // Test delle funzioni m4 mancanti
-                        log('Test delle funzioni m4...');
-                        try {
-                            if (typeof m4.perspective === 'function') {
-                                const perspMatrix = m4.perspective(Math.PI / 4, 1, 0.1, 100);
-                                log('m4.perspective funziona correttamente');
-                            } else {
-                                log('m4.perspective non è definito o non funziona', true);
-                            }
-                            
-                            if (typeof m4.ortho === 'function') {
-                                const orthoMatrix = m4.ortho(-1, 1, -1, 1, 0.1, 100);
-                                log('m4.ortho funziona correttamente');
-                            } else {
-                                log('m4.ortho non è definito o non funziona', true);
-                            }
-                            
-                            if (typeof m4.rotateX === 'function') {
-                                const rotateMatrix = m4.rotateX(m4.identity(), Math.PI / 4);
-                                log('m4.rotateX funziona correttamente');
-                            } else {
-                                log('m4.rotateX non è definito o non funziona', true);
-                            }
-                            
-                            if (typeof m4.rotateY === 'function') {
-                                const rotateMatrix = m4.rotateY(m4.identity(), Math.PI / 4);
-                                log('m4.rotateY funziona correttamente');
-                            } else {
-                                log('m4.rotateY non è definito o non funziona', true);
-                            }
-                            
-                            if (typeof m4.rotateZ === 'function') {
-                                const rotateMatrix = m4.rotateZ(m4.identity(), Math.PI / 4);
-                                log('m4.rotateZ funziona correttamente');
-                            } else {
-                                log('m4.rotateZ non è definito o non funziona', true);
-                            }
-                        } catch (error) {
-                            log(`Errore nel test delle funzioni m4: ${error.message}`, true);
-                        }
-                        
-                        // Rendering di un triangolo per verificare che tutto funzioni
-                        log('Rendering di un triangolo di test...');
-                        renderTestTriangle(gl, mainProgram);
-                        
-                        log('Test completato!');
-                    } else {
-                        log('Non tutti gli shader sono stati caricati correttamente.', true);
-                    }
-                } catch (error) {
-                    log(`Si è verificato un errore: ${error.message}`, true);
-                }
-            }
-            
-            // Render di un triangolo di test
-            function renderTestTriangle(gl, program) {
-                gl.clearColor(0.1, 0.1, 0.1, 1.0);
-                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-                
-                // Crea un array di vertici per un semplice triangolo
-                const vertexData = new Float32Array([
-                    // x, y, z
-                    0.0, 0.5, 0.0,    // Top vertex
-                    -0.5, -0.5, 0.0,  // Bottom left
-                    0.5, -0.5, 0.0    // Bottom right
-                ]);
-                
-                // Crea un array di colori (uno per vertice)
-                const colorData = new Float32Array([
-                    1.0, 0.0, 0.0,    // Rosso
-                    0.0, 1.0, 0.0,    // Verde
-                    0.0, 0.0, 1.0     // Blu
-                ]);
-                
-                // Crea un array per le normali (tutte puntano verso Z positivo)
-                const normalData = new Float32Array([
-                    0.0, 0.0, 1.0,
-                    0.0, 0.0, 1.0,
-                    0.0, 0.0, 1.0
-                ]);
-                
-                // Coordinate texture (non utilizziamo texture qui, ma per completezza)
-                const texCoordData = new Float32Array([
-                    0.5, 0.0,
-                    0.0, 1.0,
-                    1.0, 1.0
-                ]);
-                
-                // Crea e associa i buffer
-                const positionBuffer = gl.createBuffer();
-                gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-                gl.bufferData(gl.ARRAY_BUFFER, vertexData, gl.STATIC_DRAW);
-                
-                const normalBuffer = gl.createBuffer();
-                gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-                gl.bufferData(gl.ARRAY_BUFFER, normalData, gl.STATIC_DRAW);
-                
-                const texCoordBuffer = gl.createBuffer();
-                gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-                gl.bufferData(gl.ARRAY_BUFFER, texCoordData, gl.STATIC_DRAW);
-                
-                // Usa il programma shader
-                gl.useProgram(program);
-                
-                // Imposta le matrici
-                const modelMatrix = m4.identity();
-                const viewMatrix = m4.lookAt([0, 0, 5], [0, 0, 0], [0, 1, 0]);
-                const projectionMatrix = m4.perspective(Math.PI / 4, gl.canvas.width / gl.canvas.height, 0.1, 100);
-                const modelViewMatrix = m4.multiply(viewMatrix, modelMatrix);
-                const normalMatrix = m4.transpose(m4.inverse(modelViewMatrix));
-                
-                // Imposta le uniform
-                const modelViewMatrixLoc = gl.getUniformLocation(program, 'uModelViewMatrix');
-                const projectionMatrixLoc = gl.getUniformLocation(program, 'uProjectionMatrix');
-                const normalMatrixLoc = gl.getUniformLocation(program, 'uNormalMatrix');
-                
-                if (modelViewMatrixLoc) gl.uniformMatrix4fv(modelViewMatrixLoc, false, modelViewMatrix);
-                if (projectionMatrixLoc) gl.uniformMatrix4fv(projectionMatrixLoc, false, projectionMatrix);
-                if (normalMatrixLoc) gl.uniformMatrix4fv(normalMatrixLoc, false, normalMatrix);
-                
-                // Imposta altre uniform necessarie
-                const lightPositionLoc = gl.getUniformLocation(program, 'uLightPosition');
-                const lightColorLoc = gl.getUniformLocation(program, 'uLightColor');
-                const lightIntensityLoc = gl.getUniformLocation(program, 'uLightIntensity');
-                const shadowsEnabledLoc = gl.getUniformLocation(program, 'uShadowsEnabled');
-                const reflectionsEnabledLoc = gl.getUniformLocation(program, 'uReflectionsEnabled');
-                const viewPositionLoc = gl.getUniformLocation(program, 'uViewPosition');
-                const ambientStrengthLoc = gl.getUniformLocation(program, 'uAmbientStrength');
-                const specularStrengthLoc = gl.getUniformLocation(program, 'uSpecularStrength');
-                const shininessLoc = gl.getUniformLocation(program, 'uShininess');
-                
-                if (lightPositionLoc) gl.uniform3fv(lightPositionLoc, [5, 5, 5]);
-                if (lightColorLoc) gl.uniform3fv(lightColorLoc, [1, 1, 1]);
-                if (lightIntensityLoc) gl.uniform1f(lightIntensityLoc, 1.0);
-                if (shadowsEnabledLoc) gl.uniform1i(shadowsEnabledLoc, 0);  // Disabilita ombre per questo test
-                if (reflectionsEnabledLoc) gl.uniform1i(reflectionsEnabledLoc, 1);
-                if (viewPositionLoc) gl.uniform3fv(viewPositionLoc, [0, 0, 5]);
-                if (ambientStrengthLoc) gl.uniform1f(ambientStrengthLoc, 0.1);
-                if (specularStrengthLoc) gl.uniform1f(specularStrengthLoc, 0.5);
-                if (shininessLoc) gl.uniform1f(shininessLoc, 32.0);
-                
-                // Imposta gli attributi
-                const positionLoc = gl.getAttribLocation(program, 'aPosition');
-                const normalLoc = gl.getAttribLocation(program, 'aNormal');
-                const texCoordLoc = gl.getAttribLocation(program, 'aTextureCoord');
-                
-                if (positionLoc !== -1) {
-                    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-                    gl.enableVertexAttribArray(positionLoc);
-                    gl.vertexAttribPointer(positionLoc, 3, gl.FLOAT, false, 0, 0);
-                }
-                
-                if (normalLoc !== -1) {
-                    gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-                    gl.enableVertexAttribArray(normalLoc);
-                    gl.vertexAttribPointer(normalLoc, 3, gl.FLOAT, false, 0, 0);
-                }
-                
-                if (texCoordLoc !== -1) {
-                    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-                    gl.enableVertexAttribArray(texCoordLoc);
-                    gl.vertexAttribPointer(texCoordLoc, 2, gl.FLOAT, false, 0, 0);
-                }
-                
-                // Disegna il triangolo
-                gl.drawArrays(gl.TRIANGLES, 0, 3);
-                
-                log('Triangolo renderizzato con successo!');
-            }
-            
-            // Avvia il test
-            runTest();
-            
-            // Gestione del ridimensionamento
-            window.addEventListener('resize', () => {
-                const canvas = document.getElementById('canvas');
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-                
-                // Se WebGL è disponibile
-                const gl = canvas.getContext('webgl2');
-                if (gl) {
-                    gl.viewport(0, 0, canvas.width, canvas.height);
-                }
-            });
+
+            this.shaderProgram = program;
+            this.testResults.shaderCompilation = true;
+            this.log('Programma shader creato e linkato correttamente');
+
+        } catch (error) {
+            this.log('Errore nella compilazione degli shader: ' + error, true);
+            throw error;
         }
+    }
+
+    testUniformLocations() {
+        if (!this.shaderProgram) {
+            this.log('Programma shader non disponibile', true);
+            return;
+        }
+
+        const requiredUniforms = [
+            'uModelMatrix',
+            'uViewMatrix',
+            'uProjectionMatrix',
+            'uNormalMatrix',
+            'uLightPosition',
+            'uLightColor',
+            'uLightIntensity',
+            'uAttenuation',
+            'uAmbientColor',
+            'uAmbientIntensity',
+            'uAmbientStrength',
+            'uViewPosition',
+            'uSpecularStrength',
+            'uShininess'
+        ];
+
+        this.gl.useProgram(this.shaderProgram);
         
-        // Avvia il test degli shader
-        testShaders();
-    </script>
-</body>
-</html>
+        const missingUniforms = [];
+        for (const uniform of requiredUniforms) {
+            const location = this.gl.getUniformLocation(this.shaderProgram, uniform);
+            if (location === null) {
+                missingUniforms.push(uniform);
+            }
+        }
+
+        if (missingUniforms.length === 0) {
+            this.log('Tutte le uniform sono presenti e accessibili');
+            this.testResults.uniformLocations = true;
+        } else {
+            this.log('Uniform mancanti: ' + missingUniforms.join(', '), true);
+        }
+    }
+
+    testTextureBinding() {
+        try {
+            this.gl.useProgram(this.shaderProgram);
+            
+            const texture = this.gl.createTexture();
+            this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
+            
+            this.gl.texImage2D(
+                this.gl.TEXTURE_2D, 
+                0, 
+                this.gl.RGBA, 
+                1, 1, 
+                0, 
+                this.gl.RGBA, 
+                this.gl.UNSIGNED_BYTE, 
+                new Uint8Array([255, 0, 0, 255])
+            );
+
+            if (this.gl.getError() === this.gl.NO_ERROR) {
+                this.log('Texture binding funzionante');
+                this.testResults.textureBinding = true;
+            } else {
+                this.log('Errore nel binding delle texture', true);
+            }
+        } catch (error) {
+            this.log('Errore nel test delle texture: ' + error, true);
+        }
+    }
+
+    testLightingSetup() {
+        try {
+            if (!this.shaderProgram) {
+                throw new Error('Programma shader non disponibile');
+            }
+
+            this.gl.useProgram(this.shaderProgram);
+            
+            const testLight = {
+                position: [0, 8, 0],
+                color: [1, 1, 1],
+                intensity: 1.0
+            };
+
+            const lightPosLoc = this.gl.getUniformLocation(this.shaderProgram, 'uLightPosition');
+            const lightColorLoc = this.gl.getUniformLocation(this.shaderProgram, 'uLightColor');
+            
+            if (lightPosLoc === null || lightColorLoc === null) {
+                throw new Error('Location delle uniform della luce non trovate');
+            }
+
+            this.gl.uniform3fv(lightPosLoc, new Float32Array(testLight.position));
+            this.gl.uniform3fv(lightColorLoc, new Float32Array(testLight.color));
+
+            if (this.gl.getError() === this.gl.NO_ERROR) {
+                this.log('Setup illuminazione funzionante');
+                this.testResults.lightingSetup = true;
+            } else {
+                this.log('Errore nel setup dell\'illuminazione', true);
+            }
+        } catch (error) {
+            this.log('Errore nel test dell\'illuminazione: ' + error, true);
+        }
+    }
+
+    printResults() {
+        this.log('\nRisultati dei test:');
+        this.log('--------------------');
+        Object.entries(this.testResults).forEach(([test, passed]) => {
+            this.log(`${passed ? '✓' : '❌'} ${test}: ${passed ? 'OK' : 'FALLITO'}`);
+        });
+
+        const allPassed = Object.values(this.testResults).every(result => result);
+        this.log('\nStato generale: ' + (allPassed ? '✓ Tutti i test passati' : '❌ Alcuni test falliti'));
+    }
+}
+
+// Export per uso globale
+window.ShaderTestUtils = ShaderTestUtils;

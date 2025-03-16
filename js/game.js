@@ -1,6 +1,9 @@
 // game.js
+// Classe principale per la gestione del gioco
+
 class Game {
     constructor() {
+        // Riferimenti agli elementi del DOM
         this.canvas = document.getElementById('canvas');
         this.container = document.getElementById('container');
         
@@ -11,26 +14,26 @@ class Game {
         this.isLightFlickering = false;
         this.canToggleLight = true;
         
-        // Costanti della stanza
-        this.ROOM_WIDTH = 20;
-        this.ROOM_HEIGHT = 10;
-        this.ROOM_DEPTH = 25;
-        this.WALL_THICKNESS = 0.1;
+        // Costanti della stanza dalle impostazioni globali
+        this.ROOM_WIDTH = GAME_CONSTANTS.ROOM.WIDTH || 20;
+        this.ROOM_HEIGHT = GAME_CONSTANTS.ROOM.HEIGHT || 10;
+        this.ROOM_DEPTH = GAME_CONSTANTS.ROOM.DEPTH || 25;
+        this.WALL_THICKNESS = GAME_CONSTANTS.ROOM.WALL_THICKNESS || 0.1;
         
-        // Stato del giocatore - modifica posizione iniziale per vedere meglio la stanza
+        // Stato del giocatore - posizione iniziale
         this.player = {
             position: [0, 1.7, 0],  // Altezza umana standard
             rotation: [0, 0, 0],
             onFloor: true
         };
         
-        // Inizializza la camera come nell'originale
+        // Inizializza la camera
         this.camera = {
             position: [0, 1.7, 0],
             rotation: { x: 0, y: 0, z: 0 },
-            fov: 70 * Math.PI / 180,
-            near: 0.1,
-            far: 1000
+            fov: GAME_CONSTANTS.CAMERA.FOV * Math.PI / 180 || 70 * Math.PI / 180,
+            near: GAME_CONSTANTS.CAMERA.NEAR || 0.1,
+            far: GAME_CONSTANTS.CAMERA.FAR || 1000
         };
 
         // Inizializza i sottosistemi
@@ -38,11 +41,11 @@ class Game {
         this.audio = new AudioManager();
         this.input = new InputHandler(this);
         
-        // Modifica l'intensità della luce
+        // Configurazione luce principale
         this.light = {
-            position: [0, 8, 0],  // Luce più alta
-            color: [1, 1, 1],     // Luce bianca
-            intensity: 300,       // Intensità maggiore
+            position: [0, 8, 0],
+            color: GAME_CONSTANTS.LIGHTS.MAIN_LIGHT.COLOR || [1, 1, 1],
+            intensity: GAME_CONSTANTS.LIGHTS.MAIN_LIGHT.INTENSITY || 150,
             enabled: true
         };
         
@@ -54,10 +57,24 @@ class Game {
         
         // Setup degli event listeners
         this.setupEventListeners();
+        
+        this.log('Gioco inizializzato');
     }
     
+    // Funzione di log
+    log(message, isError = false) {
+        console.log(isError ? `[GAME ERROR] ${message}` : `[GAME] ${message}`);
+        
+        if (typeof logDebug === 'function') {
+            logDebug(message, isError ? 'error' : 'info');
+        }
+    }
+    
+    // Inizializzazione del gioco
     async initialize() {
         try {
+            this.log('Inizializzazione del gioco in corso...');
+            
             // Inizializza la fisica della stanza
             this.physics.initializeCollisionGeometry(
                 this.ROOM_WIDTH,
@@ -73,23 +90,17 @@ class Game {
             // Avvia l'inizializzazione del gioco
             await this.initializeGame();
             
+            this.log('Inizializzazione completata con successo');
             return true;
         } catch (error) {
-            console.error('Errore durante l\'inizializzazione del gioco:', error);
+            this.log('Errore durante l\'inizializzazione del gioco: ' + error, true);
             throw error;
         }
     }
     
+    // Inizializzazione degli elementi del gioco
     async initializeGame() {
         try {
-            // Inizializza la fisica della stanza
-            this.physics.initializeCollisionGeometry(
-                this.ROOM_WIDTH,
-                this.ROOM_HEIGHT,
-                this.ROOM_DEPTH,
-                this.WALL_THICKNESS
-            );
-            
             // Carica le mesh
             await this.loadMeshes();
             
@@ -102,57 +113,68 @@ class Game {
             // Aggiungi gli oggetti interattivi
             this.addInteractiveObjects();
             
-            // NON avviare l'audio qui
-            // this.audio.playIntroMusic(); <- rimuovi questa linea
-            
+            this.log('Elementi del gioco inizializzati');
         } catch (error) {
-            console.error('Errore durante l\'inizializzazione del gioco:', error);
+            this.log('Errore durante l\'inizializzazione degli elementi del gioco: ' + error, true);
+            throw error;
         }
     }
     
+    // Caricamento delle mesh
     async loadMeshes() {
-        // Carica tutte le mesh necessarie con i loro materiali
+        this.log('Caricamento mesh...');
+        
         await Promise.all([
             // Clock con materiali
-            this.renderer.loadMesh('clock', 'models/pendent-clock.obj', 'models/pendent-clock.mtl'),
+            this.renderer.loadMesh('clock', GAME_CONSTANTS.ASSETS.MODELS.CLOCK || 'models/pendent-clock.obj'),
             
             // Doll con materiali
-            this.renderer.loadMesh('doll', 'models/doll.obj', 'models/Doll.mtl'),
+            this.renderer.loadMesh('doll', GAME_CONSTANTS.ASSETS.MODELS.DOLL || 'models/doll.obj'),
             
             // Wheelchair1 con materiali
-            this.renderer.loadMesh('wheelchair1', 'models/kurumaisu.unity_1.obj', 'models/kurumaisu.unity_1.mtl'),
+            this.renderer.loadMesh('wheelchair1', GAME_CONSTANTS.ASSETS.MODELS.WHEELCHAIR1 || 'models/kurumaisu.unity_1.obj'),
             
             // Wheelchair2 con materiali
-            this.renderer.loadMesh('wheelchair2', 'models/UnsavedScene_1.obj', 'models/UnsavedScene_1.mtl'),
+            this.renderer.loadMesh('wheelchair2', GAME_CONSTANTS.ASSETS.MODELS.WHEELCHAIR2 || 'models/UnsavedScene_1.obj'),
             
             // Skull con materiali
-            this.renderer.loadMesh('skull', 'models/12140_Skull_v3_L2.obj', 'models/12140_Skull_v3_L2.mtl'),
+            this.renderer.loadMesh('skull', GAME_CONSTANTS.ASSETS.MODELS.SKULL || 'models/12140_Skull_v3_L2.obj'),
             
-            // Switch con materiali (FBX ha già i materiali incorporati)
-            this.renderer.loadMesh('switch', 'models/Switch.fbx'),
+            // Switch con materiali
+            this.renderer.loadMesh('switch', GAME_CONSTANTS.ASSETS.MODELS.SWITCH || 'models/Switch.fbx'),
             
             // Lamp con materiali
-            this.renderer.loadMesh('lamp', 'models/lamp.obj', 'models/lamp.mtl')
+            this.renderer.loadMesh('lamp', GAME_CONSTANTS.ASSETS.MODELS.LAMP || 'models/lamp.obj')
         ]);
+        
+        this.log('Mesh caricate con successo');
     }
     
+    // Caricamento delle texture
     async loadTextures() {
-        console.log('Loading textures...');
+        this.log('Caricamento texture...');
+        
         await Promise.all([
-            this.renderer.loadTexture('wall', 'textures/wall.jpg'),
-            this.renderer.loadTexture('floor', 'textures/wood.jpg'),
-            this.renderer.loadTexture('door', 'textures/door.png'),
-            this.renderer.loadTexture('clock', 'models/orologio-horror_baseColor.jpg'),
-            this.renderer.loadTexture('doll', 'models/Doll_Doll_BaseColor.png'),
-            this.renderer.loadTexture('switch', 'textures/DefaultMaterial_Base_color.png'),
+            this.renderer.loadTexture('wall', GAME_CONSTANTS.ASSETS.TEXTURES.WALL || 'textures/wall.jpg'),
+            this.renderer.loadTexture('floor', GAME_CONSTANTS.ASSETS.TEXTURES.FLOOR || 'textures/wood.jpg'),
+            this.renderer.loadTexture('door', GAME_CONSTANTS.ASSETS.TEXTURES.DOOR || 'textures/door.png'),
+            this.renderer.loadTexture('clock', GAME_CONSTANTS.ASSETS.TEXTURES.CLOCK || 'models/orologio-horror_baseColor.jpg'),
+            this.renderer.loadTexture('doll', GAME_CONSTANTS.ASSETS.TEXTURES.DOLL || 'models/Doll_Doll_BaseColor.png'),
+            this.renderer.loadTexture('switch', GAME_CONSTANTS.ASSETS.TEXTURES.SWITCH || 'textures/DefaultMaterial_Base_color.png'),
             this.renderer.loadTexture('skull', 'models/Skull.jpg'),
             // Usa la stessa texture della bambola per le sedie a rotelle
             this.renderer.loadTexture('wheelchair', 'models/Doll_Doll_BaseColor.png')
         ]);
+        
+        this.log('Texture caricate con successo');
     }
     
+    // Configurazione della scena base
     setupScene() {
+        this.log('Configurazione scena...');
+        
         // Configura la stanza base
+        // Pavimento
         this.scene.objects.set('floor', {
             mesh: 'plane',
             texture: 'floor',
@@ -161,7 +183,7 @@ class Game {
             scale: [this.ROOM_WIDTH, 1, this.ROOM_DEPTH]
         });
         
-        // Soffitto con Y positivo
+        // Soffitto
         this.scene.objects.set('ceiling', {
             mesh: 'plane',
             texture: 'floor',
@@ -181,16 +203,13 @@ class Game {
             obj.modelMatrix = m4.identity();
             obj.modelViewMatrix = m4.identity();
         });
+        
+        this.log('Scena configurata con successo');
     }
     
-    handleResize(width, height) {
-        this.renderer.onWindowResize();
-        this.updateCamera();
-    }
-    
+    // Configurazione delle pareti della stanza
     setupWalls() {
-        // Funzione helper per creare una parete
-        const wallTexture = 'wall'; // Verifica che questo corrisponda al nome dato in loadTextures
+        const wallTexture = 'wall';
         
         const createWall = (id, position, rotation, scale) => {
             this.scene.objects.set(id, {
@@ -199,19 +218,19 @@ class Game {
                 position,
                 rotation,
                 scale,
-                doubleSided: true // Aggiungi questa proprietà
+                doubleSided: true
             });
         };
         
-        // Pareti alla giusta altezza, partendo da Y=0
+        // Pareti alla giusta altezza
         createWall('wallFront', 
-            [0, this.ROOM_HEIGHT/2, -this.ROOM_DEPTH/2],  // position 
-            [0, 0, 0],                                    // rotation
-            [this.ROOM_WIDTH, this.ROOM_HEIGHT, 1]        // scale
+            [0, this.ROOM_HEIGHT/2, -this.ROOM_DEPTH/2],
+            [0, 0, 0],
+            [this.ROOM_WIDTH, this.ROOM_HEIGHT, 1]
         );
         
         createWall('wallBack',
-            [0, this.ROOM_HEIGHT/2, this.ROOM_DEPTH/2],   
+            [0, this.ROOM_HEIGHT/2, this.ROOM_DEPTH/2],
             [0, Math.PI, 0],
             [this.ROOM_WIDTH, this.ROOM_HEIGHT, 1]
         );
@@ -227,84 +246,65 @@ class Game {
             [0, -Math.PI/2, 0],
             [this.ROOM_DEPTH, this.ROOM_HEIGHT, 1]
         );
+        
+        this.log('Pareti aggiunte alla scena');
     }
     
+    // Configurazione dell'illuminazione
     setupLighting() {
-        console.log('Initializing horror lighting setup...');
+        this.log('Configurazione illuminazione...');
     
         if (!this.scene) {
             this.scene = {
                 lights: new Map(),
                 objects: new Map()
             };
-            console.log('Created new scene with lights and objects maps');
+            this.log('Creata nuova scena con luci e oggetti');
         }
     
+        // Luce principale (punto)
         const mainLight = {
             type: 'point',
             position: [0, this.ROOM_HEIGHT * 0.8, 0], // 80% dell'altezza della stanza
-            color: [1.0, 0.95, 0.8], // Luce calda
-            intensity: 150,       // Aumentata intensità
+            color: GAME_CONSTANTS.LIGHTS.MAIN_LIGHT.COLOR || [1.0, 0.95, 0.8], // Luce calda
+            intensity: GAME_CONSTANTS.LIGHTS.MAIN_LIGHT.INTENSITY || 150,
             enabled: true
         };
         
-        // Aggiunta luce ambientale più forte
+        // Luce ambientale per evitare zone troppo scure
         const ambientLight = {
             type: 'ambient',
-            color: [0.3, 0.3, 0.35], // Colore ambientale leggermente bluastro
-            intensity: 0.5          // Aumentata intensità ambientale
+            color: GAME_CONSTANTS.LIGHTS.AMBIENT_LIGHT.COLOR || [0.3, 0.3, 0.35], // Colore ambientale leggermente bluastro
+            intensity: GAME_CONSTANTS.LIGHTS.AMBIENT_LIGHT.INTENSITY || 0.5
         };
     
         // Aggiungi controlli al pannello laterale
         const gui = new dat.GUI({ autoPlace: false });
         document.getElementById('gui-container').appendChild(gui.domElement);
     
+        // Cartella per le impostazioni della luce
         const lightFolder = gui.addFolder('Light Settings');
         lightFolder.add(mainLight, 'intensity', 0, 200).name('Main Light Intensity')
             .onChange((value) => {
                 mainLight.intensity = value;
                 this.light.intensity = value;
-                console.log('Light intensity changed:', {
-                    newIntensity: value,
-                    mainLight: mainLight,
-                    rendererLight: this.light
-                });
+                this.log('Intensità luce modificata: ' + value);
             });
     
         lightFolder.add(mainLight, 'enabled').name('Light Enabled')
             .onChange((value) => {
                 mainLight.enabled = value;
                 this.light.enabled = value;
-                console.log('Light enabled state changed:', {
-                    enabled: value,
-                    mainLight: mainLight,
-                    rendererLight: this.light
-                });
+                this.log('Stato luce modificato: ' + (value ? 'attiva' : 'disattiva'));
             });
     
         lightFolder.open();
     
-        console.log('Light setup parameters:', {
-            mainLight: {
-                position: mainLight.position,
-                intensity: mainLight.intensity,
-                enabled: mainLight.enabled,
-                color: mainLight.color
-            },
-            ambientLight: {
-                intensity: ambientLight.intensity,
-                color: ambientLight.color
-            },
-            roomDimensions: {
-                height: this.ROOM_HEIGHT,
-                width: this.ROOM_WIDTH,
-                depth: this.ROOM_DEPTH
-            }
-        });
-    
+        // Memorizza le luci nella scena
         this.scene.lights.set('mainLight', mainLight);
         this.scene.lights.set('ambient', ambientLight);
     
+        // Aggiorna la luce del renderer
         this.light = {
             position: mainLight.position,
             color: mainLight.color,
@@ -312,9 +312,10 @@ class Game {
             enabled: mainLight.enabled
         };
     
-        console.log('Horror lighting setup completed');
+        this.log('Illuminazione configurata con successo');
     }
     
+    // Aggiunta degli oggetti interattivi alla scena
     addInteractiveObjects() {
         // Aggiungi oggetti interattivi alla scena
         this.addDoll();
@@ -322,10 +323,13 @@ class Game {
         this.addSkulls();
         this.addClock();
         this.addLightSwitch();
+        
+        this.log('Oggetti interattivi aggiunti alla scena');
     }
     
+    // Aggiunta della bambola inquietante
     addDoll() {
-        // Posizione più definita per la bambola
+        // Posizione per la bambola
         this.scene.objects.set('doll', {
             mesh: 'doll',
             texture: 'doll',
@@ -337,15 +341,16 @@ class Game {
             rotation: [0, Math.random() * Math.PI * 2, 0],
             scale: [1, 1, 1],
             interactive: true,
-            proximityRadius: 5
+            proximityRadius: GAME_CONSTANTS.INTERACTION.DOLL_PROXIMITY || 5
         });
     }
     
+    // Aggiunta delle sedie a rotelle
     addWheelchairs() {
         this.scene.objects.set('wheelchair1', {
             mesh: 'wheelchair1',
             texture: 'wheelchair',
-            position: [-this.ROOM_WIDTH + 10.5, 0, -this.ROOM_DEPTH/2 + 8], // Y a 0
+            position: [-this.ROOM_WIDTH + 10.5, 0, -this.ROOM_DEPTH/2 + 8],
             rotation: [0, -Math.PI/2, 0],
             scale: [0.2, 0.2, 0.2]
         });
@@ -353,12 +358,13 @@ class Game {
         this.scene.objects.set('wheelchair2', {
             mesh: 'wheelchair2',
             texture: 'wheelchair',
-            position: [-this.ROOM_WIDTH/2 + 20, 0, -this.ROOM_DEPTH/2 + 8], // Y a 0
+            position: [-this.ROOM_WIDTH/2 + 20, 0, -this.ROOM_DEPTH/2 + 8],
             rotation: [0, Math.PI/2, 0],
             scale: [0.2, 0.2, 0.2]
         });
     }
     
+    // Aggiunta dell'orologio
     addClock() {
         this.scene.objects.set('clock', {
             mesh: 'clock',
@@ -369,10 +375,11 @@ class Game {
         });
     }
     
+    // Aggiunta dei teschi
     addSkulls() {
         const skullPositions = [
-            { pos: [-8, 0, -11.0], rot: [-Math.PI/2, 0, 0] },  // Y a 0
-            { pos: [-8, 2, -10.8], rot: [-Math.PI/2 + 0.4, 0.2, 0.5] }, // Questo sul muro
+            { pos: [-8, 0, -11.0], rot: [-Math.PI/2, 0, 0] },
+            { pos: [-8, 2, -10.8], rot: [-Math.PI/2 + 0.4, 0.2, 0.5] },
         ];
         
         skullPositions.forEach((skull, index) => {
@@ -386,6 +393,7 @@ class Game {
         });
     }
     
+    // Aggiunta dell'interruttore della luce
     addLightSwitch() {
         this.scene.objects.set('switch', {
             mesh: 'switch',
@@ -394,18 +402,50 @@ class Game {
             rotation: [0, Math.PI/2, 0],
             scale: [0.05, 0.05, 0.05],
             interactive: true,
-            proximityRadius: 2
+            proximityRadius: GAME_CONSTANTS.INTERACTION.SWITCH_PROXIMITY || 2
         });
     }
     
+    // Avvio del gioco
     start() {
         this.isRunning = true;
         this.audio.playStartMusic();
+        
+        // Forza un rendering iniziale
+        this.render();
+        
+        // Forza un resize per assicurarsi che il canvas abbia le dimensioni corrette
+        this.handleResize(window.innerWidth, window.innerHeight);
+        
+        // Avvia il game loop
         this.gameLoop();
+        
+        // Registra un messaggio di avvio
+        this.log('Gioco avviato');
     }
     
+    // Loop principale del gioco
     gameLoop() {
-        if (!this.isRunning || this.isPaused) return;
+        if (!this.isRunning) {
+            this.log('Game loop terminato: gioco non in esecuzione');
+            return;
+        }
+        
+        if (this.isPaused) {
+            // Continua il loop anche in pausa
+            requestAnimationFrame(() => this.gameLoop());
+            return;
+        }
+        
+        // Log per diagnostica
+        if (this.loopCounter === undefined) {
+            this.loopCounter = 0;
+        }
+        
+        this.loopCounter++;
+        if (this.loopCounter % 60 === 0) { // Log ogni 60 frame (circa 1 secondo)
+            this.log(`Game loop attivo - frame ${this.loopCounter}`);
+        }
         
         // Aggiorna input
         this.input.update();
@@ -423,6 +463,7 @@ class Game {
         requestAnimationFrame(() => this.gameLoop());
     }
     
+    // Aggiornamento della fisica
     updatePhysics() {
         // Aggiorna la fisica del giocatore
         const newPosition = this.physics.update(1/60, this.player.position);
@@ -436,6 +477,7 @@ class Game {
         }
     }
     
+    // Aggiornamento della logica di gioco
     update() {
         // Aggiorna le interazioni con gli oggetti
         this.checkObjectInteractions();
@@ -445,12 +487,9 @@ class Game {
         
         // Aggiorna la camera
         this.updateCamera();
-        
-        if (this.renderer.settings.debug.playerPosition) {
-            console.log('Player position:', this.player.position);
-        }
     }
     
+    // Controllo delle interazioni con gli oggetti
     checkObjectInteractions() {
         for (const [id, object] of this.scene.objects) {
             if (object.interactive) {
@@ -462,11 +501,16 @@ class Game {
                     } else if (id === 'switch') {
                         this.handleSwitchProximity();
                     }
+                } else if (id === 'switch') {
+                    // Nascondi le istruzioni quando ci allontaniamo dall'interruttore
+                    document.getElementById('instructions').style.visibility = 'hidden';
+                    document.getElementById('crosshair').style.backgroundImage = "url('images/crosshair.png')";
                 }
             }
         }
     }
     
+    // Calcola la distanza tra il giocatore e un oggetto
     getDistanceToPlayer(objectPosition) {
         return Math.sqrt(
             Math.pow(this.player.position[0] - objectPosition[0], 2) +
@@ -475,6 +519,7 @@ class Game {
         );
     }
     
+    // Gestione dell'interazione con la bambola
     handleDollProximity() {
         // Attiva suoni inquietanti se la luce è spenta
         if (!this.isLightOn) {
@@ -482,12 +527,14 @@ class Game {
         }
     }
     
+    // Gestione dell'interazione con l'interruttore
     handleSwitchProximity() {
         // Mostra istruzioni per l'interruttore
         document.getElementById('instructions').style.visibility = 'visible';
         document.getElementById('crosshair').style.backgroundImage = "url('images/crosshair-selection.png')";
     }
     
+    // Aggiornamento dell'audio in base alla prossimità
     updateProximityAudio() {
         // Aggiorna l'audio in base alla posizione del giocatore
         const dollObject = this.scene.objects.get('doll');
@@ -497,6 +544,7 @@ class Game {
         }
     }
     
+    // Aggiornamento della camera
     updateCamera() {
         // Usa la rotazione per guardare nella direzione corretta
         const target = [
@@ -511,12 +559,9 @@ class Game {
             target,
             [0, 1, 0]
         );
-    
-        if (this.renderer.settings.debug.playerPosition) {
-            console.log('Player position:', this.player.position);
-        }
     }
     
+    // Configurazione controlli mouse
     setupMouseControls() {
         const canvas = document.getElementById('canvas');
     
@@ -545,19 +590,18 @@ class Game {
         });
     }
     
+    // Renderizzazione della scena
     render() {
         // Renderizza la scena
         this.renderer.render(this.scene);
     }
     
+    // Toggle del pannello di controllo
     togglePanel() {
         const panel = document.getElementById('side-panel');
         const isVisible = panel.classList.contains('visible');
         
-        console.log('Panel toggle:', {
-            wasVisible: isVisible,
-            action: isVisible ? 'hiding' : 'showing'
-        });
+        this.log('Toggle pannello: ' + (isVisible ? 'chiusura' : 'apertura'));
      
         if (isVisible) {
             panel.classList.remove('visible');
@@ -572,47 +616,32 @@ class Game {
         }
         
         this.isPaused = !isVisible;
-        console.log('Game state:', {
-            isPaused: this.isPaused,
-            pointerLocked: document.pointerLockElement === this.canvas
-        });
-     }
+    }
      
-     toggleLight() {
-        console.log('Light toggle attempt:', {
-            canToggle: this.canToggleLight,
-            isFlickering: this.isLightFlickering,
-            currentState: this.isLightOn
-        });
+    // Toggle della luce
+    toggleLight() {
+        this.log('Tentativo toggle luce: ' + 
+                 'canToggle=' + this.canToggleLight + 
+                 ', isFlickering=' + this.isLightFlickering + 
+                 ', currentState=' + this.isLightOn);
      
         if (this.canToggleLight && !this.isLightFlickering) {
             this.isLightOn = !this.isLightOn;
             this.isLightFlickering = true;
             
-            console.log('Light state changed:', {
-                newState: this.isLightOn,
-                flickerStarted: true
-            });
+            this.log('Stato luce cambiato: ' + (this.isLightOn ? 'accesa' : 'spenta'));
      
             this.renderer.setLightEnabled(this.isLightOn);
             
             setTimeout(() => {
                 this.isLightFlickering = false;
-                console.log('Flicker effect ended');
-            }, 500);
+                this.log('Effetto sfarfallio terminato');
+            }, GAME_CONSTANTS.LIGHTS.MAIN_LIGHT.FLICKER_DURATION || 500);
         }
-     }
+    }
     
-     updateCameraRotation(deltaX, deltaY) {
-        if(this.renderer.settings.debug.playerPosition) {
-            console.log('FPS rotation update:', {
-                prePitch: this.player.rotation[0] * (180/Math.PI),
-                preYaw: this.player.rotation[1] * (180/Math.PI),
-                deltaX: deltaX * (180/Math.PI),
-                deltaY: deltaY * (180/Math.PI)
-            });
-        }
-    
+    // Aggiornamento rotazione camera
+    updateCameraRotation(deltaX, deltaY) {
         // Yaw (rotazione orizzontale) - può ruotare liberamente 360°
         this.player.rotation[1] = (this.player.rotation[1] + deltaX) % (Math.PI * 2);
         if (this.player.rotation[1] < 0) {
@@ -624,15 +653,9 @@ class Game {
         this.player.rotation[0] = Math.max(-MAX_PITCH, 
                                          Math.min(MAX_PITCH, 
                                                 this.player.rotation[0] - deltaY));
-    
-        if(this.renderer.settings.debug.playerPosition) {
-            console.log('Post FPS rotation:', {
-                postPitch: this.player.rotation[0] * (180/Math.PI),
-                postYaw: this.player.rotation[1] * (180/Math.PI)
-            });
-        }
     }
     
+    // Movimento del giocatore
     movePlayer(direction, speed) {
         // Calcola la direzione di movimento sul piano XZ
         const yaw = this.player.rotation[1];
@@ -666,10 +689,13 @@ class Game {
         this.physics.addImpulse([moveX, 0, moveZ], 1);
     }
     
+    // Salto del giocatore
     playerJump() {
         this.physics.jump();
+        this.log('Giocatore salta');
     }
     
+    // Setup degli event listeners
     setupEventListeners() {
         // Gestione del ridimensionamento della finestra
         window.addEventListener('resize', () => {
@@ -723,11 +749,33 @@ class Game {
                 this.isPaused = true;
             }
         });
+
+            // Aggiungi gestore per quando la tab diventa visibile/invisibile
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // Tab nascosto
+                this.pause();
+            } else {
+                // Tab tornato visibile - forza un re-rendering
+                if (this.renderer) {
+                    // Assicurati che tutto sia correttamente dimensionato
+                    this.renderer.onWindowResize();
+                    // Forza un rendering
+                    this.render();
+                }
+                
+                // Riprendi solo se era in esecuzione prima
+                if (this.isRunning && this.isPaused) {
+                    this.resume();
+                }
+            }
+        });
         
         // Gestione degli eventi touch per dispositivi mobili
         this.setupTouchEvents();
     }
     
+    // Setup degli eventi touch
     setupTouchEvents() {
         let initialTouchX = 0;
         let initialTouchY = 0;
@@ -778,6 +826,7 @@ class Game {
         this.setupMobileControls();
     }
     
+    // Setup dei controlli mobile
     setupMobileControls() {
         const mobileControls = document.createElement('div');
         mobileControls.id = 'mobile-controls';
@@ -808,6 +857,7 @@ class Game {
         document.body.appendChild(mobileControls);
     }
     
+    // Mostra i controlli del gioco
     showGameControls() {
         const gameControls = document.getElementById('game-controls');
         gameControls.innerHTML = `
@@ -820,43 +870,98 @@ class Game {
         `;
     }
     
+    // Gestione del ridimensionamento
+    handleResize(width, height) {
+        if (this.renderer) {
+            this.renderer.onWindowResize();
+            // Forza un nuovo rendering dopo il resize
+            this.render();
+        }
+        this.updateCamera();
+        this.log(`Ridimensionamento a ${width}x${height}`);
+    }
+    
+    // Pausa del gioco
     pause() {
-        if (this.isRunning) {
+        if (this.isRunning && !this.isPaused) {
             this.isPaused = true;
-            this.isRunning = false;
+            this.log('Gioco in pausa');
             
-            // Ferma l'audio se necessario
+            // Ferma l'audio solo se necessario
             if (this.audio) {
                 this.audio.stopAll();
             }
             
-            // Eventualmente mostra menu di pausa o altre UI
-            document.getElementById('instructions').style.visibility = 'visible';
-            document.exitPointerLock();
-            document.body.style.cursor = 'default';
+            // Non uscire da pointer lock automaticamente
+            // document.exitPointerLock();
         }
     }
     
+    // Ripresa del gioco
     resume() {
         if (this.isPaused) {
             this.isPaused = false;
-            this.isRunning = true;
+            this.log('Gioco ripreso');
             
-            // Riavvia il game loop
-            this.gameLoop();
-            
-            // Ripristina l'audio se necessario
+            // Riavvia l'audio solo se necessario
             if (this.audio && this.isLightOn) {
                 this.audio.playStartMusic();
             }
             
-            // Ripristina UI e controlli
-            document.getElementById('instructions').style.visibility = 'hidden';
-            this.canvas.requestPointerLock();
-            document.body.style.cursor = 'none';
+            // Non richiedere pointer lock automaticamente
+            // this.canvas.requestPointerLock();
         }
+    }
+    
+    // Reinizializzazione (dopo perdita contesto WebGL)
+    async reinitialize() {
+        this.pause();
+        
+        try {
+            // Reinizializza il renderer
+            if (this.renderer) {
+                await this.renderer.initialize();
+            }
+            
+            // Ricarica le mesh e le texture
+            await this.loadMeshes();
+            await this.loadTextures();
+            
+            // Riconfigura la scena
+            this.setupScene();
+            this.addInteractiveObjects();
+            
+            this.resume();
+            this.log('Gioco reinizializzato con successo');
+            return true;
+        } catch (error) {
+            this.log('Errore durante la reinizializzazione: ' + error, true);
+            return false;
+        }
+    }
+    
+    // Ottieni lo stato attuale del gioco (per debug)
+    getState() {
+        return {
+            player: this.player,
+            isRunning: this.isRunning,
+            isPaused: this.isPaused,
+            isLightOn: this.isLightOn,
+            camera: this.camera,
+            sceneObjects: Array.from(this.scene.objects.keys())
+        };
+    }
+    
+    // Toggle vista debug
+    toggleDebugView() {
+        if (this.renderer) {
+            this.renderer.settings.debug.renderingSteps = !this.renderer.settings.debug.renderingSteps;
+            this.renderer.settings.debug.playerPosition = !this.renderer.settings.debug.playerPosition;
+            this.log('Debug view: ' + (this.renderer.settings.debug.renderingSteps ? 'on' : 'off'));
+        }
+        return this.renderer ? this.renderer.settings.debug : null;
     }
 }
 
-// Esporta la classe Game
+// Rendi disponibile globalmente
 window.Game = Game;

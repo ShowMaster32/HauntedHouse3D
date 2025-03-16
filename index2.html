@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Progetto CG A.A.2023/2024</title>
+    <title>HauntedHouse - Progetto Computer Graphics A.A.2023/2024</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
     <link rel="icon" type="image/x-icon" href="images/favicon.ico">
@@ -9,31 +9,31 @@
     <link type="text/css" rel="stylesheet" href="main2.css">
 </head>
 <body>
-    <!-- Start Menu -->
+    <!-- Menu iniziale -->
     <div id="start-menu">
         <h1>Welcome to HauntedHouse</h1>
         <button id="start-button">START</button>
     </div>
     
-    <!-- Canvas per il rendering -->
+    <!-- Canvas per il rendering WebGL -->
     <canvas id="canvas" style="display: none;"></canvas>
     
-    <!-- Contenitore del gioco -->
+    <!-- Contenitore principale del gioco -->
     <div id="container" style="display: none;"></div>
     
-    <!-- Istruzioni -->
+    <!-- Istruzioni per il giocatore -->
     <div id="instructions" style="visibility: hidden;">Press <span>F</span> to turn on the light</div>
     
-    <!-- Crosshair per mirare -->
+    <!-- Mirino centrale -->
     <div id="crosshair" style="display: none;"></div>
     
-    <!-- Barra in alto -->
+    <!-- Barra superiore con informazioni -->
     <div id="top-bar" style="display: none;">
         <span id="panel-instructions">Press P to open control panel</span>
         <span id="game-controls" style="margin-left: 20px;"></span>
     </div>
     
-    <!-- Pannello laterale nascosto all'inizio -->
+    <!-- Pannello laterale di controllo -->
     <div id="side-panel" class="hidden">
         <h2>Control Panel</h2>
         <div id="gui-container"></div>
@@ -41,6 +41,8 @@
         <button id="toggleReflections">Toggle Reflections</button>
         <button id="toggleFPS">Toggle FPS Counter</button>
         <button id="advancedRendering">Toggle Advanced Rendering</button>
+        <!-- Debug Log Toggle -->
+        <button id="toggleDebugLog">Toggle Debug Logs</button>
     </div>
     
     <!-- Audio -->
@@ -50,23 +52,195 @@
     <audio id="la-la-la" src="sounds/la-la-la.mp3"></audio>
     <audio id="demon-laugh" src="sounds/demon-laugh.mp3"></audio>
     
+    <!-- Log per debugging -->
+    <div id="debug-log" style="display: none; position: absolute; bottom: 10px; left: 10px; max-height: 200px; overflow: auto; background: rgba(0,0,0,0.7); color: white; padding: 10px; font-family: monospace; z-index: 100;"></div>
+    
     <!-- Librerie consentite dal professore -->
     <script src="lib/webgl-utils.js"></script>
     <script src="lib/m4.js"></script>
-    
-    <!-- Adapter per m4.js - crea gli alias necessari -->
+    <script src="lib/glm_utils.js"></script>
     <script>
+        // Definisci le classi mancanti
+        function nvr() {
+            this.x = 0;
+            this.y = 0;
+            this.z = 0;
+        }
+        
+        function nfc() {
+            this.n_v_e = 0;
+            this.vert = [0, 0, 0]; // Inizializza con array di default
+            this.textCoordsIndex = [0, 0, 0];
+            this.normalVertexIndex = [0, 0, 0];
+            this.normalFaceIndex = 0;
+            this.group = 0;
+            this.material = 0;
+        }
+        
+        // Crea l'oggetto glmUtils
+        window.glmUtils = window.glmUtils || {};
+        
+        // Aggiungi la funzione loadObj semplificata
+        window.glmUtils.loadObj = function(text) {
+            // Crea strutture dati semplificate
+            const lines = text.split("\n");
+            const vertices = [];
+            const normals = [];
+            const texCoords = [];
+            const indices = [];
+            
+            // Indici temporanei per il parsing
+            const tempVertices = [];
+            const tempNormals = [];
+            const tempTexCoords = [];
+            
+            // Aggiungi valori dummy all'indice 0 (gli indici OBJ partono da 1)
+            tempVertices.push([0,0,0]);
+            tempNormals.push([0,0,0]);
+            tempTexCoords.push([0,0]);
+            
+            for (let j=0; j<lines.length; j++) {
+                const line = lines[j].trim();
+                if (line === '' || line.startsWith('#')) continue;
+                
+                const parts = line.split(/\s+/);
+                
+                switch(parts[0]) {
+                    case 'v': // vertice
+                        tempVertices.push([
+                            parseFloat(parts[1]), 
+                            parseFloat(parts[2]), 
+                            parseFloat(parts[3])
+                        ]);
+                        break;
+                    case 'vn': // normale
+                        tempNormals.push([
+                            parseFloat(parts[1]), 
+                            parseFloat(parts[2]), 
+                            parseFloat(parts[3])
+                        ]);
+                        break;
+                    case 'vt': // coordinate texture
+                        tempTexCoords.push([
+                            parseFloat(parts[1]), 
+                            parts.length > 2 ? parseFloat(parts[2]) : 0
+                        ]);
+                        break;
+                    case 'f': // faccia
+                        // Supporta sia triangoli che quad
+                        const faceIndices = [];
+                        
+                        // Parsing faccia
+                        for (let i = 1; i < parts.length; i++) {
+                            const indices = parts[i].split('/');
+                            const vertIndex = parseInt(indices[0]) || 0;
+                            const texIndex = indices.length > 1 ? parseInt(indices[1]) || 0 : 0;
+                            const normIndex = indices.length > 2 ? parseInt(indices[2]) || 0 : 0;
+                            
+                            faceIndices.push({
+                                v: vertIndex,
+                                t: texIndex,
+                                n: normIndex
+                            });
+                        }
+                        
+                        // Triangolazione
+                        for (let i = 0; i < faceIndices.length - 2; i++) {
+                            // Per ogni triangolo nella faccia
+                            const points = [
+                                faceIndices[0],
+                                faceIndices[i+1],
+                                faceIndices[i+2]
+                            ];
+                            
+                            // Aggiungi i punti al buffer
+                            for (const point of points) {
+                                if (point.v > 0 && point.v < tempVertices.length) {
+                                    const vertex = tempVertices[point.v];
+                                    vertices.push(vertex[0], vertex[1], vertex[2]);
+                                    
+                                    // Aggiungi normali se disponibili
+                                    if (point.n > 0 && point.n < tempNormals.length) {
+                                        const normal = tempNormals[point.n];
+                                        normals.push(normal[0], normal[1], normal[2]);
+                                    } else if (tempNormals.length > 1) {
+                                        // Usa la prima normale disponibile
+                                        normals.push(tempNormals[1][0], tempNormals[1][1], tempNormals[1][2]);
+                                    } else {
+                                        // Normale di default
+                                        normals.push(0, 1, 0);
+                                    }
+                                    
+                                    // Aggiungi coordinate texture se disponibili
+                                    if (point.t > 0 && point.t < tempTexCoords.length) {
+                                        const texCoord = tempTexCoords[point.t];
+                                        texCoords.push(texCoord[0], texCoord[1]);
+                                    } else {
+                                        // Coordinate texture di default
+                                        texCoords.push(0, 0);
+                                    }
+                                    
+                                    // Aggiungi indice
+                                    indices.push(indices.length);
+                                }
+                            }
+                        }
+                        break;
+                }
+            }
+            
+            console.log(`Parsed OBJ with ${vertices.length/3} vertices, ${indices.length} indices`);
+            
+            return {
+                vertices: new Float32Array(vertices),
+                normals: new Float32Array(normals),
+                texCoords: new Float32Array(texCoords),
+                indices: new Uint16Array(indices)
+            };
+        };
+        
+        console.log('glmUtils.loadObj configurato correttamente');
+    </script>
+    <script src="lib/mesh_utils.js"></script>
+    <script src="lib/dat.gui.js"></script>
+    <script src="lib/jquery-3.6.0.js"></script>
+    
+    <!-- Adapter per risolvere compatibilità -->
+    <script>
+        // Funzione per aggiungere log
+        function logDebug(message, type = 'info') {
+            if (!window.debugLogging) return;
+            
+            const debugLog = document.getElementById('debug-log');
+            if (!debugLog) return;
+            
+            const entry = document.createElement('div');
+            entry.className = `log-${type}`;
+            entry.style.color = type === 'error' ? '#ff5555' : type === 'warning' ? '#ffaa55' : '#aaffaa';
+            
+            const timestamp = new Date().toTimeString().substring(0, 8);
+            entry.textContent = `[${timestamp}] ${message}`;
+            
+            debugLog.appendChild(entry);
+            debugLog.scrollTop = debugLog.scrollHeight;
+            
+            // Limita il numero di messaggi
+            while (debugLog.children.length > 50) {
+                debugLog.removeChild(debugLog.firstChild);
+            }
+        }
+        
+        window.debugLogging = true;
+        
         // Crea un alias per m4.orthographic come m4.ortho
         if (typeof m4 !== 'undefined' && typeof m4.orthographic === 'function' && typeof m4.ortho !== 'function') {
             m4.ortho = m4.orthographic;
-            console.log('Successfully created alias m4.ortho for m4.orthographic');
+            logDebug('Successfully created alias m4.ortho for m4.orthographic');
         }
         
         // Ridefinisci le funzioni di rotazione per risolvere gli errori
         if (typeof m4 !== 'undefined') {
-            // Reimplementa le funzioni di rotazione
             m4.rotateX = function(m, angleInRadians) {
-                // Questa è l'implementazione che garantisce la compatibilità
                 const c = Math.cos(angleInRadians);
                 const s = Math.sin(angleInRadians);
                 
@@ -79,10 +253,8 @@
                 const m22 = m[10];
                 const m23 = m[11];
                 
-                // Risultato
                 const result = Array.isArray(m) ? [...m] : new Float32Array(m);
                 
-                // Aggiorna elementi che cambiano con la rotazione
                 result[4] = c * m10 + s * m20;
                 result[5] = c * m11 + s * m21;
                 result[6] = c * m12 + s * m22;
@@ -108,10 +280,8 @@
                 const m22 = m[10];
                 const m23 = m[11];
                 
-                // Risultato
                 const result = Array.isArray(m) ? [...m] : new Float32Array(m);
                 
-                // Aggiorna elementi che cambiano con la rotazione
                 result[0] = c * m00 - s * m20;
                 result[1] = c * m01 - s * m21;
                 result[2] = c * m02 - s * m22;
@@ -137,10 +307,8 @@
                 const m12 = m[6];
                 const m13 = m[7];
                 
-                // Risultato
                 const result = Array.isArray(m) ? [...m] : new Float32Array(m);
                 
-                // Aggiorna elementi che cambiano con la rotazione
                 result[0] = c * m00 + s * m10;
                 result[1] = c * m01 + s * m11;
                 result[2] = c * m02 + s * m12;
@@ -153,18 +321,10 @@
                 return result;
             };
             
-            console.log('Funzioni di rotazione m4 sostituite con successo!');
+            logDebug('Funzioni di rotazione m4 sostituite con successo!');
         }
-    </script>
-    
-    <script src="lib/glm_utils.js"></script>
-    <script src="lib/mesh_utils.js"></script>
-    <script src="lib/dat.gui.js"></script>
-    <script src="lib/jquery-3.6.0.js"></script>
-    
-    <!-- Definizioni preliminari -->
-    <script>
-        // Definisci Stats come classe base per il contatore FPS
+        
+        // Definisci Stats per il contatore FPS
         class Stats {
             constructor() {
                 this.dom = document.createElement('div');
@@ -294,7 +454,7 @@
             }
             
             fromGraphNode(scene) {
-                console.log("Octree initialized from scene");
+                logDebug("Octree initialized from scene");
                 // Implementazione semplificata
             }
             
@@ -325,82 +485,22 @@
         };
     </script>
     
-    <!-- Implementazione di base di glmUtils se non è definito correttamente -->
-    <script>
-        // Implementazione di base di glmUtils se non è definito correttamente
-        if (typeof glmUtils === 'undefined' || !glmUtils.loadObj) {
-            window.glmUtils = window.glmUtils || {};
-            
-            window.glmUtils.loadObj = function(text) {
-                const vertices = [];
-                const normals = [];
-                const texCoords = [];
-                const indices = [];
-                
-                const lines = text.split('\n');
-                let indexOffset = 0;
-                const vertexMap = new Map();
-                
-                for (let i = 0; i < lines.length; i++) {
-                    const line = lines[i].trim();
-                    const parts = line.split(/\s+/);
-                    
-                    if (line.startsWith('v ')) {
-                        // Vertice
-                        vertices.push(
-                            parseFloat(parts[1]),
-                            parseFloat(parts[2]),
-                            parseFloat(parts[3])
-                        );
-                    } else if (line.startsWith('vt ')) {
-                        // Coordinate texture
-                        texCoords.push(
-                            parseFloat(parts[1]),
-                            parseFloat(parts[2])
-                        );
-                    } else if (line.startsWith('vn ')) {
-                        // Normale
-                        normals.push(
-                            parseFloat(parts[1]),
-                            parseFloat(parts[2]),
-                            parseFloat(parts[3])
-                        );
-                    } else if (line.startsWith('f ')) {
-                        // Faccia - gestione dei formati: v/vt/vn, v//vn, v/vt, v
-                        for (let j = 1; j <= 3; j++) {
-                            const vertexData = parts[j].split('/');
-                            const vertexIndex = parseInt(vertexData[0]) - 1;
-                            
-                            indices.push(vertexIndex);
-                        }
-                    }
-                }
-                
-                return {
-                    vertices: new Float32Array(vertices),
-                    texCoords: new Float32Array(texCoords),
-                    normals: new Float32Array(normals),
-                    indices: new Uint16Array(indices)
-                };
-            };
-        }
-    </script>
-    
     <!-- File sorgente del gioco -->
-    <script src="js/shader-test.js"></script>
     <script src="js/shader-loader.js"></script>
     <script src="js/math-utils.js"></script>
+    <script src="js/shader-test.js"></script>
     <script src="js/audio.js"></script>
     <script src="js/physics.js"></script>
     <script src="js/renderer.js"></script>
     <script src="js/input.js"></script>
+    <script src="js/constants.js"></script>
     <script src="js/game.js"></script>
     <script src="js/main.js"></script>
     
     <!-- Script di setup principale -->
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            console.log("Initializing HauntedHouse v1.0.0");
+            logDebug("Initializing HauntedHouse v1.0.0");
             
             // Setup elementi di base
             const startButton = document.getElementById('start-button');
@@ -415,12 +515,20 @@
             const randomGhostSound = document.getElementById('random-ghost');
             const laLaLaSound = document.getElementById('la-la-la');
             const demonLaughSound = document.getElementById('demon-laugh');
+            const debugLog = document.getElementById('debug-log');
+            
+            // Toggle per i log di debug
+            document.getElementById('toggleDebugLog').addEventListener('click', () => {
+                window.debugLogging = !window.debugLogging;
+                debugLog.style.display = window.debugLogging ? 'block' : 'none';
+                logDebug(`Debug logging ${window.debugLogging ? 'enabled' : 'disabled'}`);
+            });
             
             // Definizione della funzione per avviare la riproduzione del suono a intervalli casuali
             function playRandomGhostSound() {
                 const randomDelay = Math.random() * (30000 - 10000) + 10000; // Intervallo casuale tra 10s e 30s
                 setTimeout(() => {
-                    randomGhostSound.play().catch(e => console.warn('Failed to play sound:', e));
+                    randomGhostSound.play().catch(e => logDebug('Failed to play sound: ' + e, 'warning'));
                     playRandomGhostSound();  // Richiama la funzione per continuare a riprodurre il suono
                 }, randomDelay);
             }
@@ -437,21 +545,21 @@
                 `;
             }
             
-            // Avvia la musica dell'intro quando viene caricata la pagina (con gestione dell'errore audio)
+            // Avvia la musica dell'intro quando viene caricata la pagina
             window.onload = () => {
                 introMusic.play().catch(e => {
-                    console.warn('Audio autoplay blocked by browser policy. Click anywhere to enable sounds.');
+                    logDebug('Audio autoplay blocked by browser policy. Click anywhere to enable sounds.', 'warning');
                     document.addEventListener('click', () => {
                         introMusic.play();
                     }, { once: true });
                 });
             };
             
-// Evento click per avviare il gioco
-startButton.addEventListener('click', () => {
+            // Evento click per avviare il gioco
+            startButton.addEventListener('click', () => {
                 // Ferma l'audio di intro e avvia la musica di gioco
                 introMusic.pause();
-                startMusic.play().catch(e => console.warn('Failed to play start music:', e));
+                startMusic.play().catch(e => logDebug('Failed to play start music: ' + e, 'warning'));
                 
                 // Nascondi il menu e mostra gli elementi di gioco
                 startMenu.style.display = 'none';
@@ -474,7 +582,7 @@ startButton.addEventListener('click', () => {
                     try {
                         canvas.requestPointerLock();
                     } catch (e) {
-                        console.warn('Pointer lock not supported or permission denied:', e);
+                        logDebug('Pointer lock not supported or permission denied: ' + e, 'warning');
                     }
                 }, 100);
                 
@@ -485,7 +593,7 @@ startButton.addEventListener('click', () => {
                     const app = new GameApplication();
                     window.gameApp = app;  // Rendi disponibile globalmente per debug
                     app.initialize().catch(error => {
-                        console.error('Failed to initialize game:', error);
+                        logDebug('Failed to initialize game: ' + error, 'error');
                     });
                 }
             });
@@ -516,12 +624,14 @@ startButton.addEventListener('click', () => {
             document.getElementById('toggleShadows').addEventListener('click', () => {
                 if (window.gameApp && window.gameApp.game && window.gameApp.game.renderer) {
                     window.gameApp.game.renderer.toggleShadows();
+                    logDebug('Shadows toggled');
                 }
             });
             
             document.getElementById('toggleReflections').addEventListener('click', () => {
                 if (window.gameApp && window.gameApp.game && window.gameApp.game.renderer) {
                     window.gameApp.game.renderer.toggleReflections();
+                    logDebug('Reflections toggled');
                 }
             });
             
@@ -529,12 +639,14 @@ startButton.addEventListener('click', () => {
                 if (window.gameApp && window.gameApp.stats) {
                     const statsElement = window.gameApp.stats.dom;
                     statsElement.style.display = statsElement.style.display === 'none' ? 'block' : 'none';
+                    logDebug(`FPS counter ${statsElement.style.display === 'none' ? 'hidden' : 'shown'}`);
                 }
             });
             
             document.getElementById('advancedRendering').addEventListener('click', () => {
                 if (window.gameApp && window.gameApp.game && window.gameApp.game.renderer) {
                     window.gameApp.game.renderer.toggleAdvancedRendering();
+                    logDebug('Advanced rendering toggled');
                 }
             });
             
@@ -560,7 +672,8 @@ startButton.addEventListener('click', () => {
             
             // Gestione degli errori globali
             window.addEventListener('error', (event) => {
-                console.error('Global error:', event.error);
+                logDebug('Global error: ' + event.error, 'error');
+                
                 // Mostra un messaggio di errore all'utente ma solo se è un errore critico
                 if (event.error && event.error.message && 
                     (event.error.message.includes('WebGL') || 
@@ -579,6 +692,16 @@ startButton.addEventListener('click', () => {
                     document.body.appendChild(errorMessage);
                 }
             });
+        });
+    </script>
+    <script>
+        // Forza il focus sul canvas quando la pagina è attiva
+        window.addEventListener('focus', function() {
+            const canvas = document.getElementById('canvas');
+            if (canvas && typeof canvas.focus === 'function') {
+                canvas.focus();
+                console.log('Focus forzato sul canvas');
+            }
         });
     </script>
 </body>

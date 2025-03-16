@@ -1,4 +1,5 @@
 // main.js
+// Inizializzazione dell'applicazione e gestione errori
 
 const GAME_VERSION = window.GAME_CONSTANTS.GAME_VERSION;
 const DEBUG_MODE = window.GAME_CONSTANTS.DEBUG_MODE;
@@ -9,11 +10,25 @@ class GameApplication {
         this.game = null;
         this.stats = null;
         this.isInitialized = false;
+        this.debugMode = DEBUG_MODE;
+        
+        // Log di inizializzazione
+        this.log(`Inizializzazione HauntedHouse v${GAME_VERSION}`);
+    }
+    
+    // Funzione di log
+    log(message, isError = false) {
+        console.log(isError ? `[GAME ERROR] ${message}` : `[GAME] ${message}`);
+        
+        if (typeof logDebug === 'function') {
+            logDebug(message, isError ? 'error' : 'info');
+        }
     }
 
+    // Inizializzazione dell'applicazione
     async initialize() {
         try {
-            console.info(`Initializing HauntedHouse v${GAME_VERSION}`);
+            this.log(`Inizializzazione HauntedHouse v${GAME_VERSION}`);
 
             // Attendi il caricamento completo del DOM
             await this.waitForDOM();
@@ -28,7 +43,7 @@ class GameApplication {
             this.setupErrorHandling();
 
             // Imposta tool di debug se necessario
-            if (DEBUG_MODE) {
+            if (this.debugMode) {
                 await this.setupDebugTools();
             }
 
@@ -37,7 +52,7 @@ class GameApplication {
             await this.game.initialize();
 
             this.isInitialized = true;
-            console.info('Game initialization complete');
+            this.log('Inizializzazione gioco completata');
 
             // Aggiungi listener per resize e visibilità
             this.setupEventListeners();
@@ -50,14 +65,17 @@ class GameApplication {
         }
     }
 
+    // Attendi caricamento DOM
     async waitForDOM() {
         if (document.readyState === 'loading') {
             await new Promise(resolve => {
                 document.addEventListener('DOMContentLoaded', resolve);
             });
         }
+        this.log('DOM caricato');
     }
 
+    // Verifica requisiti di sistema
     checkSystemRequirements() {
         // Verifica WebGL2
         const canvas = document.querySelector('#canvas');
@@ -65,26 +83,35 @@ class GameApplication {
         if (!gl) {
             throw new Error(ERROR_MESSAGES.WEBGL_NOT_SUPPORTED);
         }
+        this.log('WebGL 2 supportato');
 
         // Verifica Web Audio API
         if (!window.AudioContext && !window.webkitAudioContext) {
-            console.warn(ERROR_MESSAGES.AUDIO_NOT_SUPPORTED);
+            this.log(ERROR_MESSAGES.AUDIO_NOT_SUPPORTED, true);
+        } else {
+            this.log('Web Audio API supportata');
         }
 
         // Verifica Pointer Lock API
         if (!('pointerLockElement' in document)) {
-            console.warn('Pointer Lock API non supportata. L\'esperienza di gioco potrebbe essere limitata.');
+            this.log('Pointer Lock API non supportata. L\'esperienza di gioco potrebbe essere limitata.', true);
+        } else {
+            this.log('Pointer Lock API supportata');
         }
     }
 
+    // Inizializza le risorse di base
     async initializeResources() {
         // Carica gli shader
         await this.loadShaders();
 
         // Precarica le texture di base
         await this.preloadTextures();
+        
+        this.log('Risorse di base inizializzate');
     }
 
+    // Caricamento shader
     async loadShaders() {
         const shaderFiles = [
             'vertex-shader.glsl',
@@ -98,7 +125,7 @@ class GameApplication {
                 shaderFiles.map(async file => {
                     const response = await fetch(`shaders/${file}`);
                     if (!response.ok) throw new Error(`Failed to load shader: ${file}`);
-                    return response.text();
+                    return await response.text();
                 })
             );
 
@@ -107,12 +134,15 @@ class GameApplication {
             shaderFiles.forEach((file, index) => {
                 window.gameShaders[file] = shaders[index];
             });
+            
+            this.log('Shader caricati con successo');
 
         } catch (error) {
-            throw new Error(`Shader loading failed: ${error.message}`);
+            throw new Error(`Errore nel caricamento degli shader: ${error.message}`);
         }
     }
 
+    // Precaricamento texture base
     async preloadTextures() {
         const baseTextures = [
             'textures/wall.jpg',
@@ -131,16 +161,20 @@ class GameApplication {
                     });
                 })
             );
+            this.log('Texture di base precaricate');
         } catch (error) {
-            throw new Error(`Texture preloading failed: ${error.message}`);
+            throw new Error(`Errore nel precaricamento delle texture: ${error.message}`);
         }
     }
 
+    // Configurazione gestione errori
     setupErrorHandling() {
         window.addEventListener('error', this.handleError.bind(this));
         window.addEventListener('unhandledrejection', this.handlePromiseError.bind(this));
+        this.log('Gestione errori configurata');
     }
 
+    // Configurazione strumenti di debug
     async setupDebugTools() {
         // Stats.js per monitorare FPS
         this.stats = new Stats();
@@ -168,8 +202,11 @@ class GameApplication {
             requestAnimationFrame(animate);
         };
         animate();
+        
+        this.log('Strumenti di debug configurati');
     }
 
+    // Configurazione listener eventi
     setupEventListeners() {
         // Gestione resize
         window.addEventListener('resize', this.handleResize.bind(this));
@@ -181,14 +218,18 @@ class GameApplication {
         const canvas = document.querySelector('#canvas');
         canvas.addEventListener('webglcontextlost', this.handleContextLost.bind(this));
         canvas.addEventListener('webglcontextrestored', this.handleContextRestored.bind(this));
+        
+        this.log('Event listener configurati');
     }
 
+    // Gestione ridimensionamento finestra
     handleResize() {
         if (this.game && this.isInitialized) {
             this.game.handleResize(window.innerWidth, window.innerHeight);
         }
     }
 
+    // Gestione visibilità pagina
     handleVisibilityChange() {
         if (!this.game || !this.isInitialized) return;
 
@@ -199,32 +240,37 @@ class GameApplication {
         }
     }
 
+    // Gestione perdita contesto WebGL
     handleContextLost(event) {
         event.preventDefault();
-        console.warn('WebGL context lost. Attempting to restore...');
+        this.log('WebGL context lost. Attempting to restore...', true);
         if (this.game) {
             this.game.pause();
         }
     }
 
+    // Gestione ripristino contesto WebGL
     async handleContextRestored() {
-        console.info('WebGL context restored. Reinitializing...');
+        this.log('WebGL context restored. Reinitializing...', true);
         if (this.game) {
             await this.game.reinitialize();
             this.game.resume();
         }
     }
 
+    // Gestione errori generali
     handleError(error) {
-        console.error('Game error:', error);
+        this.log('Errore: ' + (error.message || error), true);
         this.showErrorMessage(ERROR_MESSAGES.GENERIC_ERROR);
     }
 
+    // Gestione errori Promise
     handlePromiseError(event) {
-        console.error('Unhandled promise rejection:', event.reason);
+        this.log('Promise non gestita: ' + (event.reason.message || event.reason), true);
         this.showErrorMessage(ERROR_MESSAGES.GENERIC_ERROR);
     }
 
+    // Mostra messaggio di errore
     showErrorMessage(message) {
         // Rimuovi eventuali messaggi di errore esistenti
         const existingError = document.querySelector('.error-message');
@@ -246,16 +292,21 @@ class GameApplication {
     }
 }
 
-// Rendi disponibile globalmente
+// Esporta per uso globale
 window.GameApplication = GameApplication;
 
-// Crea e avvia l'applicazione
-const app = new GameApplication();
-app.initialize().catch(error => {
-    console.error('Failed to initialize game:', error);
-});
-
-// Esporta l'istanza per debug
+// Inizializzazione automatica in fase di debug
 if (DEBUG_MODE) {
-    window.gameApp = app;
+    window.addEventListener('DOMContentLoaded', () => {
+        // Non creare automaticamente l'applicazione, altrimenti si avranno due istanze
+        // Lasciamo che venga creata quando l'utente preme il pulsante START
+        console.log('Debug mode: Pronto per l\'inizializzazione manuale.');
+        
+        // Per debugging
+        window.createApp = () => {
+            const app = new GameApplication();
+            window.gameApp = app;
+            return app;
+        };
+    });
 }

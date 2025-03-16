@@ -1,4 +1,4 @@
-// constants.js
+// constants.js - Definisce tutte le costanti utilizzate nel gioco
 
 // Inizializza prima l'oggetto nel window
 window.GAME_CONSTANTS = {};
@@ -7,7 +7,7 @@ window.GAME_CONSTANTS = {};
 window.GAME_CONSTANTS = {
     // Informazioni di versione
     GAME_VERSION: '1.0.0',
-    DEBUG_MODE: false,
+    DEBUG_MODE: true,
     
     // Dimensioni della stanza
     ROOM: {
