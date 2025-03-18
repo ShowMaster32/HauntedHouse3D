@@ -432,7 +432,7 @@ class Game {
             return;
         }
         
-        // Forza almeno un render anche in stato di pausa
+        // Esegui sempre il rendering indipendentemente dallo stato di pausa
         this.render();
         
         if (!this.isPaused) {
@@ -446,7 +446,7 @@ class Game {
             this.update();
         }
         
-        // Programma il prossimo frame in ogni caso
+        // Programma il prossimo frame
         requestAnimationFrame(() => this.gameLoop());
     }
     

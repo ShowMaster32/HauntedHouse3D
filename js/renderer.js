@@ -109,13 +109,41 @@ class Renderer {
             // Imposta le uniforms di base
             this.gl.useProgram(this.programs.get('main'));
             this.setMainProgramUniforms(this.programs.get('main'));
-            
+        
             this.log('Renderer inizializzato con successo');
+            
+            // Avvia il loop di rendering continuo
+            this.startContinuousRendering();
+            
             return true;
         } catch (error) {
             this.log('Errore durante l\'inizializzazione del renderer: ' + error, true);
             throw error;
         }
+    }
+
+    // Aggiungi questo metodo alla classe Renderer in renderer.js
+    startContinuousRendering() {
+        this.log('Avvio rendering continuo...');
+        
+        // Referenza a this per la callback
+        const self = this;
+        
+        // Funzione per il loop di rendering
+        function renderLoop() {
+            // Renderizza la scena solo se abbiamo un riferimento valido
+            if (window.gameApp && window.gameApp.game) {
+                window.gameApp.game.render();
+            }
+            
+            // Continua il loop
+            requestAnimationFrame(renderLoop);
+        }
+        
+        // Avvia il loop di rendering
+        renderLoop();
+        
+        this.log('Loop di rendering continuo avviato');
     }
     
     // Setup configurazioni WebGL di base

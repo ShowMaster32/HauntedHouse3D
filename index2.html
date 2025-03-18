@@ -637,11 +637,6 @@
                 instructions.style.visibility = 'visible';
                 crosshair.style.display = 'block';
                 
-                // Mostra i controlli mobile
-                if (document.getElementById('mobile-controls')) {
-                    document.getElementById('mobile-controls').style.display = 'grid';
-                }
-                
                 // Mostra la barra superiore con la legenda dei comandi
                 const topBar = document.getElementById('top-bar');
                 topBar.style.display = 'flex';
@@ -846,6 +841,11 @@
                         });
                         
                         document.body.appendChild(mobileControls);
+                        
+                        // Mostra i controlli quando il gioco inizia
+                        startButton.addEventListener('click', () => {
+                            mobileControls.style.display = 'grid';
+                        });
                     }
                 }
             }
@@ -854,6 +854,8 @@
             setupMobileControls();
         });
     </script>
+    
+    <!-- Script per forzare il focus sul canvas -->
     <script>
         // Forza il focus sul canvas quando la pagina è attiva
         window.addEventListener('focus', function() {
@@ -867,6 +869,126 @@
             if (window.gameApp && window.gameApp.game) {
                 window.gameApp.game.render();
             }
+        });
+    </script>
+    
+    <!-- Patch di emergenza per correggere i problemi di input -->
+    <script>
+        // Attendi il caricamento completo prima di applicare le patch
+        document.addEventListener('DOMContentLoaded', () => {
+            // Attendi un po' dopo il caricamento completo
+            setTimeout(() => {
+                console.log("Applicazione patch di emergenza per gli input...");
+                
+                // Fix per i controlli WASD e movimento camera
+                const keyMap = {
+                    'KeyW': 'forward',
+                    'KeyS': 'backward',
+                    'KeyA': 'left',
+                    'KeyD': 'right',
+                    'ArrowUp': 'forward',
+                    'ArrowDown': 'backward',
+                    'ArrowLeft': 'left',
+                    'ArrowRight': 'right'
+                };
+                
+                // Stato dei tasti
+                const keyState = {};
+                
+                // Gestione keydown
+                document.addEventListener('keydown', (e) => {
+                    keyState[e.code] = true;
+                    
+                    // Gestione pannello con P
+                    if (e.code === 'KeyP') {
+                        const panel = document.getElementById('side-panel');
+                        if (panel) {
+                            if (panel.classList.contains('hidden')) {
+                                panel.classList.remove('hidden');
+                                panel.classList.add('visible');
+                                document.exitPointerLock();
+                                document.body.style.cursor = 'default';
+                            } else {
+                                panel.classList.remove('visible');
+                                panel.classList.add('hidden');
+                                document.getElementById('canvas').requestPointerLock();
+                                document.body.style.cursor = 'none';
+                            }
+                        }
+                    }
+                    
+                    // Gestione luce con F
+                    if (e.code === 'KeyF') {
+                        if (window.gameApp && window.gameApp.game) {
+                            console.log("Toggling light via patch");
+                            window.gameApp.game.toggleLight();
+                        }
+                    }
+                });
+                
+                // Gestione keyup
+                document.addEventListener('keyup', (e) => {
+                    keyState[e.code] = false;
+                });
+                
+                // Fix per il mouse e rotazione camera
+                const canvas = document.getElementById('canvas');
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (document.pointerLockElement === canvas && 
+                        window.gameApp && window.gameApp.game && window.gameApp.game.camera) {
+                        
+                        const sensitivity = 0.002;
+                        const deltaX = e.movementX * sensitivity;
+                        const deltaY = e.movementY * sensitivity;
+                        
+                        // Aggiorna la rotazione della camera
+                        window.gameApp.game.camera.rotation.y -= deltaX;
+                        window.gameApp.game.camera.rotation.x -= deltaY;
+                        
+                        // Limita la rotazione verticale
+                        window.gameApp.game.camera.rotation.x = Math.max(
+                            -Math.PI / 2 + 0.1, 
+                            Math.min(Math.PI / 2 - 0.1, window.gameApp.game.camera.rotation.x)
+                        );
+                    }
+                });
+                
+                // Assicurati che il pointer lock funzioni
+                canvas.addEventListener('click', () => {
+                    if (!document.pointerLockElement) {
+                        console.log("Tentativo di forzare il pointer lock...");
+                        canvas.requestPointerLock().catch(e => {
+                            console.warn("Errore nel pointer lock:", e);
+                        });
+                    }
+                });
+                
+                // Loop di movimento
+                function updateMovement() {
+                    if (window.gameApp && window.gameApp.game) {
+                        const game = window.gameApp.game;
+                        const moveSpeed = 0.15;
+                        
+                        // Applica movimenti basati sui tasti premuti
+                        Object.entries(keyMap).forEach(([key, direction]) => {
+                            if (keyState[key]) {
+                                if (typeof game.movePlayer === 'function') {
+                                    game.movePlayer(direction, moveSpeed);
+                                }
+                            }
+                        });
+                    }
+                    
+                    // Continua il ciclo
+                    requestAnimationFrame(updateMovement);
+                }
+                
+                // Avvia il loop di movimento
+                updateMovement();
+                
+                console.log("Patch di emergenza applicata!");
+            }, 1500); // Attendi 1.5 secondi dopo il caricamento
         });
     </script>
 </body>

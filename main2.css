@@ -1,3 +1,5 @@
+/* main2.css - Stili per HauntedHouse */
+
 /* Stile per il corpo della pagina */
 body {
     margin: 0;
@@ -370,4 +372,66 @@ body.no-cursor {
 
 .dg .cr.function .property-name {
     width: 100% !important;
+}
+
+/* Miglioramenti per esperienza utente */
+button:focus {
+    outline: 2px solid #ff6666;
+}
+
+/* Effetto pulsazione per crosshair */
+@keyframes pulse {
+    0% { transform: translate(-50%, -50%) scale(1); }
+    50% { transform: translate(-50%, -50%) scale(1.1); }
+    100% { transform: translate(-50%, -50%) scale(1); }
+}
+
+#crosshair.active {
+    animation: pulse 0.5s infinite;
+}
+
+/* Stile per mousemove disabilitato per evitare problemi con il puntatore */
+.mouse-disabled {
+    pointer-events: none;
+}
+
+/* Per facilitare il debug */
+.debug-border {
+    border: 1px solid red;
+}
+
+/* Tooltip per istruzioni aggiuntive */
+.tooltip {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 14px;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+/* Overlay per modalità pausa */
+#pause-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 15;
+    color: white;
+    font-size: 48px;
+    text-shadow: 2px 2px 4px black;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+#pause-overlay.visible {
+    opacity: 1;
 }
