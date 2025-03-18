@@ -175,19 +175,29 @@ body.no-cursor {
     display: none;
     position: absolute;
     bottom: 20px;
-    left: 20px;
+    left: 0;
+    right: 0;
+    padding: 10px;
+    grid-template-columns: repeat(3, 1fr);
+    grid-gap: 10px;
     z-index: 30;
+    justify-content: center;
 }
 
 #mobile-controls button {
-    width: 50px;
-    height: 50px;
+    width: 60px;
+    height: 60px;
     background-color: rgba(128, 0, 0, 0.7);
     color: white;
     border: 1px solid #ff0000;
-    border-radius: 5px;
+    border-radius: 50%;
     margin: 5px;
     font-size: 1.5rem;
+    touch-action: manipulation;
+}
+
+#mobile-controls button:active {
+    background-color: #ff0000;
 }
 
 /* Contatore FPS */
@@ -248,6 +258,34 @@ body.no-cursor {
     margin-left: 20px;
 }
 
+/* Debug log */
+#debug-log {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    max-height: 200px;
+    overflow: auto;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 10px;
+    font-family: monospace;
+    z-index: 100;
+    max-width: 50%;
+    border-radius: 5px;
+}
+
+.log-info {
+    color: #aaffaa;
+}
+
+.log-warning {
+    color: #ffaa55;
+}
+
+.log-error {
+    color: #ff5555;
+}
+
 /* Media queries per responsività */
 @media (max-width: 768px) {
     #top-bar {
@@ -259,8 +297,6 @@ body.no-cursor {
     
     #mobile-controls {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        grid-gap: 5px;
     }
     
     #start-menu h1 {
@@ -270,9 +306,23 @@ body.no-cursor {
     }
     
     #instructions {
-        bottom: 30%;
-        font-size: 1rem;
-        width: 80%;
+        font-size: 24px;
+        width: 90%;
+        margin: 0 auto;
+    }
+    
+    /* Adatta il debug log per mobile */
+    #debug-log {
+        max-width: 80%;
+        max-height: 150px;
+        font-size: 10px;
+    }
+    
+    /* Rendere i pulsanti più grandi su mobile */
+    #side-panel button {
+        padding: 15px;
+        margin-bottom: 15px;
+        font-size: 16px;
     }
 }
 
@@ -284,6 +334,24 @@ body.no-cursor {
     
     #side-panel {
         width: 200px;
+    }
+    
+    #start-menu h1 {
+        font-size: 2rem;
+    }
+    
+    #instructions {
+        font-size: 18px;
+    }
+    
+    #mobile-controls {
+        bottom: 10px;
+    }
+    
+    #mobile-controls button {
+        width: 50px;
+        height: 50px;
+        font-size: 1.2rem;
     }
 }
 

@@ -409,6 +409,7 @@ class Game {
     // Avvio del gioco
     start() {
         this.isRunning = true;
+        this.isPaused = false; // Assicurati che non sia in pausa all'inizio
         this.audio.playStartMusic();
         
         // Forza un rendering iniziale
@@ -431,35 +432,21 @@ class Game {
             return;
         }
         
-        if (this.isPaused) {
-            // Continua il loop anche in pausa
-            requestAnimationFrame(() => this.gameLoop());
-            return;
-        }
-        
-        // Log per diagnostica
-        if (this.loopCounter === undefined) {
-            this.loopCounter = 0;
-        }
-        
-        this.loopCounter++;
-        if (this.loopCounter % 60 === 0) { // Log ogni 60 frame (circa 1 secondo)
-            this.log(`Game loop attivo - frame ${this.loopCounter}`);
-        }
-        
-        // Aggiorna input
-        this.input.update();
-        
-        // Aggiorna fisica
-        this.updatePhysics();
-        
-        // Aggiorna logica di gioco
-        this.update();
-        
-        // Renderizza
+        // Forza almeno un render anche in stato di pausa
         this.render();
         
-        // Programma il prossimo frame
+        if (!this.isPaused) {
+            // Aggiorna input
+            this.input.update();
+            
+            // Aggiorna fisica
+            this.updatePhysics();
+            
+            // Aggiorna logica di gioco
+            this.update();
+        }
+        
+        // Programma il prossimo frame in ogni caso
         requestAnimationFrame(() => this.gameLoop());
     }
     
