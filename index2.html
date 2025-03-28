@@ -872,124 +872,163 @@
         });
     </script>
     
-    <!-- Patch di emergenza per correggere i problemi di input -->
-    <script>
-        // Attendi il caricamento completo prima di applicare le patch
-        document.addEventListener('DOMContentLoaded', () => {
-            // Attendi un po' dopo il caricamento completo
-            setTimeout(() => {
-                console.log("Applicazione patch di emergenza per gli input...");
-                
-                // Fix per i controlli WASD e movimento camera
-                const keyMap = {
-                    'KeyW': 'forward',
-                    'KeyS': 'backward',
-                    'KeyA': 'left',
-                    'KeyD': 'right',
-                    'ArrowUp': 'forward',
-                    'ArrowDown': 'backward',
-                    'ArrowLeft': 'left',
-                    'ArrowRight': 'right'
-                };
-                
-                // Stato dei tasti
-                const keyState = {};
-                
-                // Gestione keydown
-                document.addEventListener('keydown', (e) => {
-                    keyState[e.code] = true;
-                    
-                    // Gestione pannello con P
-                    if (e.code === 'KeyP') {
-                        const panel = document.getElementById('side-panel');
-                        if (panel) {
-                            if (panel.classList.contains('hidden')) {
-                                panel.classList.remove('hidden');
-                                panel.classList.add('visible');
-                                document.exitPointerLock();
-                                document.body.style.cursor = 'default';
-                            } else {
-                                panel.classList.remove('visible');
-                                panel.classList.add('hidden');
-                                document.getElementById('canvas').requestPointerLock();
-                                document.body.style.cursor = 'none';
-                            }
-                        }
-                    }
-                    
-                    // Gestione luce con F
-                    if (e.code === 'KeyF') {
-                        if (window.gameApp && window.gameApp.game) {
-                            console.log("Toggling light via patch");
-                            window.gameApp.game.toggleLight();
-                        }
-                    }
-                });
-                
-                // Gestione keyup
-                document.addEventListener('keyup', (e) => {
-                    keyState[e.code] = false;
-                });
-                
-                // Fix per il mouse e rotazione camera
-                const canvas = document.getElementById('canvas');
-                
-                document.addEventListener('mousemove', (e) => {
-                    if (document.pointerLockElement === canvas && 
-                        window.gameApp && window.gameApp.game && window.gameApp.game.camera) {
-                        
-                        const sensitivity = 0.002;
-                        const deltaX = e.movementX * sensitivity;
-                        const deltaY = e.movementY * sensitivity;
-                        
-                        // Aggiorna la rotazione della camera
-                        window.gameApp.game.camera.rotation.y -= deltaX;
-                        window.gameApp.game.camera.rotation.x -= deltaY;
-                        
-                        // Limita la rotazione verticale
-                        window.gameApp.game.camera.rotation.x = Math.max(
-                            -Math.PI / 2 + 0.1, 
-                            Math.min(Math.PI / 2 - 0.1, window.gameApp.game.camera.rotation.x)
-                        );
-                    }
-                });
-                
-                // Assicurati che il pointer lock funzioni
+<script>
+    // Attendi il caricamento completo prima di applicare le patch
+    document.addEventListener('DOMContentLoaded', () => {
+        // Attendi un po' dopo il caricamento completo
+        setTimeout(() => {
+            console.log("Applicazione patch di emergenza per gli input...");
+            logDebug("Applicazione patch di emergenza per gli input...");
+            
+            // Verifica che il canvas sia nel DOM e abbia correttamente l'event listener
+            const canvas = document.getElementById('canvas');
+            if (canvas) {
                 canvas.addEventListener('click', () => {
+                    logDebug('Canvas click - tentativo di pointer lock');
                     if (!document.pointerLockElement) {
-                        console.log("Tentativo di forzare il pointer lock...");
                         canvas.requestPointerLock().catch(e => {
-                            console.warn("Errore nel pointer lock:", e);
+                            logDebug('Pointer lock request fallito: ' + e, 'error');
                         });
                     }
                 });
+            }
+            
+            // Fix per i controlli WASD e movimento camera
+            const keyMap = {
+                'KeyW': 'forward',
+                'KeyS': 'backward',
+                'KeyA': 'left',
+                'KeyD': 'right',
+                'ArrowUp': 'forward',
+                'ArrowDown': 'backward',
+                'ArrowLeft': 'left',
+                'ArrowRight': 'right'
+            };
+            
+            // Stato dei tasti
+            const keyState = {};
+            
+            // Gestione keydown
+            document.addEventListener('keydown', (e) => {
+                keyState[e.code] = true;
                 
-                // Loop di movimento
-                function updateMovement() {
-                    if (window.gameApp && window.gameApp.game) {
-                        const game = window.gameApp.game;
-                        const moveSpeed = 0.15;
-                        
-                        // Applica movimenti basati sui tasti premuti
-                        Object.entries(keyMap).forEach(([key, direction]) => {
-                            if (keyState[key]) {
-                                if (typeof game.movePlayer === 'function') {
-                                    game.movePlayer(direction, moveSpeed);
-                                }
-                            }
-                        });
+                // Gestione pannello con P
+                if (e.code === 'KeyP') {
+                    const panel = document.getElementById('side-panel');
+                    if (panel) {
+                        if (panel.classList.contains('hidden')) {
+                            panel.classList.remove('hidden');
+                            panel.classList.add('visible');
+                            document.exitPointerLock();
+                            document.body.style.cursor = 'default';
+                        } else {
+                            panel.classList.remove('visible');
+                            panel.classList.add('hidden');
+                            document.getElementById('canvas').requestPointerLock();
+                            document.body.style.cursor = 'none';
+                        }
                     }
-                    
-                    // Continua il ciclo
-                    requestAnimationFrame(updateMovement);
                 }
                 
-                // Avvia il loop di movimento
-                updateMovement();
-                
-                console.log("Patch di emergenza applicata!");
-            }, 1500); // Attendi 1.5 secondi dopo il caricamento
+                // Gestione luce con F
+                if (e.code === 'KeyF') {
+                    if (window.gameApp && window.gameApp.game) {
+                        logDebug("Toggling light via patch");
+                        window.gameApp.game.toggleLight();
+                    }
+                }
+            });
+            
+            // Gestione keyup
+            document.addEventListener('keyup', (e) => {
+                keyState[e.code] = false;
+            });
+            
+// Fix per il mouse e rotazione camera
+document.addEventListener('mousemove', (e) => {
+    if (document.pointerLockElement === canvas && 
+        window.gameApp && window.gameApp.game && window.gameApp.game.camera) {
+        
+        const sensitivity = GAME_CONSTANTS.CAMERA.SENSITIVITY || 0.002;
+        const deltaX = e.movementX * sensitivity;
+        const deltaY = e.movementY * sensitivity;
+        
+        // Aggiorna direttamente la rotazione della camera
+        window.gameApp.game.camera.rotation.y -= deltaX;
+        window.gameApp.game.camera.rotation.x -= deltaY;
+        
+        // Limita la rotazione verticale
+        window.gameApp.game.camera.rotation.x = Math.max(
+            -Math.PI / 2 + 0.1, 
+            Math.min(Math.PI / 2 - 0.1, window.gameApp.game.camera.rotation.x)
+        );
+        
+        // Forza un aggiornamento della camera e un rendering
+        if (window.gameApp.game.updateCamera) {
+            window.gameApp.game.updateCamera();
+        } else {
+            // Fallback se updateCamera non esiste
+            window.gameApp.game.render();
+        }
+        
+        // Log per debugging
+        logDebug(`Camera ruotata a: y=${window.gameApp.game.camera.rotation.y.toFixed(2)}, x=${window.gameApp.game.camera.rotation.x.toFixed(2)}`);
+    }
+});
+            
+            // Assicurati che il pointer lock funzioni
+            canvas.addEventListener('click', () => {
+                if (!document.pointerLockElement) {
+                    logDebug("Tentativo di forzare il pointer lock...");
+                    canvas.requestPointerLock().catch(e => {
+                        logDebug("Errore nel pointer lock: " + e, 'error');
+                    });
+                }
+            });
+            
+            // Modifica del loop di movimento per renderlo più fluido
+            function updateMovement() {
+    if (window.gameApp && window.gameApp.game) {
+        const game = window.gameApp.game;
+        const moveSpeed = GAME_CONSTANTS.PHYSICS.MOVEMENT_SPEED || 0.15;
+        
+        // Applica movimenti basati sui tasti premuti
+        let moved = false;
+        Object.entries(keyMap).forEach(([key, direction]) => {
+            if (keyState[key]) {
+                if (typeof game.movePlayer === 'function') {
+                    game.movePlayer(direction, moveSpeed);
+                    moved = true;
+                }
+            }
         });
-    </script>
+    }
+    
+    // Continua il ciclo
+    requestAnimationFrame(updateMovement);
+}
+            
+            // Avvia il loop di movimento
+            updateMovement();
+            
+            // Aggiungi un ciclo di rendering continuo
+            function continuousRender() {
+                if (window.gameApp && window.gameApp.game && window.gameApp.isInitialized) {
+                    try {
+                        window.gameApp.game.render();
+                    } catch (e) {
+                        logDebug("Errore nel rendering continuo: " + e, 'error');
+                    }
+                }
+                requestAnimationFrame(continuousRender);
+            }
+            
+            // Avvia il ciclo di rendering continuo
+            continuousRender();
+            
+            logDebug("Patch di emergenza applicata con successo!");
+        }, 1500); // Attendi 1.5 secondi dopo il caricamento
+    });
+</script>
 </body>
 </html>

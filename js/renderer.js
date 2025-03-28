@@ -98,23 +98,19 @@ class Renderer {
             this.programs.set('main', shaderPrograms.mainProgram);
             this.programs.set('shadow', shaderPrograms.shadowProgram);
             
-            // Setup shadow mapping
-            this.setupShadowMapping();
-            
             // Verifica i programmi
             if (!this.programs.get('main') || !this.programs.get('shadow')) {
                 throw new Error('Errore nella creazione dei programmi shader');
             }
+            
+            // Setup shadow mapping
+            this.setupShadowMapping();
             
             // Imposta le uniforms di base
             this.gl.useProgram(this.programs.get('main'));
             this.setMainProgramUniforms(this.programs.get('main'));
         
             this.log('Renderer inizializzato con successo');
-            
-            // Avvia il loop di rendering continuo
-            this.startContinuousRendering();
-            
             return true;
         } catch (error) {
             this.log('Errore durante l\'inizializzazione del renderer: ' + error, true);
@@ -493,6 +489,12 @@ class Renderer {
     render(scene) {
         const gl = this.gl;
         
+        // Verifica che i programmi siano inizializzati
+        if (!this.programs.get('main') || !this.programs.get('shadow')) {
+            this.log('Impossibile renderizzare: programmi shader non inizializzati', true);
+            return; // Esci in anticipo se i programmi non sono pronti
+        }
+        
         // Aggiorna la scena interna
         if (scene) {
             this.scene = scene;
@@ -500,7 +502,12 @@ class Renderer {
         
         // Prima pass: shadow mapping
         if (this.settings.shadows) {
-            this.renderShadowMap(this.scene);
+            try {
+                this.renderShadowMap(this.scene);
+            } catch (error) {
+                this.log('Errore in renderShadowMap: ' + error, true);
+                this.settings.shadows = false; // Disabilita le ombre se c'è un errore
+            }
         }
         
         // Seconda pass: rendering principale
@@ -530,22 +537,30 @@ class Renderer {
     renderShadowMap(scene) {
         const gl = this.gl;
         
+        // Verifica che il programma shadow esista
+        const program = this.programs.get('shadow');
+        if (!program) {
+            this.log('Impossibile renderizzare shadow map: programma non inizializzato', true);
+            return;
+        }
+        
         // Prepara il framebuffer per shadow mapping
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.shadowFramebuffer);
         gl.viewport(0, 0, 1024, 1024);
         gl.clear(gl.DEPTH_BUFFER_BIT);
         
         // Usa il programma per shadow
-        const program = this.programs.get('shadow');
         gl.useProgram(program);
         
         // Matrice di trasformazione per lo spazio della luce
         const lightSpaceMatrix = this.getLightSpaceMatrix();
-        gl.uniformMatrix4fv(
-            gl.getUniformLocation(program, 'uLightSpaceMatrix'),
-            false,
-            lightSpaceMatrix
-        );
+        const lightMatrixLoc = gl.getUniformLocation(program, 'uLightSpaceMatrix');
+        
+        if (lightMatrixLoc) {
+            gl.uniformMatrix4fv(lightMatrixLoc, false, lightSpaceMatrix);
+        } else {
+            this.log('Warning: Uniform uLightSpaceMatrix non trovata', true);
+        }
         
         // Rendering degli oggetti per la shadow map
         if (scene.objects && scene.objects instanceof Map) {

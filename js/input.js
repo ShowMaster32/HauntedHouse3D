@@ -104,25 +104,31 @@ class InputHandler {
         });
 
         // Movimento mouse per rotazione camera
-        document.addEventListener('mousemove', (event) => {
-            if (document.pointerLockElement === canvas) {
-                const sensitivity = GAME_CONSTANTS.CAMERA.SENSITIVITY || 0.002;
-                const deltaX = event.movementX * sensitivity;
-                const deltaY = event.movementY * sensitivity;
+    document.addEventListener('mousemove', (event) => {
+        if (document.pointerLockElement === canvas) {
+            this.log(`Mouse move in InputHandler: x=${event.movementX}, y=${event.movementY}`);
+            const sensitivity = GAME_CONSTANTS.CAMERA.SENSITIVITY || 0.002;
+            const deltaX = event.movementX * sensitivity;
+            const deltaY = event.movementY * sensitivity;
 
-                // Aggiorna rotazione camera
-                if (this.game && this.game.camera) {
-                    this.game.camera.rotation.y -= deltaX;
-                    this.game.camera.rotation.x -= deltaY;
-                    
-                    // Limita rotazione verticale per evitare capovolgimenti
-                    this.game.camera.rotation.x = Math.max(
-                        -Math.PI / 2 + 0.1, 
-                        Math.min(Math.PI / 2 - 0.1, this.game.camera.rotation.x)
-                    );
+            // Aggiorna rotazione camera
+            if (this.game && this.game.camera) {
+                this.game.camera.rotation.y -= deltaX;
+                this.game.camera.rotation.x -= deltaY;
+                
+                // Limita rotazione verticale per evitare capovolgimenti
+                this.game.camera.rotation.x = Math.max(
+                    -Math.PI / 2 + 0.1, 
+                    Math.min(Math.PI / 2 - 0.1, this.game.camera.rotation.x)
+                );
+                
+                // Forza un rendering
+                if (this.game.render) {
+                    this.game.render();
                 }
             }
-        });
+        }
+    });
         
         this.log('Controlli da mouse configurati');
     }

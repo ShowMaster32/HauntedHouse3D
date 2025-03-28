@@ -207,48 +207,68 @@ class Game {
         this.log('Scena configurata con successo');
     }
     
-    // Configurazione delle pareti della stanza
-    setupWalls() {
-        const wallTexture = 'wall';
-        
-        const createWall = (id, position, rotation, scale) => {
-            this.scene.objects.set(id, {
-                mesh: 'plane',
-                texture: wallTexture,
-                position,
-                rotation,
-                scale,
-                doubleSided: true
-            });
-        };
-        
-        // Pareti alla giusta altezza
-        createWall('wallFront', 
-            [0, this.ROOM_HEIGHT/2, -this.ROOM_DEPTH/2],
-            [0, 0, 0],
-            [this.ROOM_WIDTH, this.ROOM_HEIGHT, 1]
-        );
-        
-        createWall('wallBack',
-            [0, this.ROOM_HEIGHT/2, this.ROOM_DEPTH/2],
-            [0, Math.PI, 0],
-            [this.ROOM_WIDTH, this.ROOM_HEIGHT, 1]
-        );
-        
-        createWall('wallLeft', 
-            [-this.ROOM_WIDTH/2, this.ROOM_HEIGHT/2, 0],
-            [0, Math.PI/2, 0],
-            [this.ROOM_DEPTH, this.ROOM_HEIGHT, 1]
-        );
-        
-        createWall('wallRight',
-            [this.ROOM_WIDTH/2, this.ROOM_HEIGHT/2, 0],
-            [0, -Math.PI/2, 0],
-            [this.ROOM_DEPTH, this.ROOM_HEIGHT, 1]
-        );
-        
-        this.log('Pareti aggiunte alla scena');
+// Configurazione delle pareti della stanza
+setupWalls() {
+    this.log('Iniziando setup pareti...');
+    
+    const wallTexture = 'wall';
+    
+    const createWall = (id, position, rotation, scale) => {
+        this.scene.objects.set(id, {
+            mesh: 'plane',
+            texture: wallTexture,
+            position,
+            rotation,
+            scale,
+            doubleSided: true
+        });
+        this.log(`Parete ${id} creata a posizione [${position}], rotazione [${rotation}], scala [${scale}]`);
+    };
+    
+    // Posizione corretta per le pareti - l'altezza è metà dell'altezza totale
+    createWall('wallFront', 
+        [0, this.ROOM_HEIGHT/2, -this.ROOM_DEPTH/2],
+        [0, 0, 0],
+        [this.ROOM_WIDTH, this.ROOM_HEIGHT, 1]
+    );
+    
+    createWall('wallBack',
+        [0, this.ROOM_HEIGHT/2, this.ROOM_DEPTH/2],
+        [0, Math.PI, 0],
+        [this.ROOM_WIDTH, this.ROOM_HEIGHT, 1]
+    );
+    
+    createWall('wallLeft', 
+        [-this.ROOM_WIDTH/2, this.ROOM_HEIGHT/2, 0],
+        [0, Math.PI/2, 0],
+        [this.ROOM_DEPTH, this.ROOM_HEIGHT, 1]
+    );
+    
+    createWall('wallRight',
+        [this.ROOM_WIDTH/2, this.ROOM_HEIGHT/2, 0],
+        [0, -Math.PI/2, 0],
+        [this.ROOM_DEPTH, this.ROOM_HEIGHT, 1]
+    );
+    
+    // Aggiungi anche delle collisioni fisiche per la stanza
+    this.physics.addCollisionBox(
+        [-this.ROOM_WIDTH/2, 0, -this.ROOM_DEPTH/2], 
+        [this.ROOM_WIDTH/2, this.ROOM_HEIGHT, this.ROOM_DEPTH/2]
+    );
+    
+    // Verifica che le pareti siano state create
+    this.log(`Numero di oggetti nella scena dopo setup pareti: ${this.scene.objects.size}`);
+    if (this.scene.objects.has('wallFront') && 
+        this.scene.objects.has('wallBack') && 
+        this.scene.objects.has('wallLeft') && 
+        this.scene.objects.has('wallRight')) {
+        this.log('Tutte le pareti sono state aggiunte correttamente');
+    } else {
+        this.log('ERRORE: Alcune pareti non sono state aggiunte', true);
     }
+    
+    this.log('Setup pareti completato');
+}
     
     // Configurazione dell'illuminazione
     setupLighting() {
@@ -531,22 +551,32 @@ class Game {
         }
     }
     
-    // Aggiornamento della camera
-    updateCamera() {
-        // Usa la rotazione per guardare nella direzione corretta
-        const target = [
-            this.player.position[0] + Math.sin(this.camera.rotation.y),
-            this.player.position[1] + Math.sin(this.camera.rotation.x),
-            this.player.position[2] - Math.cos(this.camera.rotation.y)
-        ];
+// Aggiornamento della camera
+updateCamera() {
+    // Sincronizza posizione camera con player
+    this.camera.position = [...this.player.position];
     
-        // Aggiorna la matrice di vista usando m4
+    // Calcola il punto di mira in base alla rotazione
+    const target = [
+        this.player.position[0] + Math.sin(this.camera.rotation.y),
+        this.player.position[1] + Math.sin(this.camera.rotation.x),
+        this.player.position[2] - Math.cos(this.camera.rotation.y)
+    ];
+
+    // Aggiorna la matrice di vista nel renderer
+    if (this.renderer) {
         this.renderer.updateCamera(
             this.player.position,
             target,
             [0, 1, 0]
         );
+        
+        // Forza rendering
+        this.render();
     }
+    
+    this.log(`Camera aggiornata - pos: [${this.player.position}], rot: [${this.camera.rotation.x.toFixed(2)}, ${this.camera.rotation.y.toFixed(2)}]`);
+}
     
     // Configurazione controlli mouse
     setupMouseControls() {
@@ -627,54 +657,70 @@ class Game {
         }
     }
     
-    // Aggiornamento rotazione camera
-    updateCameraRotation(deltaX, deltaY) {
-        // Yaw (rotazione orizzontale) - può ruotare liberamente 360°
-        this.player.rotation[1] = (this.player.rotation[1] + deltaX) % (Math.PI * 2);
-        if (this.player.rotation[1] < 0) {
-            this.player.rotation[1] += Math.PI * 2;
-        }
+// Nel metodo updateCameraRotation
+updateCameraRotation(deltaX, deltaY) {
+    // Aggiunta di log per debugging
+    this.log(`Updating camera rotation: deltaX=${deltaX}, deltaY=${deltaY}`);
     
-        // Pitch (rotazione verticale) - limitata a ±85 gradi
-        const MAX_PITCH = (85 * Math.PI) / 180; // 85 gradi in radianti
-        this.player.rotation[0] = Math.max(-MAX_PITCH, 
-                                         Math.min(MAX_PITCH, 
-                                                this.player.rotation[0] - deltaY));
+    // Rotazione orizzontale - il negativo crea un movimento più intuitivo
+    this.camera.rotation.y -= deltaX;
+    
+    // Rotazione verticale
+    this.camera.rotation.x -= deltaY;
+    
+    // Limita la rotazione verticale
+    this.camera.rotation.x = Math.max(
+        -Math.PI / 2 + 0.1, 
+        Math.min(Math.PI / 2 - 0.1, this.camera.rotation.x)
+    );
+    
+    // Forza un rendering dopo l'aggiornamento della camera
+    this.updateCamera();
+}
+    
+// Movimento del giocatore
+movePlayer(direction, speed) {
+    // Calcola la direzione di movimento sul piano XZ
+    const yaw = this.camera.rotation.y;
+    let moveX = 0;
+    let moveZ = 0;
+
+    switch(direction) {
+        case 'forward':
+            moveX = Math.sin(yaw) * speed;
+            moveZ = -Math.cos(yaw) * speed;
+            break;
+        case 'backward':
+            moveX = -Math.sin(yaw) * speed;
+            moveZ = Math.cos(yaw) * speed;
+            break;
+        case 'left':
+            moveX = -Math.cos(yaw) * speed;
+            moveZ = -Math.sin(yaw) * speed;
+            break;
+        case 'right':
+            moveX = Math.cos(yaw) * speed;
+            moveZ = Math.sin(yaw) * speed;
+            break;
     }
-    
-    // Movimento del giocatore
-    movePlayer(direction, speed) {
-        // Calcola la direzione di movimento sul piano XZ
-        const yaw = this.player.rotation[1];
-        let moveX = 0;
-        let moveZ = 0;
-    
-        switch(direction) {
-            case 'forward':
-                moveX = Math.sin(yaw) * speed;
-                moveZ = -Math.cos(yaw) * speed;
-                break;
-            case 'backward':
-                moveX = -Math.sin(yaw) * speed;
-                moveZ = Math.cos(yaw) * speed;
-                break;
-            case 'left':
-                moveX = -Math.cos(yaw) * speed;
-                moveZ = -Math.sin(yaw) * speed;
-                break;
-            case 'right':
-                moveX = Math.cos(yaw) * speed;
-                moveZ = Math.sin(yaw) * speed;
-                break;
-        }
-    
-        // Aggiorna solo le coordinate X e Z, mantenendo Y costante
-        this.player.position[0] += moveX;
-        this.player.position[2] += moveZ;
-    
-        // La Y viene gestita solo per salti/cadute dalla fisica
-        this.physics.addImpulse([moveX, 0, moveZ], 1);
+
+    // Verifica valori validi
+    if (isNaN(moveX) || isNaN(moveZ)) {
+        this.log(`Movimento non valido: moveX=${moveX}, moveZ=${moveZ}, yaw=${yaw}`, true);
+        return;
     }
+
+    // Aggiorna posizione player
+    this.player.position[0] += moveX;
+    this.player.position[2] += moveZ;
+    
+    // Log di movimento
+    this.log(`Movimento: dir=${direction}, yaw=${yaw.toFixed(2)}, moveX=${moveX.toFixed(2)}, moveZ=${moveZ.toFixed(2)}`);
+    this.log(`Nuova posizione: [${this.player.position[0].toFixed(2)}, ${this.player.position[1].toFixed(2)}, ${this.player.position[2].toFixed(2)}]`);
+
+    // Aggiorna la camera per seguire il movimento
+    this.updateCamera();
+}
     
     // Salto del giocatore
     playerJump() {
