@@ -127,6 +127,11 @@
         <div id="test-output">I risultati dei test appariranno qui...</div>
     </div>
 
+    <!-- Carica le librerie richieste dal progetto originale -->
+    <script src="lib/webgl-utils.js"></script>
+    <script src="lib/m4.js"></script>
+    <script src="lib/m4-adapter.js"></script>
+    
     <!-- Definizione della classe ShaderLoader inline -->
     <script>
         // Configurazione del sistema di logging
@@ -594,10 +599,6 @@
         }
     </script>
     
-    <!-- Caricamento delle librerie richieste dal progetto originale -->
-    <script src="lib/webgl-utils.js"></script>
-    <script src="lib/m4.js"></script>
-    
     <!-- Script di testing -->
     <script>
         // Classe RendererTest - una versione minimale per i test
@@ -804,12 +805,23 @@
             onWindowResize() {
                 const canvas = this.gl.canvas;
                 
-                // Imposta le dimensioni del canvas alla dimensione corrente
-                if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
-                    canvas.width = canvas.clientWidth;
-                    canvas.height = canvas.clientHeight;
+                // Imposta le dimensioni del canvas alla dimensione del contenitore
+                // Assicurati che il canvas abbia dimensioni non nulle
+                const displayWidth = canvas.clientWidth || 800;
+                const displayHeight = canvas.clientHeight || 600;
+                
+                // Verifica se è necessario ridimensionare
+                if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+                    canvas.width = displayWidth;
+                    canvas.height = displayHeight;
+                    
+                    // Aggiorna il viewport
+                    this.gl.viewport(0, 0, displayWidth, displayHeight);
+                    
+                    logMessage(`Canvas ridimensionato a ${displayWidth}x${displayHeight}`);
+                } else {
+                    // Assicurati che il viewport sia comunque impostato
                     this.gl.viewport(0, 0, canvas.width, canvas.height);
-                    logMessage(`Canvas resize: ${canvas.width}x${canvas.height}`);
                 }
             }
             
@@ -890,8 +902,8 @@
                 // Imposta le dimensioni del canvas
                 this.onWindowResize();
                 
-                // Cancella il canvas
-                gl.clearColor(0.1, 0.1, 0.1, 1.0);
+                // Cancella il canvas con un colore distintivo (blu scuro per verificare che funzioni)
+                gl.clearColor(0.0, 0.0, 0.2, 1.0);
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
                 
                 // Utilizza il programma shader
@@ -925,27 +937,52 @@
                 }
                 
                 // Setup matrici
-                const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
-                const projectionMatrix = m4.perspective(Math.PI / 4, aspect, 0.1, 100.0);
+                // Assicurati che l'aspect sia calcolato correttamente
+                const width = gl.canvas.width || 800;
+                const height = gl.canvas.height || 600;
+                const aspect = width / height;
+                logMessage(`Canvas size: ${width}x${height}, aspect ratio: ${aspect}`);
                 
-                // Camera leggermente alzata e arretrata
+                // Usa un FOV più ampio per vedere meglio
+                const projectionMatrix = m4.perspective(Math.PI / 3, aspect, 0.1, 100.0);
+                
+                // Posiziona la camera più indietro per vedere meglio l'oggetto
                 const viewMatrix = m4.lookAt(
-                    [0, 1.5, 5],  // posizione camera
+                    [0, 0, 7],    // posizione camera (più indietro)
                     [0, 0, 0],    // target
                     [0, 1, 0]     // up vector
                 );
                 
                 // Matrice modello con rotazione
-                let modelMatrix = m4.identity();
-                modelMatrix = m4.rotateY(modelMatrix, this.previewSettings.rotationY);
+                // Usa la matrice identità e poi applica la rotazione manualmente
+                const modelMatrix = m4.identity();
+                
+                // Applica la rotazione sull'asse Y
+                const angle = this.previewSettings.rotationY;
+                const c = Math.cos(angle);
+                const s = Math.sin(angle);
+                
+                // Crea una matrice rotazione Y
+                const rotY = [
+                    c,  0, s, 0,
+                    0,  1, 0, 0,
+                -s,  0, c, 0,
+                    0,  0, 0, 1
+                ];
+                
+                // Moltiplica per ottenere la matrice modello finale
+                const finalModelMatrix = m4.multiply(modelMatrix, rotY);
+                
+                // Usare la funzione rotateY definita nell'adapter invece di implementarla manualmente
+                // const finalModelMatrix = m4.rotateY(modelMatrix, angle);
                 
                 // Matrice normale (inversa trasposta)
-                const normalMatrix = m4.transpose(m4.inverse(modelMatrix));
+                const normalMatrix = m4.transpose(m4.inverse(finalModelMatrix));
                 
                 // Imposta uniform matrici
                 gl.uniformMatrix4fv(gl.getUniformLocation(program, 'uProjectionMatrix'), false, projectionMatrix);
                 gl.uniformMatrix4fv(gl.getUniformLocation(program, 'uViewMatrix'), false, viewMatrix);
-                gl.uniformMatrix4fv(gl.getUniformLocation(program, 'uModelMatrix'), false, modelMatrix);
+                gl.uniformMatrix4fv(gl.getUniformLocation(program, 'uModelMatrix'), false, finalModelMatrix);
                 gl.uniformMatrix4fv(gl.getUniformLocation(program, 'uNormalMatrix'), false, normalMatrix);
                 
                 // Imposta anche una lightSpaceMatrix se esiste
@@ -978,7 +1015,7 @@
                 gl.uniform1f(gl.getUniformLocation(program, 'uAmbientStrength'), this.ambientLight.strength);
                 
                 // Imposta posizione camera
-                gl.uniform3fv(gl.getUniformLocation(program, 'uViewPosition'), new Float32Array([0, 1.5, 5]));
+                gl.uniform3fv(gl.getUniformLocation(program, 'uViewPosition'), new Float32Array([0, 0, 7]));
                 
                 // Imposta altri parametri
                 const specularStrengthLoc = gl.getUniformLocation(program, 'uSpecularStrength');
@@ -1000,12 +1037,22 @@
                 
                 // Renderizza in wireframe o solid
                 if (this.previewSettings.wireframe) {
-                    gl.polygonMode = gl.LINE;  // Non funziona in WebGL 1.0, usiamo un workaround
+                    // Workaround per WebGL 1.0 che non supporta gl.polygonMode
                     for (let i = 0; i < mesh.numIndices; i += 3) {
                         gl.drawElements(gl.LINE_LOOP, 3, gl.UNSIGNED_SHORT, i * 2);
                     }
                 } else {
+                    // Disegna l'oggetto
+                    logMessage(`Drawing mesh with ${mesh.numIndices} indices`);
                     gl.drawElements(gl.TRIANGLES, mesh.numIndices, gl.UNSIGNED_SHORT, 0);
+                }
+                
+                // Verifica errori GL
+                const error = gl.getError();
+                if (error !== gl.NO_ERROR) {
+                    logMessage(`Errore GL dopo rendering: ${error}`, 'error');
+                } else {
+                    logMessage('Rendering completato senza errori');
                 }
             }
         }
