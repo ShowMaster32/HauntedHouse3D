@@ -932,8 +932,17 @@ class Game {
         this.updateCamera();
     }
     
-    // Movimento del giocatore
+    // Movimento del giocatore - versione corretta
     movePlayer(direction, speed) {
+        // Log di input
+        this.log(`Tentativo movimento: ${direction} con velocità ${speed}`);
+        
+        // Valida la rotazione della camera
+        if (!this.camera || typeof this.camera.rotation !== 'object' || typeof this.camera.rotation.y !== 'number') {
+            this.log('Rotazione camera non valida per calcolo movimento', true);
+            return;
+        }
+        
         // Calcola la direzione di movimento sul piano XZ
         const yaw = this.camera.rotation.y;
         let moveX = 0;
@@ -956,27 +965,76 @@ class Game {
                 moveX = Math.cos(yaw) * speed;
                 moveZ = Math.sin(yaw) * speed;
                 break;
+            default:
+                this.log(`Direzione non valida: ${direction}`, true);
+                return;
         }
 
         // Verifica valori validi
         if (isNaN(moveX) || isNaN(moveZ)) {
             this.log(`Movimento non valido: moveX=${moveX}, moveZ=${moveZ}, yaw=${yaw}`, true);
-            return;
+            // Imposta valori di default sicuri
+            moveX = 0;
+            moveZ = direction === 'forward' ? -speed : 
+                    direction === 'backward' ? speed : 
+                    direction === 'left' ? -speed : 
+                    direction === 'right' ? speed : 0;
         }
 
-        // Log di movimento
+        // Log di movimento per debug
         this.log(`Movimento: dir=${direction}, yaw=${yaw.toFixed(2)}, moveX=${moveX.toFixed(2)}, moveZ=${moveZ.toFixed(2)}`);
         
-        // Aggiorna sia la velocità per la fisica
-        this.playerVelocity[0] += moveX;
-        this.playerVelocity[2] += moveZ;
+        // Calcola la nuova posizione
+        const newX = this.player.position[0] + moveX;
+        const newZ = this.player.position[2] + moveZ;
         
-        // E anche la posizione direttamente per un movimento più immediato
-        this.player.position[0] += moveX;
-        this.player.position[2] += moveZ;
+        // Verifica collisioni prima di aggiornare la posizione
+        const playerRadius = this.PLAYER_RADIUS || 0.35;
+        let canMove = true;
         
-        // Forza un update della camera
-        this.updateCamera();
+        // Controlla se ci sono collisioni con le bounding box
+        if (this.boundingBoxes && this.boundingBoxes.length > 0) {
+            // Creiamo una mini bounding box per il giocatore
+            const playerMin = [
+                newX - playerRadius,
+                this.player.position[1],
+                newZ - playerRadius
+            ];
+            
+            const playerMax = [
+                newX + playerRadius,
+                this.player.position[1] + (this.PLAYER_HEIGHT || 1.7),
+                newZ + playerRadius
+            ];
+            
+            // Verifica collisioni con tutte le bounding box
+            for (const box of this.boundingBoxes) {
+                // Semplice test AABB (Axis-Aligned Bounding Box)
+                if (playerMin[0] <= box.max[0] && playerMax[0] >= box.min[0] &&
+                    playerMin[1] <= box.max[1] && playerMax[1] >= box.min[1] &&
+                    playerMin[2] <= box.max[2] && playerMax[2] >= box.min[2]) {
+                    canMove = false;
+                    break;
+                }
+            }
+        }
+        
+        if (canMove) {
+            // Aggiorna sia la velocità per la fisica
+            this.playerVelocity[0] += moveX;
+            this.playerVelocity[2] += moveZ;
+            
+            // E anche la posizione direttamente per un movimento più immediato
+            this.player.position[0] = newX;
+            this.player.position[2] = newZ;
+            
+            // Forza un update della camera
+            this.updateCamera();
+        } else {
+            this.log(`Movimento bloccato da collisione: ${direction}`);
+        }
+        
+        return canMove;
     }
     
     // Salto del giocatore

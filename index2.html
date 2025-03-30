@@ -53,7 +53,17 @@
     <audio id="demon-laugh" src="sounds/demon-laugh.mp3"></audio>
     
     <!-- Log per debugging -->
-    <div id="debug-log" style="display: none;"></div>
+    <div id="debug-log" style="display: block;"></div>
+    
+    <!-- Controlli virtuali per mobile -->
+    <div id="mobile-controls" class="mobile-only">
+        <button id="move-forward">↑</button>
+        <button id="move-backward">↓</button>
+        <button id="move-left">←</button>
+        <button id="move-right">→</button>
+        <button id="toggle-light">L</button>
+        <button id="toggle-panel">P</button>
+    </div>
     
     <!-- Librerie consentite dal professore -->
     <script src="lib/webgl-utils.js"></script>
@@ -85,10 +95,12 @@
             
             // Funzione per aggiungere log
             window.logDebug = function(message, type = 'info') {
-                if (!window.debugLogging) return;
-                
+                // Assicurati che i log siano sempre visibili durante lo sviluppo
                 const debugLog = document.getElementById('debug-log');
                 if (!debugLog) return;
+                
+                // Mostra i log sempre in fase di debug
+                debugLog.style.display = 'block';
                 
                 const entry = document.createElement('div');
                 entry.className = `log-${type}`;
@@ -103,6 +115,9 @@
                 while (debugLog.children.length > 50) {
                     debugLog.removeChild(debugLog.firstChild);
                 }
+                
+                // Log anche in console per debug
+                console.log(`[${type.toUpperCase()}] ${message}`);
             };
             
             // Abilita logging di default
@@ -140,6 +155,80 @@
                 `;
             }
             
+            // Aggiungi controlli virtuali per mobile
+            function setupMobileControls() {
+                const mobileControls = document.getElementById('mobile-controls');
+                
+                if (!mobileControls) return;
+                
+                // Assicurati che i controlli siano accessibili su mobile
+                if (window.innerWidth <= 768) {
+                    mobileControls.style.display = 'grid';
+                }
+                
+                // Funzioni di movimento mobile
+                const moveForward = document.getElementById('move-forward');
+                const moveBackward = document.getElementById('move-backward');
+                const moveLeft = document.getElementById('move-left');
+                const moveRight = document.getElementById('move-right');
+                const toggleLight = document.getElementById('toggle-light');
+                const togglePanel = document.getElementById('toggle-panel');
+                
+                // Aggiunge event listener se gli elementi esistono
+                if (moveForward) {
+                    moveForward.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        window.gameApp.game.movePlayer('forward', 0.15);
+                    });
+                }
+                
+                if (moveBackward) {
+                    moveBackward.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        window.gameApp.game.movePlayer('backward', 0.15);
+                    });
+                }
+                
+                if (moveLeft) {
+                    moveLeft.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        window.gameApp.game.movePlayer('left', 0.15);
+                    });
+                }
+                
+                if (moveRight) {
+                    moveRight.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        window.gameApp.game.movePlayer('right', 0.15);
+                    });
+                }
+                
+                if (toggleLight) {
+                    toggleLight.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        window.gameApp.game.toggleLight();
+                    });
+                }
+                
+                if (togglePanel) {
+                    togglePanel.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        window.gameApp.game.togglePanel();
+                    });
+                }
+            }
+            
+            // Debug keyboard status
+            function setupKeyboardDebug() {
+                document.addEventListener('keydown', (e) => {
+                    logDebug(`KeyDown: ${e.code}`);
+                });
+                
+                document.addEventListener('keyup', (e) => {
+                    logDebug(`KeyUp: ${e.code}`);
+                });
+            }
+            
             // Avvia la musica dell'intro quando viene caricata la pagina
             window.onload = () => {
                 introMusic.play().catch(e => {
@@ -148,6 +237,9 @@
                         introMusic.play();
                     }, { once: true });
                 });
+                
+                // Setup debug keyboard
+                setupKeyboardDebug();
             };
             
             // Evento click per avviare il gioco
@@ -178,9 +270,20 @@
                 app.initialize().then(() => {
                     logDebug('Gioco inizializzato con successo');
                     
+                    // Setup controlli mobile
+                    setupMobileControls();
+                    
                     // Ferma la musica di intro e avvia quella di gioco
                     introMusic.pause();
                     startMusic.play().catch(e => logDebug('Failed to play start music: ' + e, 'warning'));
+                    
+                    // Assicurati che il gioco sia avviato
+                    if (app.game) {
+                        app.game.start();
+                        logDebug('Game.start() chiamato');
+                    } else {
+                        logDebug('Game non disponibile dopo inizializzazione', 'error');
+                    }
                     
                     // Blocca il puntatore con un piccolo ritardo
                     setTimeout(() => {
@@ -212,6 +315,12 @@
                         topBar.style.transform = 'translateX(-50%)';
                     }
                     
+                    // Aggiorna display controlli mobile
+                    const mobileControls = document.getElementById('mobile-controls');
+                    if (mobileControls) {
+                        mobileControls.style.display = window.innerWidth <= 768 ? 'grid' : 'none';
+                    }
+                    
                     if (window.gameApp && window.gameApp.game) {
                         window.gameApp.game.handleResize(window.innerWidth, window.innerHeight);
                     }
@@ -220,9 +329,71 @@
             
             // Gestione degli errori globali
             window.addEventListener('error', (event) => {
-                logDebug('Global error: ' + event.error.message, 'error');
-                console.error('Error:', event.error);
+                logDebug('Global error: ' + (event.error ? event.error.message : event.message), 'error');
+                console.error('Error:', event.error || event.message);
             });
+            
+            // Patch per Game.prototype.movePlayer
+            const originalGameMovement = Game.prototype.movePlayer;
+            Game.prototype.movePlayer = function(direction, speed) {
+                logDebug(`Game.movePlayer chiamato: ${direction}, ${speed}`);
+                
+                // Valida la rotazione della camera
+                if (!this.camera || typeof this.camera.rotation !== 'object' || typeof this.camera.rotation.y !== 'number') {
+                    logDebug('Rotazione camera non valida per calcolo movimento', 'error');
+                    return;
+                }
+                
+                // Calcola la direzione di movimento sul piano XZ
+                const yaw = this.camera.rotation.y;
+                let moveX = 0;
+                let moveZ = 0;
+
+                switch(direction) {
+                    case 'forward':
+                        moveX = Math.sin(yaw) * speed;
+                        moveZ = -Math.cos(yaw) * speed;
+                        break;
+                    case 'backward':
+                        moveX = -Math.sin(yaw) * speed;
+                        moveZ = Math.cos(yaw) * speed;
+                        break;
+                    case 'left':
+                        moveX = -Math.cos(yaw) * speed;
+                        moveZ = -Math.sin(yaw) * speed;
+                        break;
+                    case 'right':
+                        moveX = Math.cos(yaw) * speed;
+                        moveZ = Math.sin(yaw) * speed;
+                        break;
+                }
+
+                // Verifica valori validi
+                if (isNaN(moveX) || isNaN(moveZ)) {
+                    logDebug(`Movimento non valido: moveX=${moveX}, moveZ=${moveZ}, yaw=${yaw}`, 'error');
+                    // Usa valori di default
+                    moveX = 0;
+                    moveZ = direction === 'forward' ? -speed : (direction === 'backward' ? speed : 0);
+                }
+
+                // Log di movimento
+                logDebug(`Movimento: dir=${direction}, yaw=${yaw.toFixed(2)}, moveX=${moveX.toFixed(2)}, moveZ=${moveZ.toFixed(2)}`);
+                
+                // Aggiorna sia la velocità per la fisica
+                this.playerVelocity[0] += moveX;
+                this.playerVelocity[2] += moveZ;
+                
+                // E anche la posizione direttamente per un movimento più immediato
+                this.player.position[0] += moveX;
+                this.player.position[2] += moveZ;
+                
+                // Forza un update della camera
+                if (this.updateCamera) {
+                    this.updateCamera();
+                }
+            };
+            
+            logDebug('Setup iniziale completato');
         });
     </script>
 </body>

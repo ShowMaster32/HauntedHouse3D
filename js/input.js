@@ -19,21 +19,23 @@ class InputHandler {
         this.setupMouseControls();
         this.setupTouchControls();
         
-        this.log('Input handler inizializzato');
+        this.log('Input handler inizializzato con game reference: ' + (this.game ? 'valido' : 'INVALIDO'));
     }
     
     // Funzione di log
     log(message, isError = false) {
         console.log(isError ? `[INPUT ERROR] ${message}` : `[INPUT] ${message}`);
         
-        if (typeof logDebug === 'function') {
-            logDebug(message, isError ? 'error' : 'info');
+        if (typeof window.logDebug === 'function') {
+            window.logDebug(message, isError ? 'error' : 'info');
         }
     }
 
     // Setup controlli da tastiera
     setupKeyboardControls() {
         document.addEventListener('keydown', (event) => {
+            // Log aggiuntivo per debug
+            console.log(`Tasto premuto: ${event.code}`);
             this.keyStates[event.code] = true;
             
             // Gestione pannello di controllo (tasto P)
@@ -101,7 +103,8 @@ class InputHandler {
             } else {
                 document.body.style.cursor = 'default';
                 // Non mettere in pausa automaticamente se il pannello è aperto
-                if (this.game && !document.getElementById('side-panel').classList.contains('visible')) {
+                const sidePanel = document.getElementById('side-panel');
+                if (this.game && sidePanel && !sidePanel.classList.contains('visible')) {
                     this.game.isPaused = true;
                 }
                 this.log('Puntatore sbloccato');
@@ -118,6 +121,8 @@ class InputHandler {
                 // Aggiorna rotazione camera nel gioco
                 if (this.game && this.game.updateCameraRotation) {
                     this.game.updateCameraRotation(deltaX, deltaY);
+                } else {
+                    this.log("Impossibile aggiornare la rotazione della camera", true);
                 }
             }
         });
@@ -209,9 +214,11 @@ class InputHandler {
     }
 
     // Aggiorna lo stato dell'input
-    // Cerca la funzione update() in input.js e sostituiscila con questa
     update() {
-        if (!this.game) return;
+        if (!this.game) {
+            this.log("Game reference non valida nell'update", true);
+            return;
+        }
         
         // Log per diagnostica
         const activeKeys = Object.entries(this.keyStates)
@@ -222,37 +229,101 @@ class InputHandler {
             this.log(`Tasti premuti: ${activeKeys.join(', ')}`);
         }
         
-        // Calcola la velocità di movimento in base a se il giocatore è sul pavimento
-        const moveSpeed = 0.2; // Aumenta la velocità per renderla più percepibile
+        // Test direzione di movimento più dettagliato
+        const moveSpeed = 0.2;
         
-        // Aggiorniamo direttamente la posizione del giocatore invece di affidarci solo alla velocità
+        // DEBUG: Log della rotazione camera
+        if (this.game.camera && this.game.camera.rotation) {
+            this.log(`Camera rotation: y=${this.game.camera.rotation.y.toFixed(2)}`);
+        } else {
+            this.log("Camera rotation non disponibile", true);
+        }
+        
+        // Test diretto del movimento - più sicuro dell'approccio precedente
         let moved = false;
         
         if (this.isKeyPressed('KeyW') || this.isKeyPressed('ArrowUp')) {
-            this.game.movePlayer('forward', moveSpeed);
+            this.log("Muovendo in avanti");
+            this.movePlayerSafe('forward', moveSpeed);
             moved = true;
         }
         if (this.isKeyPressed('KeyS') || this.isKeyPressed('ArrowDown')) {
-            this.game.movePlayer('backward', moveSpeed);
+            this.log("Muovendo indietro");
+            this.movePlayerSafe('backward', moveSpeed);
             moved = true;
         }
         if (this.isKeyPressed('KeyA') || this.isKeyPressed('ArrowLeft')) {
-            this.game.movePlayer('left', moveSpeed);
+            this.log("Muovendo a sinistra");
+            this.movePlayerSafe('left', moveSpeed);
             moved = true;
         }
         if (this.isKeyPressed('KeyD') || this.isKeyPressed('ArrowRight')) {
-            this.game.movePlayer('right', moveSpeed);
+            this.log("Muovendo a destra");
+            this.movePlayerSafe('right', moveSpeed);
             moved = true;
         }
         
         // Salto
-        if ((this.isKeyPressed('Space') || this.isKeyPressed('KeyJ')) && this.game.player.onFloor) {
+        if ((this.isKeyPressed('Space') || this.isKeyPressed('KeyJ')) && 
+            this.game.player && this.game.player.onFloor) {
             this.game.playerJump();
         }
         
         // Se c'è stato movimento, forza un aggiornamento della camera
-        if (moved) {
+        if (moved && this.game.updateCamera) {
             this.game.updateCamera();
+        }
+    }
+
+    // Versione più sicura del movimento che verifica tutti i dati necessari
+    movePlayerSafe(direction, speed) {
+        if (!this.game) {
+            this.log("Game reference non valida in movePlayerSafe", true);
+            return;
+        }
+        
+        if (!this.game.movePlayer) {
+            this.log("movePlayer non disponibile nell'oggetto game", true);
+            
+            // Implementazione fallback diretta
+            if (this.game.player && this.game.player.position && this.game.camera) {
+                const yaw = this.game.camera.rotation ? this.game.camera.rotation.y : 0;
+                let moveX = 0;
+                let moveZ = 0;
+                
+                switch(direction) {
+                    case 'forward':
+                        moveX = Math.sin(yaw) * speed;
+                        moveZ = -Math.cos(yaw) * speed;
+                        break;
+                    case 'backward':
+                        moveX = -Math.sin(yaw) * speed;
+                        moveZ = Math.cos(yaw) * speed;
+                        break;
+                    case 'left':
+                        moveX = -Math.cos(yaw) * speed;
+                        moveZ = -Math.sin(yaw) * speed;
+                        break;
+                    case 'right':
+                        moveX = Math.cos(yaw) * speed;
+                        moveZ = Math.sin(yaw) * speed;
+                        break;
+                }
+                
+                // Aggiorna direttamente la posizione
+                this.game.player.position[0] += moveX;
+                this.game.player.position[2] += moveZ;
+                
+                this.log(`Movimento fallback: ${direction}, x=${moveX.toFixed(2)}, z=${moveZ.toFixed(2)}`);
+            }
+            return;
+        }
+        
+        // Usa il metodo standard
+        try {
+            this.game.movePlayer(direction, speed);
+        } catch (error) {
+            this.log(`Errore in movePlayer: ${error}`, true);
         }
     }
 }
