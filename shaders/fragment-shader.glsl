@@ -1,11 +1,11 @@
-#version 300 es
+// Versione WebGL 1.0 (rimuovere la riga #version 300 es)
 precision highp float;
 
 // Input dal vertex shader
-in vec2 vTextureCoord;
-in vec3 vNormal;
-in vec3 vFragPos;
-in vec4 vFragPosLightSpace;
+varying vec2 vTextureCoord;
+varying vec3 vNormal;
+varying vec3 vFragPos;
+varying vec4 vFragPosLightSpace;
 
 // Texture samplers
 uniform sampler2D uSampler;
@@ -32,9 +32,6 @@ uniform bool uShadowsEnabled;
 uniform bool uReflectionsEnabled;
 uniform bool uAdvancedRendering;
 
-// Output
-out vec4 fragColor;
-
 // Calcola l'ombra usando PCF (Percentage Closer Filtering)
 float calculateShadow(vec4 fragPosLightSpace) {
     // Esegue la proiezione prospettica
@@ -51,7 +48,7 @@ float calculateShadow(vec4 fragPosLightSpace) {
     }
     
     // Ottieni la profondità più vicina dal punto di vista della luce
-    float closestDepth = texture(uShadowMap, projCoords.xy).r;
+    float closestDepth = texture2D(uShadowMap, projCoords.xy).r;
     
     // Profondità attuale del frammento
     float currentDepth = projCoords.z;
@@ -63,10 +60,10 @@ float calculateShadow(vec4 fragPosLightSpace) {
     
     // PCF per ombre più morbide
     float shadow = 0.0;
-    vec2 texelSize = 1.0 / vec2(textureSize(uShadowMap, 0));
+    vec2 texelSize = vec2(0.001, 0.001); // Valore fisso che funzionerà per la maggior parte delle texture
     for(int x = -1; x <= 1; ++x) {
         for(int y = -1; y <= 1; ++y) {
-            float pcfDepth = texture(uShadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
+            float pcfDepth = texture2D(uShadowMap, projCoords.xy + vec2(float(x), float(y)) * texelSize).r;
             shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;
         }
     }
@@ -78,7 +75,7 @@ float calculateShadow(vec4 fragPosLightSpace) {
 
 void main() {
     // Ottieni il colore dalla texture
-    vec4 texColor = texture(uSampler, vTextureCoord);
+    vec4 texColor = texture2D(uSampler, vTextureCoord);
     
     // Gestione trasparenza semplice
     if(texColor.a < 0.1) discard;
@@ -136,5 +133,5 @@ void main() {
     // Correzione gamma
     result = pow(result, vec3(1.0/2.2));
 
-    fragColor = vec4(result, texColor.a);
+    gl_FragColor = vec4(result, texColor.a);
 }

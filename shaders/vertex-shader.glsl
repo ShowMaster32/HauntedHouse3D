@@ -1,9 +1,7 @@
-#version 300 es
-
-// Input attributes
-in vec4 aPosition;
-in vec2 aTextureCoord;
-in vec3 aNormal;
+// Versione WebGL 1.0 (rimuovere la riga #version 300 es)
+attribute vec4 aPosition;
+attribute vec2 aTextureCoord;
+attribute vec3 aNormal;
 
 // Uniform matrices
 uniform mat4 uModelMatrix;
@@ -13,10 +11,10 @@ uniform mat4 uNormalMatrix;
 uniform mat4 uLightSpaceMatrix;
 
 // Output to fragment shader
-out vec2 vTextureCoord;
-out vec3 vNormal;
-out vec3 vFragPos;
-out vec4 vFragPosLightSpace;
+varying vec2 vTextureCoord;
+varying vec3 vNormal;
+varying vec3 vFragPos;
+varying vec4 vFragPosLightSpace;
 
 void main() {
     // Calcola la posizione del frammento nello spazio mondo

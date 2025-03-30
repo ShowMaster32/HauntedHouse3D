@@ -2,24 +2,24 @@
 // Utilità matematiche per rendering 3D e fisica
 
 // Funzioni vettoriali
-window.Vector3 = {
-    create: (x = 0, y = 0, z = 0) => new Float32Array([x, y, z]),
+const Vector3 = {
+    create: (x = 0, y = 0, z = 0) => [x, y, z],
     
-    add: (a, b, out = new Float32Array(3)) => {
+    add: (a, b, out = [0, 0, 0]) => {
         out[0] = a[0] + b[0];
         out[1] = a[1] + b[1];
         out[2] = a[2] + b[2];
         return out;
     },
     
-    subtract: (a, b, out = new Float32Array(3)) => {
+    subtract: (a, b, out = [0, 0, 0]) => {
         out[0] = a[0] - b[0];
         out[1] = a[1] - b[1];
         out[2] = a[2] - b[2];
         return out;
     },
     
-    scale: (v, s, out = new Float32Array(3)) => {
+    scale: (v, s, out = [0, 0, 0]) => {
         out[0] = v[0] * s;
         out[1] = v[1] * s;
         out[2] = v[2] * s;
@@ -28,7 +28,7 @@ window.Vector3 = {
     
     dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
     
-    cross: (a, b, out = new Float32Array(3)) => {
+    cross: (a, b, out = [0, 0, 0]) => {
         const ax = a[0], ay = a[1], az = a[2];
         const bx = b[0], by = b[1], bz = b[2];
         
@@ -40,7 +40,9 @@ window.Vector3 = {
     
     length: (v) => Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]),
     
-    normalize: (v, out = new Float32Array(3)) => {
+    lengthSquared: (v) => v[0] * v[0] + v[1] * v[1] + v[2] * v[2],
+    
+    normalize: (v, out = [0, 0, 0]) => {
         const len = Vector3.length(v);
         if (len > 0) {
             const invLen = 1 / len;
@@ -56,14 +58,61 @@ window.Vector3 = {
         const dy = b[1] - a[1];
         const dz = b[2] - a[2];
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    },
+    
+    distanceSquared: (a, b) => {
+        const dx = b[0] - a[0];
+        const dy = b[1] - a[1];
+        const dz = b[2] - a[2];
+        return dx * dx + dy * dy + dz * dz;
+    },
+    
+    // Ottieni un vettore transformato da una matrice 4x4
+    transformMat4: (a, m, out = [0, 0, 0]) => {
+        const x = a[0], y = a[1], z = a[2];
+        const w = m[3] * x + m[7] * y + m[11] * z + m[15] || 1.0;
+        
+        out[0] = (m[0] * x + m[4] * y + m[8] * z + m[12]) / w;
+        out[1] = (m[1] * x + m[5] * y + m[9] * z + m[13]) / w;
+        out[2] = (m[2] * x + m[6] * y + m[10] * z + m[14]) / w;
+        
+        return out;
+    },
+    
+    // Clona un vettore 3D
+    clone: (v) => [v[0], v[1], v[2]],
+    
+    // Limita la lunghezza di un vettore
+    limit: (v, max, out = [0, 0, 0]) => {
+        const lengthSq = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
+        if (lengthSq > max * max) {
+            const scalar = max / Math.sqrt(lengthSq);
+            out[0] = v[0] * scalar;
+            out[1] = v[1] * scalar;
+            out[2] = v[2] * scalar;
+            return out;
+        }
+        out[0] = v[0];
+        out[1] = v[1];
+        out[2] = v[2];
+        return out;
+    },
+    
+    // Riflette un vettore rispetto a una normale
+    reflect: (v, normal, out = [0, 0, 0]) => {
+        const dot2 = 2.0 * Vector3.dot(v, normal);
+        out[0] = v[0] - dot2 * normal[0];
+        out[1] = v[1] - dot2 * normal[1];
+        out[2] = v[2] - dot2 * normal[2];
+        return out;
     }
 };
 
 // Funzioni quaternion
-window.Quaternion = {
-    create: (x = 0, y = 0, z = 0, w = 1) => new Float32Array([x, y, z, w]),
+const Quaternion = {
+    create: (x = 0, y = 0, z = 0, w = 1) => [x, y, z, w],
     
-    fromEuler: (x, y, z, out = new Float32Array(4)) => {
+    fromEuler: (x, y, z, out = [0, 0, 0, 0]) => {
         const c1 = Math.cos(x / 2);
         const c2 = Math.cos(y / 2);
         const c3 = Math.cos(z / 2);
@@ -79,7 +128,7 @@ window.Quaternion = {
         return out;
     },
     
-    multiply: (a, b, out = new Float32Array(4)) => {
+    multiply: (a, b, out = [0, 0, 0, 0]) => {
         const ax = a[0], ay = a[1], az = a[2], aw = a[3];
         const bx = b[0], by = b[1], bz = b[2], bw = b[3];
         
@@ -89,263 +138,83 @@ window.Quaternion = {
         out[3] = aw * bw - ax * bx - ay * by - az * bz;
         
         return out;
+    },
+    
+    // Converti quaternione in matrice 3x3 di rotazione
+    toMatrix3: (q, out = []) => {
+        const x = q[0], y = q[1], z = q[2], w = q[3];
+        const x2 = x + x, y2 = y + y, z2 = z + z;
+        const xx = x * x2, xy = x * y2, xz = x * z2;
+        const yy = y * y2, yz = y * z2, zz = z * z2;
+        const wx = w * x2, wy = w * y2, wz = w * z2;
+        
+        out[0] = 1 - (yy + zz);
+        out[1] = xy + wz;
+        out[2] = xz - wy;
+        
+        out[3] = xy - wz;
+        out[4] = 1 - (xx + zz);
+        out[5] = yz + wx;
+        
+        out[6] = xz + wy;
+        out[7] = yz - wx;
+        out[8] = 1 - (xx + yy);
+        
+        return out;
+    },
+    
+    // Converti da angoli di Eulero (pitch, yaw, roll) a quaternione
+    fromYawPitchRoll: (yaw, pitch, roll, out = [0, 0, 0, 0]) => {
+        const halfYaw = yaw * 0.5;
+        const halfPitch = pitch * 0.5;
+        const halfRoll = roll * 0.5;
+        
+        const sinYaw = Math.sin(halfYaw);
+        const cosYaw = Math.cos(halfYaw);
+        const sinPitch = Math.sin(halfPitch);
+        const cosPitch = Math.cos(halfPitch);
+        const sinRoll = Math.sin(halfRoll);
+        const cosRoll = Math.cos(halfRoll);
+        
+        out[0] = cosYaw * sinPitch * cosRoll + sinYaw * cosPitch * sinRoll;
+        out[1] = sinYaw * cosPitch * cosRoll - cosYaw * sinPitch * sinRoll;
+        out[2] = cosYaw * cosPitch * sinRoll - sinYaw * sinPitch * cosRoll;
+        out[3] = cosYaw * cosPitch * cosRoll + sinYaw * sinPitch * sinRoll;
+        
+        return out;
     }
 };
 
 // Funzioni di interpolazione
-window.Interpolation = {
+const Interpolation = {
     lerp: (a, b, t) => a + (b - a) * t,
+    
+    lerpVec3: (a, b, t, out = [0, 0, 0]) => {
+        out[0] = a[0] + (b[0] - a[0]) * t;
+        out[1] = a[1] + (b[1] - a[1]) * t;
+        out[2] = a[2] + (b[2] - a[2]) * t;
+        return out;
+    },
     
     smoothStep: (min, max, value) => {
         const x = Math.max(0, Math.min(1, (value - min) / (max - min)));
         return x * x * (3 - 2 * x);
     },
     
-    clamp: (value, min, max) => Math.max(min, Math.min(max, value))
-};
-
-// Funzioni per collisioni
-window.Collision = {
-    pointInBox: (point, boxMin, boxMax) => {
-        return point[0] >= boxMin[0] && point[0] <= boxMax[0] &&
-               point[1] >= boxMin[1] && point[1] <= boxMax[1] &&
-               point[2] >= boxMin[2] && point[2] <= boxMax[2];
-    },
+    clamp: (value, min, max) => Math.max(min, Math.min(max, value)),
     
-    sphereIntersectsBox: (center, radius, boxMin, boxMax) => {
-        let dmin = 0;
-        
-        for (let i = 0; i < 3; i++) {
-            if (center[i] < boxMin[i]) {
-                const diff = center[i] - boxMin[i];
-                dmin += diff * diff;
-            } else if (center[i] > boxMax[i]) {
-                const diff = center[i] - boxMax[i];
-                dmin += diff * diff;
-            }
-        }
-        
-        return dmin <= (radius * radius);
-    },
-    
-    rayIntersectsBox: (origin, direction, boxMin, boxMax) => {
-        let tmin = (boxMin[0] - origin[0]) / direction[0];
-        let tmax = (boxMax[0] - origin[0]) / direction[0];
-        
-        if (tmin > tmax) [tmin, tmax] = [tmax, tmin];
-        
-        let tymin = (boxMin[1] - origin[1]) / direction[1];
-        let tymax = (boxMax[1] - origin[1]) / direction[1];
-        
-        if (tymin > tymax) [tymin, tymax] = [tymax, tymin];
-        
-        if (tmin > tymax || tymin > tmax) return false;
-        
-        if (tymin > tmin) tmin = tymin;
-        if (tymax < tmax) tmax = tymax;
-        
-        let tzmin = (boxMin[2] - origin[2]) / direction[2];
-        let tzmax = (boxMax[2] - origin[2]) / direction[2];
-        
-        if (tzmin > tzmax) [tzmin, tzmax] = [tzmax, tzmin];
-        
-        if (tmin > tzmax || tzmin > tmax) return false;
-        
-        return true;
-    },
-    
-    // Collisione capsula-box
-    capsuleIntersectsBox: (capsuleStart, capsuleEnd, radius, boxMin, boxMax) => {
-        // Trova il punto più vicino sulla linea della capsula alla box
-        const direction = Vector3.subtract(capsuleEnd, capsuleStart);
-        const length = Vector3.length(direction);
-        Vector3.scale(direction, 1/length, direction);
-        
-        const closest = Collision.closestPointOnLine(
-            boxMin, boxMax,
-            capsuleStart,
-            direction,
-            length
-        );
-        
-        // Verifica se il punto più vicino è all'interno della sfera con raggio 'radius'
-        return Vector3.distance(closest, capsuleStart) <= radius;
-    },
-    
-    closestPointOnLine: (boxMin, boxMax, lineStart, lineDir, lineLength) => {
-        const closest = Vector3.create();
-        for (let i = 0; i < 3; i++) {
-            const d = lineDir[i];
-            const o = lineStart[i];
-            
-            if (d === 0) {
-                closest[i] = o;
-            } else {
-                let t = (d > 0 ? boxMin[i] : boxMax[i] - o) / d;
-                if (t < 0) t = 0;
-                if (t > lineLength) t = lineLength;
-                closest[i] = o + t * d;
-            }
-        }
-        return closest;
-    }
-};
-
-// Funzioni per matrici 4x4 (integrazione con m4.js)
-window.Matrix4 = {
-    create: () => new Float32Array(16),
-    
-    identity: (out = new Float32Array(16)) => {
-        out.fill(0);
-        out[0] = out[5] = out[10] = out[15] = 1;
-        return out;
-    },
-    
-    // Utilizza m4.multiply se disponibile, altrimenti implementa la propria versione
-    multiply: (a, b, out = new Float32Array(16)) => {
-        if (typeof m4 !== 'undefined' && typeof m4.multiply === 'function') {
-            return m4.multiply(a, b);
-        }
-        
-        const a00 = a[0],  a01 = a[1],  a02 = a[2],  a03 = a[3];
-        const a10 = a[4],  a11 = a[5],  a12 = a[6],  a13 = a[7];
-        const a20 = a[8],  a21 = a[9],  a22 = a[10], a23 = a[11];
-        const a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
-        
-        let b0 = b[0], b1 = b[1], b2 = b[2], b3 = b[3];
-        out[0] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
-        out[1] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
-        out[2] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
-        out[3] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
-        
-        b0 = b[4]; b1 = b[5]; b2 = b[6]; b3 = b[7];
-        out[4] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
-        out[5] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
-        out[6] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
-        out[7] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
-        
-        b0 = b[8]; b1 = b[9]; b2 = b[10]; b3 = b[11];
-        out[8] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
-        out[9] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
-        out[10] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
-        out[11] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
-        
-        b0 = b[12]; b1 = b[13]; b2 = b[14]; b3 = b[15];
-        out[12] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
-        out[13] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
-        out[14] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
-        out[15] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
-        
-        return out;
-    },
-    
-    // Matrice di proiezione prospettica
-    perspective: (fovy, aspect, near, far, out = new Float32Array(16)) => {
-        if (typeof m4 !== 'undefined' && typeof m4.perspective === 'function') {
-            return m4.perspective(fovy, aspect, near, far);
-        }
-        
-        const f = 1.0 / Math.tan(fovy / 2);
-        out[0] = f / aspect;
-        out[1] = 0;
-        out[2] = 0;
-        out[3] = 0;
-        out[4] = 0;
-        out[5] = f;
-        out[6] = 0;
-        out[7] = 0;
-        out[8] = 0;
-        out[9] = 0;
-        out[11] = -1;
-        out[12] = 0;
-        out[13] = 0;
-        out[15] = 0;
-        
-        const nf = 1 / (near - far);
-        out[10] = (far + near) * nf;
-        out[14] = 2 * far * near * nf;
-        
-        return out;
-    },
-    
-    // Matrice lookAt per la camera
-    lookAt: (eye, center, up, out = new Float32Array(16)) => {
-        if (typeof m4 !== 'undefined' && typeof m4.lookAt === 'function') {
-            return m4.lookAt(eye, center, up);
-        }
-        
-        const z = Vector3.normalize(Vector3.subtract(eye, center));
-        const x = Vector3.normalize(Vector3.cross(up, z));
-        const y = Vector3.cross(z, x);
-        
-        out[0] = x[0]; out[1] = y[0]; out[2] = z[0]; out[3] = 0;
-        out[4] = x[1]; out[5] = y[1]; out[6] = z[1]; out[7] = 0;
-        out[8] = x[2]; out[9] = y[2]; out[10] = z[2]; out[11] = 0;
-        out[12] = -Vector3.dot(x, eye);
-        out[13] = -Vector3.dot(y, eye);
-        out[14] = -Vector3.dot(z, eye);
-        out[15] = 1;
-        
-        return out;
-    }
-};
-
-// Utility per random e rumore
-window.Random = {
-    // Genera un numero random in un range
-    range: (min, max) => min + Math.random() * (max - min),
-    
-    // Genera un intero random in un range
-    rangeInt: (min, max) => Math.floor(min + Math.random() * (max - min + 1)),
-    
-    // Genera un punto random in una sfera
-    pointInSphere: (radius) => {
-        const theta = 2 * Math.PI * Math.random();
-        const phi = Math.acos(2 * Math.random() - 1);
-        const r = radius * Math.cbrt(Math.random());
-        
-        return Vector3.create(
-            r * Math.sin(phi) * Math.cos(theta),
-            r * Math.sin(phi) * Math.sin(theta),
-            r * Math.cos(phi)
-        );
-    },
-    
-    // Genera un quaternione casuale per rotazioni random
-    randomQuaternion: () => {
-        const u1 = Math.random();
-        const u2 = Math.random();
-        const u3 = Math.random();
-        
-        return Quaternion.create(
-            Math.sqrt(1 - u1) * Math.sin(2 * Math.PI * u2),
-            Math.sqrt(1 - u1) * Math.cos(2 * Math.PI * u2),
-            Math.sqrt(u1) * Math.sin(2 * Math.PI * u3),
-            Math.sqrt(u1) * Math.cos(2 * Math.PI * u3)
-        );
-    }
-};
-
-// Utility per conversione tra gradi e radianti
-window.MathUtils = {
-    DEG_TO_RAD: Math.PI / 180,
-    RAD_TO_DEG: 180 / Math.PI,
-    
-    toRadians: (degrees) => degrees * (Math.PI / 180),
-    toDegrees: (radians) => radians * (180 / Math.PI),
-    
-    // Interpolazione sferica di quaternioni
-    slerp: (qa, qb, t) => {
-        // Copiamo i quaternioni per non modificarli
-        let a = Quaternion.create(qa[0], qa[1], qa[2], qa[3]);
-        let b = Quaternion.create(qb[0], qb[1], qb[2], qb[3]);
-        
-        // Calcola coseno dell'angolo tra i quaternioni
+    // Interpolazione sferica di quaternion
+    slerp: (a, b, t, out = [0, 0, 0, 0]) => {
+        // Calcola il coseno dell'angolo tra i quaternioni
         let cosHalfTheta = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
         
-        // Se i quaternioni sono troppo simili, fai interpolazione lineare
+        // Se i quaternioni sono troppo simili, usa lerp
         if (Math.abs(cosHalfTheta) >= 1.0) {
-            return a;
+            out[0] = a[0];
+            out[1] = a[1];
+            out[2] = a[2];
+            out[3] = a[3];
+            return out;
         }
         
         // Assicurati di prendere il percorso più breve
@@ -357,39 +226,292 @@ window.MathUtils = {
             cosHalfTheta = -cosHalfTheta;
         }
         
-        // Calcola coefficienti di interpolazione
         const halfTheta = Math.acos(cosHalfTheta);
         const sinHalfTheta = Math.sqrt(1.0 - cosHalfTheta * cosHalfTheta);
         
-        // Se l'angolo è troppo piccolo, fai interpolazione lineare
+        // Se l'angolo è troppo piccolo, fai lerp
         if (Math.abs(sinHalfTheta) < 0.001) {
-            return Quaternion.create(
-                (a[0] * 0.5 + b[0] * 0.5),
-                (a[1] * 0.5 + b[1] * 0.5),
-                (a[2] * 0.5 + b[2] * 0.5),
-                (a[3] * 0.5 + b[3] * 0.5)
-            );
+            out[0] = a[0] * 0.5 + b[0] * 0.5;
+            out[1] = a[1] * 0.5 + b[1] * 0.5;
+            out[2] = a[2] * 0.5 + b[2] * 0.5;
+            out[3] = a[3] * 0.5 + b[3] * 0.5;
+            return out;
         }
         
-        // Calcola ratios
         const ratioA = Math.sin((1 - t) * halfTheta) / sinHalfTheta;
         const ratioB = Math.sin(t * halfTheta) / sinHalfTheta;
         
-        // Crea risultato
-        return Quaternion.create(
-            (a[0] * ratioA + b[0] * ratioB),
-            (a[1] * ratioA + b[1] * ratioB),
-            (a[2] * ratioA + b[2] * ratioB),
-            (a[3] * ratioA + b[3] * ratioB)
-        );
+        out[0] = a[0] * ratioA + b[0] * ratioB;
+        out[1] = a[1] * ratioA + b[1] * ratioB;
+        out[2] = a[2] * ratioA + b[2] * ratioB;
+        out[3] = a[3] * ratioA + b[3] * ratioB;
+        
+        return out;
     }
 };
 
-// Esporta gli oggetti nel window
+// Funzioni per collisioni
+const Collision = {
+    // Test se un punto è dentro un box
+    pointInBox: (point, boxMin, boxMax) => {
+        return point[0] >= boxMin[0] && point[0] <= boxMax[0] &&
+               point[1] >= boxMin[1] && point[1] <= boxMax[1] &&
+               point[2] >= boxMin[2] && point[2] <= boxMax[2];
+    },
+    
+    // Test se una sfera interseca un box
+    sphereIntersectsBox: (center, radius, boxMin, boxMax) => {
+        // Trova il punto più vicino nel box alla sfera
+        const closest = [
+            Interpolation.clamp(center[0], boxMin[0], boxMax[0]),
+            Interpolation.clamp(center[1], boxMin[1], boxMax[1]),
+            Interpolation.clamp(center[2], boxMin[2], boxMax[2])
+        ];
+        
+        // Calcola il quadrato della distanza dal punto più vicino al centro della sfera
+        const distanceSquared = Vector3.distanceSquared(center, closest);
+        
+        // Se il quadrato della distanza è minore del quadrato del raggio, c'è intersezione
+        return distanceSquared <= (radius * radius);
+    },
+    
+    // Test se un raggio interseca un box
+    rayIntersectsBox: (origin, direction, boxMin, boxMax) => {
+        // Calcola gli inversi delle componenti della direzione
+        const invDir = [
+            1.0 / (direction[0] || 0.000001),
+            1.0 / (direction[1] || 0.000001),
+            1.0 / (direction[2] || 0.000001)
+        ];
+        
+        // Calcola i t per ogni asse
+        const t1 = (boxMin[0] - origin[0]) * invDir[0];
+        const t2 = (boxMax[0] - origin[0]) * invDir[0];
+        const t3 = (boxMin[1] - origin[1]) * invDir[1];
+        const t4 = (boxMax[1] - origin[1]) * invDir[1];
+        const t5 = (boxMin[2] - origin[2]) * invDir[2];
+        const t6 = (boxMax[2] - origin[2]) * invDir[2];
+        
+        const tMin = Math.max(Math.max(Math.min(t1, t2), Math.min(t3, t4)), Math.min(t5, t6));
+        const tMax = Math.min(Math.min(Math.max(t1, t2), Math.max(t3, t4)), Math.max(t5, t6));
+        
+        // Se tMax < 0, il raggio è diretto lontano dal box
+        if (tMax < 0) return false;
+        
+        // Se tMin > tMax, il raggio non interseca il box
+        if (tMin > tMax) return false;
+        
+        // Altrimenti, il raggio interseca il box
+        return true;
+    },
+    
+    // Intersezione tra due box AABB
+    boxIntersectsBox: (minA, maxA, minB, maxB) => {
+        return minA[0] <= maxB[0] && maxA[0] >= minB[0] &&
+               minA[1] <= maxB[1] && maxA[1] >= minB[1] &&
+               minA[2] <= maxB[2] && maxA[2] >= minB[2];
+    },
+    
+    // Calcola il punto più vicino su un box a un punto dato
+    closestPointOnBox: (point, boxMin, boxMax) => {
+        const result = [0, 0, 0];
+        
+        // Clamp point to box
+        for (let i = 0; i < 3; i++) {
+            result[i] = Math.max(boxMin[i], Math.min(point[i], boxMax[i]));
+        }
+        
+        return result;
+    }
+};
+
+// Utilità di mathjs per WebGL
+const MatrixUtils = {
+    // Crea una matrice di identità 4x4
+    identity: () => {
+        return [
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1
+        ];
+    },
+    
+    // Crea una matrice di proiezione prospettica
+    perspective: (fovy, aspect, near, far) => {
+        const f = 1.0 / Math.tan(fovy / 2);
+        const nf = 1 / (near - far);
+        
+        return [
+            f / aspect, 0, 0, 0,
+            0, f, 0, 0,
+            0, 0, (far + near) * nf, -1,
+            0, 0, (2 * far * near) * nf, 0
+        ];
+    },
+    
+    // Crea una matrice di vista lookAt
+    lookAt: (eye, center, up) => {
+        const z = Vector3.normalize(Vector3.subtract(eye, center));
+        const x = Vector3.normalize(Vector3.cross(up, z));
+        const y = Vector3.cross(z, x);
+        
+        return [
+            x[0], y[0], z[0], 0,
+            x[1], y[1], z[1], 0,
+            x[2], y[2], z[2], 0,
+            -Vector3.dot(x, eye), -Vector3.dot(y, eye), -Vector3.dot(z, eye), 1
+        ];
+    },
+    
+    // Trasformazione di traslazione
+    translate: (matrix, tx, ty, tz) => {
+        matrix[12] = matrix[0] * tx + matrix[4] * ty + matrix[8] * tz + matrix[12];
+        matrix[13] = matrix[1] * tx + matrix[5] * ty + matrix[9] * tz + matrix[13];
+        matrix[14] = matrix[2] * tx + matrix[6] * ty + matrix[10] * tz + matrix[14];
+        matrix[15] = matrix[3] * tx + matrix[7] * ty + matrix[11] * tz + matrix[15];
+        
+        return matrix;
+    },
+    
+    // Trasformazione di scala
+    scale: (matrix, sx, sy, sz) => {
+        matrix[0] *= sx;
+        matrix[1] *= sx;
+        matrix[2] *= sx;
+        matrix[3] *= sx;
+        
+        matrix[4] *= sy;
+        matrix[5] *= sy;
+        matrix[6] *= sy;
+        matrix[7] *= sy;
+        
+        matrix[8] *= sz;
+        matrix[9] *= sz;
+        matrix[10] *= sz;
+        matrix[11] *= sz;
+        
+        return matrix;
+    },
+    
+    // Rotazione intorno all'asse X
+    rotateX: (matrix, angle) => {
+        const s = Math.sin(angle);
+        const c = Math.cos(angle);
+        
+        const a10 = matrix[4];
+        const a11 = matrix[5];
+        const a12 = matrix[6];
+        const a13 = matrix[7];
+        const a20 = matrix[8];
+        const a21 = matrix[9];
+        const a22 = matrix[10];
+        const a23 = matrix[11];
+        
+        // Performa la rotazione
+        matrix[4] = a10 * c + a20 * s;
+        matrix[5] = a11 * c + a21 * s;
+        matrix[6] = a12 * c + a22 * s;
+        matrix[7] = a13 * c + a23 * s;
+        matrix[8] = a20 * c - a10 * s;
+        matrix[9] = a21 * c - a11 * s;
+        matrix[10] = a22 * c - a12 * s;
+        matrix[11] = a23 * c - a13 * s;
+        
+        return matrix;
+    },
+    
+    // Rotazione intorno all'asse Y
+    rotateY: (matrix, angle) => {
+        const s = Math.sin(angle);
+        const c = Math.cos(angle);
+        
+        const a00 = matrix[0];
+        const a01 = matrix[1];
+        const a02 = matrix[2];
+        const a03 = matrix[3];
+        const a20 = matrix[8];
+        const a21 = matrix[9];
+        const a22 = matrix[10];
+        const a23 = matrix[11];
+        
+        // Performa la rotazione
+        matrix[0] = a00 * c - a20 * s;
+        matrix[1] = a01 * c - a21 * s;
+        matrix[2] = a02 * c - a22 * s;
+        matrix[3] = a03 * c - a23 * s;
+        matrix[8] = a00 * s + a20 * c;
+        matrix[9] = a01 * s + a21 * c;
+        matrix[10] = a02 * s + a22 * c;
+        matrix[11] = a03 * s + a23 * c;
+        
+        return matrix;
+    },
+    
+    // Rotazione intorno all'asse Z
+    rotateZ: (matrix, angle) => {
+        const s = Math.sin(angle);
+        const c = Math.cos(angle);
+        
+        const a00 = matrix[0];
+        const a01 = matrix[1];
+        const a02 = matrix[2];
+        const a03 = matrix[3];
+        const a10 = matrix[4];
+        const a11 = matrix[5];
+        const a12 = matrix[6];
+        const a13 = matrix[7];
+        
+        // Performa la rotazione
+        matrix[0] = a00 * c + a10 * s;
+        matrix[1] = a01 * c + a11 * s;
+        matrix[2] = a02 * c + a12 * s;
+        matrix[3] = a03 * c + a13 * s;
+        matrix[4] = a10 * c - a00 * s;
+        matrix[5] = a11 * c - a01 * s;
+        matrix[6] = a12 * c - a02 * s;
+        matrix[7] = a13 * c - a03 * s;
+        
+        return matrix;
+    }
+};
+
+// Utility per random e rumore
+const Random = {
+    // Genera un numero random in un range
+    range: (min, max) => min + Math.random() * (max - min),
+    
+    // Genera un intero random in un range (inclusi min e max)
+    rangeInt: (min, max) => Math.floor(Random.range(min, max + 0.999)),
+    
+    // Genera un punto random in una sfera
+    pointInSphere: (radius = 1) => {
+        const theta = 2 * Math.PI * Math.random();
+        const phi = Math.acos(2 * Math.random() - 1);
+        const r = radius * Math.cbrt(Math.random());
+        
+        return [
+            r * Math.sin(phi) * Math.cos(theta),
+            r * Math.sin(phi) * Math.sin(theta),
+            r * Math.cos(phi)
+        ];
+    }
+};
+
+// Utility per conversione tra gradi e radianti
+const MathUtils = {
+    DEG_TO_RAD: Math.PI / 180,
+    RAD_TO_DEG: 180 / Math.PI,
+    
+    toRadians: (degrees) => degrees * Math.PI / 180,
+    toDegrees: (radians) => radians * 180 / Math.PI
+};
+
+// Rendi disponibili globalmente
 window.Vector3 = Vector3;
 window.Quaternion = Quaternion;
-window.Matrix4 = Matrix4;
 window.Interpolation = Interpolation;
 window.Collision = Collision;
+window.MatrixUtils = MatrixUtils;
 window.Random = Random;
 window.MathUtils = MathUtils;

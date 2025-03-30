@@ -73,6 +73,7 @@ body {
     cursor: pointer;
     transition: background 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
     backdrop-filter: blur(2px);
+    font-family: 'Creepster', cursive;
 }
 
 #start-button:hover {
@@ -130,6 +131,7 @@ body.no-cursor {
     transform: translateX(100%);
     transition: transform 0.3s ease;
     z-index: 20;
+    overflow-y: auto;
 }
 
 /* Pannello laterale visibile */
@@ -145,6 +147,7 @@ body.no-cursor {
 /* Stile per il contenitore GUI (dat.gui) */
 #gui-container {
     width: 100%;
+    margin-bottom: 15px;
 }
 
 /* Bottoni nel pannello laterale */
@@ -159,6 +162,7 @@ body.no-cursor {
     border-radius: 5px;
     cursor: pointer;
     transition: background-color 0.3s ease;
+    font-family: Arial, sans-serif;
 }
 
 #side-panel button:hover {
@@ -390,48 +394,7 @@ button:focus {
     animation: pulse 0.5s infinite;
 }
 
-/* Stile per mousemove disabilitato per evitare problemi con il puntatore */
-.mouse-disabled {
-    pointer-events: none;
-}
-
 /* Per facilitare il debug */
 .debug-border {
     border: 1px solid red;
-}
-
-/* Tooltip per istruzioni aggiuntive */
-.tooltip {
-    position: absolute;
-    background: rgba(0, 0, 0, 0.8);
-    color: white;
-    padding: 5px 10px;
-    border-radius: 5px;
-    font-size: 14px;
-    z-index: 1000;
-    pointer-events: none;
-}
-
-/* Overlay per modalità pausa */
-#pause-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 15;
-    color: white;
-    font-size: 48px;
-    text-shadow: 2px 2px 4px black;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-#pause-overlay.visible {
-    opacity: 1;
 }

@@ -58,515 +58,55 @@
     <!-- Librerie consentite dal professore -->
     <script src="lib/webgl-utils.js"></script>
     <script src="lib/m4.js"></script>
+    <script src="lib/m4-adapter.js"></script>
     <script src="lib/glm_utils.js"></script>
-    <script>
-        // Definisci le classi mancanti
-        function nvr() {
-            this.x = 0;
-            this.y = 0;
-            this.z = 0;
-        }
-        
-        function nfc() {
-            this.n_v_e = 0;
-            this.vert = [0, 0, 0]; // Inizializza con array di default
-            this.textCoordsIndex = [0, 0, 0];
-            this.normalVertexIndex = [0, 0, 0];
-            this.normalFaceIndex = 0;
-            this.group = 0;
-            this.material = 0;
-        }
-        
-        // Crea l'oggetto glmUtils
-        window.glmUtils = window.glmUtils || {};
-        
-        // Aggiungi la funzione loadObj semplificata
-        window.glmUtils.loadObj = function(text) {
-            // Crea strutture dati semplificate
-            const lines = text.split("\n");
-            const vertices = [];
-            const normals = [];
-            const texCoords = [];
-            const indices = [];
-            
-            // Indici temporanei per il parsing
-            const tempVertices = [];
-            const tempNormals = [];
-            const tempTexCoords = [];
-            
-            // Aggiungi valori dummy all'indice 0 (gli indici OBJ partono da 1)
-            tempVertices.push([0,0,0]);
-            tempNormals.push([0,0,0]);
-            tempTexCoords.push([0,0]);
-            
-            for (let j=0; j<lines.length; j++) {
-                const line = lines[j].trim();
-                if (line === '' || line.startsWith('#')) continue;
-                
-                const parts = line.split(/\s+/);
-                
-                switch(parts[0]) {
-                    case 'v': // vertice
-                        tempVertices.push([
-                            parseFloat(parts[1]), 
-                            parseFloat(parts[2]), 
-                            parseFloat(parts[3])
-                        ]);
-                        break;
-                    case 'vn': // normale
-                        tempNormals.push([
-                            parseFloat(parts[1]), 
-                            parseFloat(parts[2]), 
-                            parseFloat(parts[3])
-                        ]);
-                        break;
-                    case 'vt': // coordinate texture
-                        tempTexCoords.push([
-                            parseFloat(parts[1]), 
-                            parts.length > 2 ? parseFloat(parts[2]) : 0
-                        ]);
-                        break;
-                    case 'f': // faccia
-                        // Supporta sia triangoli che quad
-                        const faceIndices = [];
-                        
-                        // Parsing faccia
-                        for (let i = 1; i < parts.length; i++) {
-                            const indices = parts[i].split('/');
-                            const vertIndex = parseInt(indices[0]) || 0;
-                            const texIndex = indices.length > 1 ? parseInt(indices[1]) || 0 : 0;
-                            const normIndex = indices.length > 2 ? parseInt(indices[2]) || 0 : 0;
-                            
-                            faceIndices.push({
-                                v: vertIndex,
-                                t: texIndex,
-                                n: normIndex
-                            });
-                        }
-                        
-                        // Triangolazione
-                        for (let i = 0; i < faceIndices.length - 2; i++) {
-                            // Per ogni triangolo nella faccia
-                            const points = [
-                                faceIndices[0],
-                                faceIndices[i+1],
-                                faceIndices[i+2]
-                            ];
-                            
-                            // Aggiungi i punti al buffer
-                            for (const point of points) {
-                                if (point.v > 0 && point.v < tempVertices.length) {
-                                    const vertex = tempVertices[point.v];
-                                    vertices.push(vertex[0], vertex[1], vertex[2]);
-                                    
-                                    // Aggiungi normali se disponibili
-                                    if (point.n > 0 && point.n < tempNormals.length) {
-                                        const normal = tempNormals[point.n];
-                                        normals.push(normal[0], normal[1], normal[2]);
-                                    } else if (tempNormals.length > 1) {
-                                        // Usa la prima normale disponibile
-                                        normals.push(tempNormals[1][0], tempNormals[1][1], tempNormals[1][2]);
-                                    } else {
-                                        // Normale di default
-                                        normals.push(0, 1, 0);
-                                    }
-                                    
-                                    // Aggiungi coordinate texture se disponibili
-                                    if (point.t > 0 && point.t < tempTexCoords.length) {
-                                        const texCoord = tempTexCoords[point.t];
-                                        texCoords.push(texCoord[0], texCoord[1]);
-                                    } else {
-                                        // Coordinate texture di default
-                                        texCoords.push(0, 0);
-                                    }
-                                    
-                                    // Aggiungi indice
-                                    indices.push(indices.length);
-                                }
-                            }
-                        }
-                        break;
-                }
-            }
-            
-            console.log(`Parsed OBJ with ${vertices.length/3} vertices, ${indices.length} indices`);
-            
-            return {
-                vertices: new Float32Array(vertices),
-                normals: new Float32Array(normals),
-                texCoords: new Float32Array(texCoords),
-                indices: new Uint16Array(indices)
-            };
-        };
-        
-        console.log('glmUtils.loadObj configurato correttamente');
-    </script>
+    <script src="lib/glm-adapter.js"></script>
     <script src="lib/mesh_utils.js"></script>
     <script src="lib/dat.gui.js"></script>
     <script src="lib/jquery-3.6.0.js"></script>
     
-    <!-- File sorgente del gioco -->
+    <!-- Shader e utility principali -->
     <script src="js/shader-loader.js"></script>
     <script src="js/math-utils.js"></script>
-    <script src="js/shader-test.js"></script>
+    
+    <!-- Script game core -->
+    <script src="js/constants.js"></script>
     <script src="js/audio.js"></script>
     <script src="js/physics.js"></script>
-    <script src="js/renderer.js"></script>
     <script src="js/input.js"></script>
-    <script src="js/constants.js"></script>
+    <script src="js/renderer.js"></script>
     <script src="js/game.js"></script>
     <script src="js/main.js"></script>
     
-    <!-- Adapter per risolvere compatibilità -->
-    <script>
-        // Funzione per aggiungere log
-        function logDebug(message, type = 'info') {
-            if (!window.debugLogging) return;
-            
-            const debugLog = document.getElementById('debug-log');
-            if (!debugLog) return;
-            
-            const entry = document.createElement('div');
-            entry.className = `log-${type}`;
-            
-            const timestamp = new Date().toTimeString().substring(0, 8);
-            entry.textContent = `[${timestamp}] ${message}`;
-            
-            debugLog.appendChild(entry);
-            debugLog.scrollTop = debugLog.scrollHeight;
-            
-            // Limita il numero di messaggi
-            while (debugLog.children.length > 50) {
-                debugLog.removeChild(debugLog.firstChild);
-            }
-        }
-        
-        window.debugLogging = true;
-        
-        // Crea un alias per m4.orthographic come m4.ortho
-        if (typeof m4 !== 'undefined' && typeof m4.orthographic === 'function' && typeof m4.ortho !== 'function') {
-            m4.ortho = m4.orthographic;
-            logDebug('Successfully created alias m4.ortho for m4.orthographic');
-        }
-        
-        // Ridefinisci le funzioni di rotazione per risolvere gli errori
-        if (typeof m4 !== 'undefined') {
-            m4.rotateX = function(m, angleInRadians) {
-                const c = Math.cos(angleInRadians);
-                const s = Math.sin(angleInRadians);
-                
-                const m10 = m[4];
-                const m11 = m[5];
-                const m12 = m[6];
-                const m13 = m[7];
-                const m20 = m[8];
-                const m21 = m[9];
-                const m22 = m[10];
-                const m23 = m[11];
-                
-                const result = Array.isArray(m) ? [...m] : new Float32Array(m);
-                
-                result[4] = c * m10 + s * m20;
-                result[5] = c * m11 + s * m21;
-                result[6] = c * m12 + s * m22;
-                result[7] = c * m13 + s * m23;
-                result[8] = c * m20 - s * m10;
-                result[9] = c * m21 - s * m11;
-                result[10] = c * m22 - s * m12;
-                result[11] = c * m23 - s * m13;
-                
-                return result;
-            };
-            
-            m4.rotateY = function(m, angleInRadians) {
-                const c = Math.cos(angleInRadians);
-                const s = Math.sin(angleInRadians);
-                
-                const m00 = m[0];
-                const m01 = m[1];
-                const m02 = m[2];
-                const m03 = m[3];
-                const m20 = m[8];
-                const m21 = m[9];
-                const m22 = m[10];
-                const m23 = m[11];
-                
-                const result = Array.isArray(m) ? [...m] : new Float32Array(m);
-                
-                result[0] = c * m00 - s * m20;
-                result[1] = c * m01 - s * m21;
-                result[2] = c * m02 - s * m22;
-                result[3] = c * m03 - s * m23;
-                result[8] = c * m20 + s * m00;
-                result[9] = c * m21 + s * m01;
-                result[10] = c * m22 + s * m02;
-                result[11] = c * m23 + s * m03;
-                
-                return result;
-            };
-            
-            m4.rotateZ = function(m, angleInRadians) {
-                const c = Math.cos(angleInRadians);
-                const s = Math.sin(angleInRadians);
-                
-                const m00 = m[0];
-                const m01 = m[1];
-                const m02 = m[2];
-                const m03 = m[3];
-                const m10 = m[4];
-                const m11 = m[5];
-                const m12 = m[6];
-                const m13 = m[7];
-                
-                const result = Array.isArray(m) ? [...m] : new Float32Array(m);
-                
-                result[0] = c * m00 + s * m10;
-                result[1] = c * m01 + s * m11;
-                result[2] = c * m02 + s * m12;
-                result[3] = c * m03 + s * m13;
-                result[4] = c * m10 - s * m00;
-                result[5] = c * m11 - s * m01;
-                result[6] = c * m12 - s * m02;
-                result[7] = c * m13 - s * m03;
-                
-                return result;
-            };
-            
-            logDebug('Funzioni di rotazione m4 sostituite con successo!');
-        }
-        
-        // Definisci Stats per il contatore FPS
-        class Stats {
-            constructor() {
-                this.dom = document.createElement('div');
-                this.dom.className = 'stats';
-                this.dom.style.position = 'absolute';
-                this.dom.style.top = '0px';
-                this.dom.style.left = '0px';
-                this.dom.style.zIndex = '100';
-                this.dom.style.backgroundColor = 'rgba(0,0,0,0.5)';
-                this.dom.style.color = '#0ff';
-                this.dom.style.padding = '5px';
-                this.dom.style.fontFamily = 'Courier New, monospace';
-                this.dom.style.fontSize = '12px';
-                this.dom.innerHTML = 'FPS: 0';
-                
-                this.lastTime = performance.now();
-                this.frames = 0;
-                this.fps = 0;
-            }
-            
-            showPanel(mode) {
-                // mode 0 = fps, 1 = ms, 2 = mb (ignoriamo mode per semplicità)
-            }
-            
-            update() {
-                const time = performance.now();
-                this.frames++;
-                
-                if (time >= this.lastTime + 1000) {
-                    this.fps = Math.round((this.frames * 1000) / (time - this.lastTime));
-                    this.lastTime = time;
-                    this.frames = 0;
-                    this.dom.innerHTML = 'FPS: ' + this.fps;
-                }
-            }
-            
-            getFPS() {
-                return this.fps;
-            }
-            
-            begin() {
-                // start timing
-            }
-            
-            end() {
-                this.update();
-            }
-        }
-        
-        window.Stats = Stats;
-        
-        // Definisci il Clock
-        class Clock {
-            constructor(autoStart = true) {
-                this.autoStart = autoStart;
-                this.startTime = autoStart ? performance.now() : 0;
-                this.oldTime = this.startTime;
-                this.elapsedTime = 0;
-                this.running = autoStart;
-            }
-            
-            start() {
-                this.startTime = performance.now();
-                this.oldTime = this.startTime;
-                this.elapsedTime = 0;
-                this.running = true;
-            }
-            
-            stop() {
-                this.getElapsedTime();
-                this.running = false;
-            }
-            
-            getElapsedTime() {
-                this.getDelta();
-                return this.elapsedTime;
-            }
-            
-            getDelta() {
-                let diff = 0;
-                
-                if (this.autoStart && !this.running) {
-                    this.start();
-                    return 0;
-                }
-                
-                if (this.running) {
-                    const newTime = performance.now();
-                    diff = (newTime - this.oldTime) / 1000;
-                    this.oldTime = newTime;
-                    this.elapsedTime += diff;
-                }
-                
-                return diff;
-            }
-        }
-        
-        window.Clock = Clock;
-        
-        // Definisci la costante STEPS_PER_FRAME
-        const STEPS_PER_FRAME = 5;
-        
-        // Definisci Capsule e Octree per la fisica
-        class Capsule {
-            constructor(start, end, radius) {
-                this.start = start;
-                this.end = end;
-                this.radius = radius;
-            }
-            
-            translate(vector) {
-                this.start[0] += vector[0];
-                this.start[1] += vector[1];
-                this.start[2] += vector[2];
-                
-                this.end[0] += vector[0];
-                this.end[1] += vector[1];
-                this.end[2] += vector[2];
-            }
-        }
-        
-        window.Capsule = Capsule;
-        
-        class Octree {
-            constructor() {
-                this.nodes = [];
-            }
-            
-            fromGraphNode(scene) {
-                logDebug("Octree initialized from scene");
-                // Implementazione semplificata
-            }
-            
-            capsuleIntersect(capsule) {
-                // Implementazione base per simulare collisioni con il pavimento
-                if (capsule.end[1] < 0.35) {
-                    return {
-                        normal: [0, 1, 0],
-                        depth: 0.35 - capsule.end[1]
-                    };
-                }
-                return null;
-            }
-        }
-        
-        window.Octree = Octree;
-        
-        // Definisci le costanti GAME_CONSTANTS
-        window.GAME_CONSTANTS = window.GAME_CONSTANTS || {
-            GAME_VERSION: '1.0.0',
-            DEBUG_MODE: true,
-            ERROR_MESSAGES: {
-                WEBGL_NOT_SUPPORTED: 'WebGL 2 non è supportato da questo browser.',
-                AUDIO_NOT_SUPPORTED: 'Web Audio API non supportata.',
-                LOAD_ERROR: 'Errore durante il caricamento delle risorse.',
-                GENERIC_ERROR: 'Si è verificato un errore. Ricarica la pagina per riprovare.'
-            },
-            // Dimensioni della stanza
-            ROOM: {
-                WIDTH: 20,
-                HEIGHT: 10,
-                DEPTH: 25,
-                WALL_THICKNESS: 0.1
-            },
-            // Fisica
-            PHYSICS: {
-                GRAVITY: 30,
-                JUMP_FORCE: 10,
-                MOVEMENT_SPEED: 0.15,
-                AIR_MOVEMENT_SPEED: 0.05
-            },
-            // Camera
-            CAMERA: {
-                FOV: 70,
-                NEAR: 0.1,
-                FAR: 1000,
-                SENSITIVITY: 0.002
-            },
-            // Player
-            PLAYER: {
-                HEIGHT: 4,
-                RADIUS: 0.35,
-                BASE_SPEED: 25,
-                SPRINT_MULTIPLIER: 1.5,
-                CROUCH_MULTIPLIER: 0.5
-            },
-            // Audio
-            AUDIO: {
-                GHOST_SOUND_MIN_DELAY: 10000,
-                GHOST_SOUND_MAX_DELAY: 30000,
-                PROXIMITY_RADIUS: 5,
-                FOOTSTEP_INTERVAL: 400
-            },
-            // Luci
-            LIGHTS: {
-                MAIN_LIGHT: {
-                    INTENSITY: 100,
-                    COLOR: [1, 0.95, 0.8],
-                    HEIGHT: 9,
-                    FLICKER_DURATION: 500
-                },
-                AMBIENT_LIGHT: {
-                    INTENSITY: 0.3,
-                    COLOR: [0.2, 0.2, 0.2]
-                }
-            },
-            // Rendering
-            RENDER: {
-                SHADOW_MAP_SIZE: 1024,
-                MAX_POINT_LIGHTS: 4,
-                DEFAULT_GAMMA: 2.2
-            },
-            // Interazione
-            INTERACTION: {
-                SWITCH_PROXIMITY: 2,
-                DOLL_PROXIMITY: 5,
-                INTERACTION_DELAY: 500
-            },
-            // Touch controls
-            TOUCH: {
-                SWIPE_SENSITIVITY: 0.005,
-                PINCH_SENSITIVITY: 0.01,
-                MIN_SWIPE_DISTANCE: 30
-            }
-        };
-    </script>
-    
-    <!-- Script di setup principale -->
+    <!-- Script di inizializzazione -->
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            logDebug("Initializing HauntedHouse v1.0.0");
+            console.log("Inizializzazione HauntedHouse");
+            
+            // Funzione per aggiungere log
+            window.logDebug = function(message, type = 'info') {
+                if (!window.debugLogging) return;
+                
+                const debugLog = document.getElementById('debug-log');
+                if (!debugLog) return;
+                
+                const entry = document.createElement('div');
+                entry.className = `log-${type}`;
+                
+                const timestamp = new Date().toTimeString().substring(0, 8);
+                entry.textContent = `[${timestamp}] ${message}`;
+                
+                debugLog.appendChild(entry);
+                debugLog.scrollTop = debugLog.scrollHeight;
+                
+                // Limita il numero di messaggi
+                while (debugLog.children.length > 50) {
+                    debugLog.removeChild(debugLog.firstChild);
+                }
+            };
+            
+            // Abilita logging di default
+            window.debugLogging = true;
             
             // Setup elementi di base
             const startButton = document.getElementById('start-button');
@@ -578,9 +118,6 @@
             const crosshair = document.getElementById('crosshair');
             const introMusic = document.getElementById('intro-music');
             const startMusic = document.getElementById('start-music');
-            const randomGhostSound = document.getElementById('random-ghost');
-            const laLaLaSound = document.getElementById('la-la-la');
-            const demonLaughSound = document.getElementById('demon-laugh');
             const debugLog = document.getElementById('debug-log');
             
             // Toggle per i log di debug
@@ -590,15 +127,7 @@
                 logDebug(`Debug logging ${window.debugLogging ? 'enabled' : 'disabled'}`);
             });
             
-            // Definizione della funzione per avviare la riproduzione del suono a intervalli casuali
-            function playRandomGhostSound() {
-                const randomDelay = Math.random() * (30000 - 10000) + 10000; // Intervallo casuale tra 10s e 30s
-                setTimeout(() => {
-                    randomGhostSound.play().catch(e => logDebug('Failed to play sound: ' + e, 'warning'));
-                    playRandomGhostSound();  // Richiama la funzione per continuare a riprodurre il suono
-                }, randomDelay);
-            }
-            
+            // Mostra i controlli del gioco
             function showGameControls() {
                 const gameControls = document.getElementById('game-controls');
                 gameControls.innerHTML = `
@@ -623,108 +152,51 @@
             
             // Evento click per avviare il gioco
             startButton.addEventListener('click', () => {
-                // Ferma l'audio di intro e avvia la musica di gioco
-                introMusic.pause();
-                startMusic.play().catch(e => logDebug('Failed to play start music: ' + e, 'warning'));
+                logDebug('Inizializzazione gioco dopo click su START');
                 
                 // Nascondi il menu e mostra gli elementi di gioco
                 startMenu.style.display = 'none';
+                
                 canvas.style.display = 'block';
-                canvas.width = window.innerWidth;   // Forza la dimensione corretta
-                canvas.height = window.innerHeight; // Forza la dimensione corretta
                 container.style.display = 'block';
-                controlPanel.style.display = 'block';
                 instructions.style.visibility = 'visible';
                 crosshair.style.display = 'block';
                 
                 // Mostra la barra superiore con la legenda dei comandi
-                const topBar = document.getElementById('top-bar');
-                topBar.style.display = 'flex';
+                document.getElementById('top-bar').style.display = 'flex';
                 showGameControls();
                 
-                // Avvia l'audio a intervalli casuali
-                playRandomGhostSound();
+                // Imposta le dimensioni del canvas
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
                 
-                // Blocca il puntatore con un piccolo ritardo
-                setTimeout(() => {
-                    try {
-                        canvas.requestPointerLock();
-                    } catch (e) {
-                        logDebug('Pointer lock not supported or permission denied: ' + e, 'warning');
-                    }
-                }, 100);
+                // Crea l'applicazione di gioco
+                const app = new GameApplication();
+                window.gameApp = app;
                 
-                document.body.style.cursor = 'none';
-                
-                // Inizializza l'applicazione di gioco
-                if (typeof GameApplication !== 'undefined') {
-                    const app = new GameApplication();
-                    window.gameApp = app;  // Rendi disponibile globalmente per debug
-                    app.initialize().then(() => {
-                        // Dopo l'inizializzazione, forza il rendering
-                        setTimeout(() => {
-                            if (window.gameApp && window.gameApp.game) {
-                                logDebug('Forzando rendering iniziale e resize...');
-                                window.gameApp.game.handleResize(window.innerWidth, window.innerHeight);
-                                window.gameApp.game.render();
-                            }
-                        }, 500);
-                    }).catch(error => {
-                        logDebug('Failed to initialize game: ' + error, 'error');
-                    });
-                }
-            });
-            
-            // Aggiungi il controllo del pannello laterale quando si preme P
-            document.addEventListener('keydown', (event) => {
-                if (event.code === 'KeyP') {
-                    const panel = document.getElementById('side-panel');
-                    const isPanelOpen = !panel.classList.contains('hidden');
+                // Inizializza e avvia il gioco
+                app.initialize().then(() => {
+                    logDebug('Gioco inizializzato con successo');
                     
-                    if (!isPanelOpen) {
-                        // Mostra il pannello e sgancia il mouse
-                        panel.classList.remove('hidden');
-                        panel.classList.add('visible');
-                        document.exitPointerLock();
-                        document.body.style.cursor = 'default';
-                    } else {
-                        // Chiudi il pannello e blocca nuovamente il mouse
-                        panel.classList.remove('visible');
-                        panel.classList.add('hidden');
-                        canvas.requestPointerLock();
-                        document.body.style.cursor = 'none';
-                    }
-                }
-            });
-            
-            // Gestione dei pulsanti nel pannello di controllo
-            document.getElementById('toggleShadows').addEventListener('click', () => {
-                if (window.gameApp && window.gameApp.game && window.gameApp.game.renderer) {
-                    window.gameApp.game.renderer.toggleShadows();
-                    logDebug('Shadows toggled');
-                }
-            });
-            
-            document.getElementById('toggleReflections').addEventListener('click', () => {
-                if (window.gameApp && window.gameApp.game && window.gameApp.game.renderer) {
-                    window.gameApp.game.renderer.toggleReflections();
-                    logDebug('Reflections toggled');
-                }
-            });
-            
-            document.getElementById('toggleFPS').addEventListener('click', () => {
-                if (window.gameApp && window.gameApp.stats) {
-                    const statsElement = window.gameApp.stats.dom;
-                    statsElement.style.display = statsElement.style.display === 'none' ? 'block' : 'none';
-                    logDebug(`FPS counter ${statsElement.style.display === 'none' ? 'hidden' : 'shown'}`);
-                }
-            });
-            
-            document.getElementById('advancedRendering').addEventListener('click', () => {
-                if (window.gameApp && window.gameApp.game && window.gameApp.game.renderer) {
-                    window.gameApp.game.renderer.toggleAdvancedRendering();
-                    logDebug('Advanced rendering toggled');
-                }
+                    // Ferma la musica di intro e avvia quella di gioco
+                    introMusic.pause();
+                    startMusic.play().catch(e => logDebug('Failed to play start music: ' + e, 'warning'));
+                    
+                    // Blocca il puntatore con un piccolo ritardo
+                    setTimeout(() => {
+                        try {
+                            canvas.requestPointerLock();
+                        } catch (e) {
+                            logDebug('Pointer lock not supported or permission denied: ' + e, 'warning');
+                        }
+                    }, 100);
+                    
+                    document.body.style.cursor = 'none';
+                }).catch(error => {
+                    logDebug('Failed to initialize game: ' + error, 'error');
+                    // Mostra errore all'utente
+                    alert('Si è verificato un errore nell\'inizializzazione del gioco: ' + error);
+                });
             });
             
             // Gestione responsiva per il canvas
@@ -740,295 +212,18 @@
                         topBar.style.transform = 'translateX(-50%)';
                     }
                     
-                    // Aggiorna il renderer se esiste
-                    if (window.gameApp && window.gameApp.game && window.gameApp.game.renderer) {
-                        window.gameApp.game.renderer.onWindowResize();
-                        // Forza un rendering dopo il resize
-                        window.gameApp.game.render();
+                    if (window.gameApp && window.gameApp.game) {
+                        window.gameApp.game.handleResize(window.innerWidth, window.innerHeight);
                     }
                 }
             });
             
             // Gestione degli errori globali
             window.addEventListener('error', (event) => {
-                logDebug('Global error: ' + event.error, 'error');
-                
-                // Mostra un messaggio di errore all'utente ma solo se è un errore critico
-                if (event.error && event.error.message && 
-                    (event.error.message.includes('WebGL') || 
-                     event.error.message.includes('shader') ||
-                     event.error.message.includes('initialize'))) {
-                    
-                    const errorMessage = document.createElement('div');
-                    errorMessage.className = 'error-message';
-                    errorMessage.innerHTML = `
-                        <div class="error-content">
-                            <h2>Errore</h2>
-                            <p>${GAME_CONSTANTS.ERROR_MESSAGES.GENERIC_ERROR}</p>
-                            <button onclick="location.reload()">Ricarica gioco</button>
-                        </div>
-                    `;
-                    document.body.appendChild(errorMessage);
-                }
+                logDebug('Global error: ' + event.error.message, 'error');
+                console.error('Error:', event.error);
             });
-            
-            // Gestione della visibilità della pagina
-            document.addEventListener('visibilitychange', () => {
-                if (!document.hidden && window.gameApp && window.gameApp.game) {
-                    logDebug('Pagina tornata visibile, forzando rendering...');
-                    // Forza un rendering e un resize quando la pagina torna visibile
-                    window.gameApp.game.handleResize(window.innerWidth, window.innerHeight);
-                    window.gameApp.game.render();
-                }
-            });
-            
-            // Supporto per touch screen su dispositivi mobili
-            function setupMobileControls() {
-                // Verifichiamo se è un dispositivo mobile
-                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                
-                if (isMobile) {
-                    logDebug('Dispositivo mobile rilevato, configurazione controlli touch');
-                    
-                    // Previeni il comportamento di zoom predefinito
-                    document.addEventListener('touchstart', (e) => {
-                        if (e.touches.length > 1) {
-                            e.preventDefault();
-                        }
-                    }, { passive: false });
-                    
-                    // Crea controlli mobile se non esistono già
-                    if (!document.getElementById('mobile-controls')) {
-                        const mobileControls = document.createElement('div');
-                        mobileControls.id = 'mobile-controls';
-                        mobileControls.style.display = 'none';
-                        
-                        // Aggiungi pulsanti direzionali e azioni
-                        const buttons = [
-                            { id: 'move-forward', text: '↑', action: 'forward' },
-                            { id: 'move-backward', text: '↓', action: 'backward' },
-                            { id: 'move-left', text: '←', action: 'left' },
-                            { id: 'move-right', text: '→', action: 'right' },
-                            { id: 'toggle-light', text: 'L', action: 'light' },
-                            { id: 'toggle-panel', text: 'P', action: 'panel' }
-                        ];
-                        
-                        buttons.forEach(btn => {
-                            const button = document.createElement('button');
-                            button.id = btn.id;
-                            button.textContent = btn.text;
-                            
-                            button.addEventListener('touchstart', (e) => {
-                                e.preventDefault();
-                                // Se il gioco è avviato, invia l'azione al controller
-                                if (window.gameApp && window.gameApp.game) {
-                                    if (btn.action === 'light') {
-                                        window.gameApp.game.toggleLight();
-                                    } else if (btn.action === 'panel') {
-                                        // Simula il tasto P
-                                        const event = new KeyboardEvent('keydown', {
-                                            code: 'KeyP'
-                                        });
-                                        document.dispatchEvent(event);
-                                    } else {
-                                        // Movimenti
-                                        window.gameApp.game.movePlayer(btn.action, 0.15);
-                                    }
-                                }
-                            });
-                            
-                            mobileControls.appendChild(button);
-                        });
-                        
-                        document.body.appendChild(mobileControls);
-                        
-                        // Mostra i controlli quando il gioco inizia
-                        startButton.addEventListener('click', () => {
-                            mobileControls.style.display = 'grid';
-                        });
-                    }
-                }
-            }
-            
-            // Inizializza i controlli mobile
-            setupMobileControls();
         });
     </script>
-    
-    <!-- Script per forzare il focus sul canvas -->
-    <script>
-        // Forza il focus sul canvas quando la pagina è attiva
-        window.addEventListener('focus', function() {
-            const canvas = document.getElementById('canvas');
-            if (canvas && typeof canvas.focus === 'function') {
-                canvas.focus();
-                console.log('Focus forzato sul canvas');
-            }
-            
-            // Se il gioco è in esecuzione, forza un rendering
-            if (window.gameApp && window.gameApp.game) {
-                window.gameApp.game.render();
-            }
-        });
-    </script>
-    
-<script>
-    // Attendi il caricamento completo prima di applicare le patch
-    document.addEventListener('DOMContentLoaded', () => {
-        // Attendi un po' dopo il caricamento completo
-        setTimeout(() => {
-            console.log("Applicazione patch di emergenza per gli input...");
-            logDebug("Applicazione patch di emergenza per gli input...");
-            
-            // Verifica che il canvas sia nel DOM e abbia correttamente l'event listener
-            const canvas = document.getElementById('canvas');
-            if (canvas) {
-                canvas.addEventListener('click', () => {
-                    logDebug('Canvas click - tentativo di pointer lock');
-                    if (!document.pointerLockElement) {
-                        canvas.requestPointerLock().catch(e => {
-                            logDebug('Pointer lock request fallito: ' + e, 'error');
-                        });
-                    }
-                });
-            }
-            
-            // Fix per i controlli WASD e movimento camera
-            const keyMap = {
-                'KeyW': 'forward',
-                'KeyS': 'backward',
-                'KeyA': 'left',
-                'KeyD': 'right',
-                'ArrowUp': 'forward',
-                'ArrowDown': 'backward',
-                'ArrowLeft': 'left',
-                'ArrowRight': 'right'
-            };
-            
-            // Stato dei tasti
-            const keyState = {};
-            
-            // Gestione keydown
-            document.addEventListener('keydown', (e) => {
-                keyState[e.code] = true;
-                
-                // Gestione pannello con P
-                if (e.code === 'KeyP') {
-                    const panel = document.getElementById('side-panel');
-                    if (panel) {
-                        if (panel.classList.contains('hidden')) {
-                            panel.classList.remove('hidden');
-                            panel.classList.add('visible');
-                            document.exitPointerLock();
-                            document.body.style.cursor = 'default';
-                        } else {
-                            panel.classList.remove('visible');
-                            panel.classList.add('hidden');
-                            document.getElementById('canvas').requestPointerLock();
-                            document.body.style.cursor = 'none';
-                        }
-                    }
-                }
-                
-                // Gestione luce con F
-                if (e.code === 'KeyF') {
-                    if (window.gameApp && window.gameApp.game) {
-                        logDebug("Toggling light via patch");
-                        window.gameApp.game.toggleLight();
-                    }
-                }
-            });
-            
-            // Gestione keyup
-            document.addEventListener('keyup', (e) => {
-                keyState[e.code] = false;
-            });
-            
-// Fix per il mouse e rotazione camera
-document.addEventListener('mousemove', (e) => {
-    if (document.pointerLockElement === canvas && 
-        window.gameApp && window.gameApp.game && window.gameApp.game.camera) {
-        
-        const sensitivity = GAME_CONSTANTS.CAMERA.SENSITIVITY || 0.002;
-        const deltaX = e.movementX * sensitivity;
-        const deltaY = e.movementY * sensitivity;
-        
-        // Aggiorna direttamente la rotazione della camera
-        window.gameApp.game.camera.rotation.y -= deltaX;
-        window.gameApp.game.camera.rotation.x -= deltaY;
-        
-        // Limita la rotazione verticale
-        window.gameApp.game.camera.rotation.x = Math.max(
-            -Math.PI / 2 + 0.1, 
-            Math.min(Math.PI / 2 - 0.1, window.gameApp.game.camera.rotation.x)
-        );
-        
-        // Forza un aggiornamento della camera e un rendering
-        if (window.gameApp.game.updateCamera) {
-            window.gameApp.game.updateCamera();
-        } else {
-            // Fallback se updateCamera non esiste
-            window.gameApp.game.render();
-        }
-        
-        // Log per debugging
-        logDebug(`Camera ruotata a: y=${window.gameApp.game.camera.rotation.y.toFixed(2)}, x=${window.gameApp.game.camera.rotation.x.toFixed(2)}`);
-    }
-});
-            
-            // Assicurati che il pointer lock funzioni
-            canvas.addEventListener('click', () => {
-                if (!document.pointerLockElement) {
-                    logDebug("Tentativo di forzare il pointer lock...");
-                    canvas.requestPointerLock().catch(e => {
-                        logDebug("Errore nel pointer lock: " + e, 'error');
-                    });
-                }
-            });
-            
-            // Modifica del loop di movimento per renderlo più fluido
-            function updateMovement() {
-    if (window.gameApp && window.gameApp.game) {
-        const game = window.gameApp.game;
-        const moveSpeed = GAME_CONSTANTS.PHYSICS.MOVEMENT_SPEED || 0.15;
-        
-        // Applica movimenti basati sui tasti premuti
-        let moved = false;
-        Object.entries(keyMap).forEach(([key, direction]) => {
-            if (keyState[key]) {
-                if (typeof game.movePlayer === 'function') {
-                    game.movePlayer(direction, moveSpeed);
-                    moved = true;
-                }
-            }
-        });
-    }
-    
-    // Continua il ciclo
-    requestAnimationFrame(updateMovement);
-}
-            
-            // Avvia il loop di movimento
-            updateMovement();
-            
-            // Aggiungi un ciclo di rendering continuo
-            function continuousRender() {
-                if (window.gameApp && window.gameApp.game && window.gameApp.isInitialized) {
-                    try {
-                        window.gameApp.game.render();
-                    } catch (e) {
-                        logDebug("Errore nel rendering continuo: " + e, 'error');
-                    }
-                }
-                requestAnimationFrame(continuousRender);
-            }
-            
-            // Avvia il ciclo di rendering continuo
-            continuousRender();
-            
-            logDebug("Patch di emergenza applicata con successo!");
-        }, 1500); // Attendi 1.5 secondi dopo il caricamento
-    });
-</script>
 </body>
 </html>

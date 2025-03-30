@@ -12,6 +12,7 @@ class InputHandler {
         this.initialTouchY = 0;
         this.lastPinchDistance = null;
         this.swipeSensitivity = GAME_CONSTANTS.TOUCH.SWIPE_SENSITIVITY || 0.005;
+        this.canRequestPointerLock = true;
         
         // Configura gli event listeners
         this.setupKeyboardControls();
@@ -36,12 +37,12 @@ class InputHandler {
             this.keyStates[event.code] = true;
             
             // Gestione pannello di controllo (tasto P)
-            if (event.code === 'KeyP') {
+            if (event.code === 'KeyP' && this.game) {
                 this.game.togglePanel();
             }
             
             // Gestione luce (tasto F)
-            if (event.code === 'KeyF' && !this.game.isLightFlickering) {
+            if (event.code === 'KeyF' && this.game && !this.game.isLightFlickering) {
                 this.game.toggleLight();
             }
             
@@ -55,7 +56,7 @@ class InputHandler {
             this.keyStates[event.code] = false;
             
             // Reset del flag per la luce
-            if (event.code === 'KeyF') {
+            if (event.code === 'KeyF' && this.game) {
                 this.game.canToggleLight = true;
             }
         });
@@ -65,28 +66,30 @@ class InputHandler {
 
     // Setup controlli da mouse
     setupMouseControls() {
-        const canvas = document.getElementById('canvas');
+        const canvas = this.game ? this.game.canvas : document.getElementById('canvas');
+        if (!canvas) {
+            this.log('Canvas non trovato per configurare i controlli mouse', true);
+            return;
+        }
     
         canvas.addEventListener('click', () => {
             // Assicurati che il gioco sia in esecuzione e non in pausa
-            if (!this.isPointerLocked && this.game && !this.game.isPaused) {
+            if (!this.isPointerLocked && this.canRequestPointerLock) {
                 try {
-                    // Avvolgi in un try-catch per gestire eventuali errori
-                    canvas.requestPointerLock().catch(e => {
-                        console.warn('Impossibile bloccare il puntatore:', e);
-                        // Non effettuare ulteriori tentativi per un po'
-                        setTimeout(() => {
-                            this.canRequestPointerLock = true;
-                        }, 1000);
-                    });
+                    canvas.requestPointerLock();
                     this.canRequestPointerLock = false;
+                    
+                    // Reimposta il flag dopo un breve ritardo
+                    setTimeout(() => {
+                        this.canRequestPointerLock = true;
+                    }, 1000);
                 } catch (e) {
-                    console.warn('Eccezione nella richiesta di pointer lock:', e);
+                    this.log('Errore nella richiesta di pointer lock: ' + e, true);
                 }
             }
         });
     
-        // Gestisci l'evento pointerlockchange in modo più robusto
+        // Gestisci l'evento pointerlockchange
         document.addEventListener('pointerlockchange', () => {
             const isLocked = document.pointerLockElement === canvas;
             this.isPointerLocked = isLocked;
@@ -97,51 +100,49 @@ class InputHandler {
                 this.log('Puntatore bloccato');
             } else {
                 document.body.style.cursor = 'default';
-                // Non mettere in pausa automaticamente il gioco
-                // a meno che non sia stato esplicitamente richiesto
+                // Non mettere in pausa automaticamente se il pannello è aperto
+                if (this.game && !document.getElementById('side-panel').classList.contains('visible')) {
+                    this.game.isPaused = true;
+                }
                 this.log('Puntatore sbloccato');
             }
         });
 
         // Movimento mouse per rotazione camera
-    document.addEventListener('mousemove', (event) => {
-        if (document.pointerLockElement === canvas) {
-            this.log(`Mouse move in InputHandler: x=${event.movementX}, y=${event.movementY}`);
-            const sensitivity = GAME_CONSTANTS.CAMERA.SENSITIVITY || 0.002;
-            const deltaX = event.movementX * sensitivity;
-            const deltaY = event.movementY * sensitivity;
+        document.addEventListener('mousemove', (event) => {
+            if (document.pointerLockElement === canvas) {
+                const sensitivity = GAME_CONSTANTS.CAMERA.SENSITIVITY || 0.002;
+                const deltaX = event.movementX * sensitivity;
+                const deltaY = event.movementY * sensitivity;
 
-            // Aggiorna rotazione camera
-            if (this.game && this.game.camera) {
-                this.game.camera.rotation.y -= deltaX;
-                this.game.camera.rotation.x -= deltaY;
-                
-                // Limita rotazione verticale per evitare capovolgimenti
-                this.game.camera.rotation.x = Math.max(
-                    -Math.PI / 2 + 0.1, 
-                    Math.min(Math.PI / 2 - 0.1, this.game.camera.rotation.x)
-                );
-                
-                // Forza un rendering
-                if (this.game.render) {
-                    this.game.render();
+                // Aggiorna rotazione camera nel gioco
+                if (this.game && this.game.updateCameraRotation) {
+                    this.game.updateCameraRotation(deltaX, deltaY);
                 }
             }
-        }
-    });
+        });
         
         this.log('Controlli da mouse configurati');
     }
 
     // Setup controlli touch per dispositivi mobili
     setupTouchControls() {
-        const canvas = document.getElementById('canvas');
+        const canvas = this.game ? this.game.canvas : document.getElementById('canvas');
+        if (!canvas) {
+            this.log('Canvas non trovato per configurare i controlli touch', true);
+            return;
+        }
 
         // Touch start
         canvas.addEventListener('touchstart', (event) => {
             // Memorizza posizione iniziale per calcolare swipe
             this.initialTouchX = event.touches[0].clientX;
             this.initialTouchY = event.touches[0].clientY;
+            
+            // Verifica se il tocco è vicino all'interruttore
+            if (this.game && this.game.isNearSwitch && this.game.isNearSwitch()) {
+                this.game.toggleLight();
+            }
             
             // Gestione pinch con due dita
             if (event.touches.length === 2) {
@@ -165,7 +166,7 @@ class InputHandler {
                 const deltaY = (touchY - this.initialTouchY) * this.swipeSensitivity;
                 
                 // Aggiorna rotazione camera
-                if (this.game) {
+                if (this.game && this.game.updateCameraRotation) {
                     this.game.updateCameraRotation(deltaX, deltaY);
                 }
                 
@@ -208,7 +209,10 @@ class InputHandler {
     }
 
     // Aggiorna lo stato dell'input
+    // Cerca la funzione update() in input.js e sostituiscila con questa
     update() {
+        if (!this.game) return;
+        
         // Log per diagnostica
         const activeKeys = Object.entries(this.keyStates)
             .filter(([_, isPressed]) => isPressed)
@@ -218,29 +222,37 @@ class InputHandler {
             this.log(`Tasti premuti: ${activeKeys.join(', ')}`);
         }
         
-        // Update player movement based on current key states
-        const moveSpeed = this.game.playerOnFloor ? 0.15 : 0.05;
+        // Calcola la velocità di movimento in base a se il giocatore è sul pavimento
+        const moveSpeed = 0.2; // Aumenta la velocità per renderla più percepibile
+        
+        // Aggiorniamo direttamente la posizione del giocatore invece di affidarci solo alla velocità
+        let moved = false;
         
         if (this.isKeyPressed('KeyW') || this.isKeyPressed('ArrowUp')) {
-            this.log('Movimento in avanti');
             this.game.movePlayer('forward', moveSpeed);
+            moved = true;
         }
         if (this.isKeyPressed('KeyS') || this.isKeyPressed('ArrowDown')) {
-            this.log('Movimento indietro');
             this.game.movePlayer('backward', moveSpeed);
+            moved = true;
         }
-        
-        // Movimento laterale
         if (this.isKeyPressed('KeyA') || this.isKeyPressed('ArrowLeft')) {
             this.game.movePlayer('left', moveSpeed);
+            moved = true;
         }
         if (this.isKeyPressed('KeyD') || this.isKeyPressed('ArrowRight')) {
             this.game.movePlayer('right', moveSpeed);
+            moved = true;
         }
         
         // Salto
-        if ((this.isKeyPressed('Space') || this.isKeyPressed('KeyJ')) && this.game.playerOnFloor) {
+        if ((this.isKeyPressed('Space') || this.isKeyPressed('KeyJ')) && this.game.player.onFloor) {
             this.game.playerJump();
+        }
+        
+        // Se c'è stato movimento, forza un aggiornamento della camera
+        if (moved) {
+            this.game.updateCamera();
         }
     }
 }

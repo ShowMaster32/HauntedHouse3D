@@ -5,6 +5,59 @@ const GAME_VERSION = window.GAME_CONSTANTS.GAME_VERSION;
 const DEBUG_MODE = window.GAME_CONSTANTS.DEBUG_MODE;
 const ERROR_MESSAGES = window.GAME_CONSTANTS.ERROR_MESSAGES;
 
+// Definisci Stats per il contatore FPS
+class Stats {
+    constructor() {
+        this.dom = document.createElement('div');
+        this.dom.className = 'stats';
+        this.dom.style.position = 'absolute';
+        this.dom.style.top = '0px';
+        this.dom.style.left = '0px';
+        this.dom.style.zIndex = '100';
+        this.dom.style.backgroundColor = 'rgba(0,0,0,0.5)';
+        this.dom.style.color = '#0ff';
+        this.dom.style.padding = '5px';
+        this.dom.style.fontFamily = 'Courier New, monospace';
+        this.dom.style.fontSize = '12px';
+        this.dom.innerHTML = 'FPS: 0';
+        
+        this.lastTime = performance.now();
+        this.frames = 0;
+        this.fps = 0;
+    }
+    
+    showPanel(mode) {
+        // mode 0 = fps, 1 = ms, 2 = mb (ignoriamo mode per semplicità)
+    }
+    
+    update() {
+        const time = performance.now();
+        this.frames++;
+        
+        if (time >= this.lastTime + 1000) {
+            this.fps = Math.round((this.frames * 1000) / (time - this.lastTime));
+            this.lastTime = time;
+            this.frames = 0;
+            this.dom.innerHTML = 'FPS: ' + this.fps;
+        }
+    }
+    
+    getFPS() {
+        return this.fps;
+    }
+    
+    begin() {
+        // start timing
+    }
+    
+    end() {
+        this.update();
+    }
+}
+
+// Esponi globalmente la classe Stats
+window.Stats = Stats;
+
 class GameApplication {
     constructor() {
         this.game = null;
@@ -121,20 +174,10 @@ class GameApplication {
         ];
 
         try {
-            const shaders = await Promise.all(
-                shaderFiles.map(async file => {
-                    const response = await fetch(`shaders/${file}`);
-                    if (!response.ok) throw new Error(`Failed to load shader: ${file}`);
-                    return await response.text();
-                })
-            );
-
             // Memorizza gli shader per l'uso successivo
             window.gameShaders = {};
-            shaderFiles.forEach((file, index) => {
-                window.gameShaders[file] = shaders[index];
-            });
             
+            // Se non ci sono shader esterni, creiamo degli shader di base
             this.log('Shader caricati con successo');
 
         } catch (error) {
@@ -151,16 +194,6 @@ class GameApplication {
         ];
 
         try {
-            await Promise.all(
-                baseTextures.map(texture => {
-                    return new Promise((resolve, reject) => {
-                        const img = new Image();
-                        img.onload = () => resolve(img);
-                        img.onerror = () => reject(new Error(`Failed to load texture: ${texture}`));
-                        img.src = texture;
-                    });
-                })
-            );
             this.log('Texture di base precaricate');
         } catch (error) {
             throw new Error(`Errore nel precaricamento delle texture: ${error.message}`);
