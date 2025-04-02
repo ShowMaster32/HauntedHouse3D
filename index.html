@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Progetto CG A.A.2023/2024</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <link rel="stylesheet" href="main.css">
+</head>
+<body>
+    <!-- Start Menu -->
+    <div id="start-menu">
+        <h1>Casa Infestata</h1>
+        <button id="start-button">START</button>
+    </div>
+    
+    <!-- Canvas per il rendering -->
+    <canvas id="gl-canvas"></canvas>
+    
+    <!-- Interfaccia utente -->
+    <div id="crosshair"></div>
+    <div id="instructions" style="visibility: hidden;">Premi <span style="color:#ff4d4d">F</span> per accendere la luce</div>
+    <div id="top-bar">
+        <span id="panel-instructions">Premi P per aprire il pannello di controllo</span>
+        <span id="game-controls"></span>
+    </div>
+    
+    <!-- Pannello di controllo -->
+    <div id="side-panel" class="visible">
+        <h2>Pannello di Controllo</h2>
+        <button id="toggleShadows">Attiva/Disattiva Ombre</button>
+        <button id="toggleReflections">Attiva/Disattiva Riflessioni</button>
+        <button id="toggleFPS">Attiva/Disattiva FPS</button>
+        <button id="toggleLogs">Attiva/Disattiva Log</button>
+        <button id="advancedRendering">Rendering Avanzato</button>
+    </div>
+    
+    <!-- Container per i log -->
+    <div id="log-container"></div>
+    
+    <!-- Inclusione delle librerie richieste dal professore -->
+    <script src="lib/glm_utils.js"></script>
+    <script src="lib/mesh_utils.js"></script>
+    <script src="lib/webgl-utils.js"></script>
+    <script src="lib/m4.js"></script>
+    <script src="lib/dat.gui.js"></script>
+    <script src="lib/jquery-3.6.0.js"></script>
+
+    <!-- Vertex Shader -->
+    <script id="vertex-shader" type="x-shader/x-vertex">
+        attribute vec4 a_position;
+        attribute vec3 a_normal;
+        attribute vec2 a_texcoord;
+        
+        uniform mat4 u_model;
+        uniform mat4 u_view;
+        uniform mat4 u_projection;
+        
+        varying vec3 v_normal;
+        varying vec3 v_position;
+        varying vec2 v_texcoord;
+        
+        void main() {
+            gl_Position = u_projection * u_view * u_model * a_position;
+            v_normal = mat3(u_model) * a_normal;
+            v_position = vec3(u_model * a_position);
+            v_texcoord = a_texcoord;
+        }
+    </script>
+    
+    <!-- Fragment Shader -->
+    <script id="fragment-shader" type="x-shader/x-fragment">
+        precision mediump float;
+        
+        uniform vec3 u_lightPos;
+        uniform vec3 u_viewPos;
+        uniform bool u_useTexture;
+        uniform sampler2D u_texture;
+        
+        varying vec3 v_normal;
+        varying vec3 v_position;
+        varying vec2 v_texcoord;
+        
+        void main() {
+            vec3 normal = normalize(v_normal);
+            vec3 lightDir = normalize(u_lightPos - v_position);
+            
+            // Ambient
+            float ambientStrength = 0.1;
+            vec3 ambient = ambientStrength * vec3(1.0, 1.0, 1.0);
+            
+            // Diffuse
+            float diff = max(dot(normal, lightDir), 0.0);
+            vec3 diffuse = diff * vec3(1.0, 1.0, 1.0);
+            
+            // Specular
+            float specularStrength = 0.5;
+            vec3 viewDir = normalize(u_viewPos - v_position);
+            vec3 reflectDir = reflect(-lightDir, normal);
+            float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
+            vec3 specular = specularStrength * spec * vec3(1.0, 1.0, 1.0);
+            
+            // Combine
+            vec3 color = vec3(0.8, 0.8, 0.8);
+            if (u_useTexture) {
+                color = texture2D(u_texture, v_texcoord).rgb;
+            }
+            
+            vec3 result = (ambient + diffuse + specular) * color;
+            gl_FragColor = vec4(result, 1.0);
+        }
+    </script>
+
+    <script>
+        // Sistema di logging
+        const logger = {
+            container: document.getElementById('log-container'),
+            logs: [],
+            enabled: false,
+            
+            log: function(message) {
+                const time = new Date().toLocaleTimeString();
+                this.logs.push(`[${time}] ${message}`);
+                if (this.logs.length > 10) this.logs.shift();
+                if (this.enabled) this.update();
+                console.log(message);
+            },
+            
+            update: function() {
+                this.container.innerHTML = this.logs.join('<br>');
+                this.container.scrollTop = this.container.scrollHeight;
+            },
+            
+            toggle: function() {
+                this.enabled = !this.enabled;
+                this.container.style.display = this.enabled ? 'block' : 'none';
+                this.update();
+                this.log(`Log ${this.enabled ? 'attivati' : 'disattivati'}`);
+            }
+        };
+        
+        // Inizializzazione WebGL
+        let gl, canvas;
+        let program;
+        let lastTime = 0;
+        let deltaTime = 0;
+        
+        // Stato del gioco
+        let isPanelOpen = false;
+        let isLightOn = true;
+        let renderOptions = {
+            shadows: true,
+            reflections: false,
+            showFPS: true,
+            advancedRendering: false
+        };
+        
+        // Input utente
+        let keys = {};
+        let mouseLocked = false;
+        
+        // Camera e player
+        let camera = {
+            position: [0, -3, 5],
+            rotation: [0, 0],
+            speed: 0.1
+        };
+        
+        // Elementi della scena
+        let models = [];
+        let textures = {};
+        
+        // Inizializzazione dell'app
+        window.onload = function() {
+            // Inizializza WebGL
+            canvas = document.getElementById('gl-canvas');
+            gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            
+            if (!gl) {
+                alert('Il tuo browser non supporta WebGL!');
+                return;
+            }
+            
+            // Imposta dimensioni canvas
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            
+            // Compila shaders
+            initShaders();
+            
+            // Carica risorse (texture e modelli)
+            loadResources();
+            
+            // Configura gli event listener
+            setupEvents();
+            
+            logger.log('Inizializzazione completata');
+        };
+        
+        // Funzione per ridimensionare il canvas
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            logger.log(`Canvas ridimensionato: ${canvas.width}x${canvas.height}`);
+        }
+        
+        // Inizializzazione shaders
+        function initShaders() {
+            const vertexShaderSource = document.getElementById('vertex-shader').textContent;
+            const fragmentShaderSource = document.getElementById('fragment-shader').textContent;
+            
+            // Compila vertex shader
+            const vertexShader = gl.createShader(gl.VERTEX_SHADER);
+            gl.shaderSource(vertexShader, vertexShaderSource);
+            gl.compileShader(vertexShader);
+            
+            if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+                logger.log('Errore nel vertex shader: ' + gl.getShaderInfoLog(vertexShader));
+                return;
+            }
+            
+            // Compila fragment shader
+            const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+            gl.shaderSource(fragmentShader, fragmentShaderSource);
+            gl.compileShader(fragmentShader);
+            
+            if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+                logger.log('Errore nel fragment shader: ' + gl.getShaderInfoLog(fragmentShader));
+                return;
+            }
+            
+            // Crea e collega il program
+            program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+            
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                logger.log('Errore nel link del program: ' + gl.getProgramInfoLog(program));
+                return;
+            }
+            
+            gl.useProgram(program);
+            logger.log('Shaders inizializzati con successo');
+        }
+
+        // Funzione per mostrare le coordinate della camera
+        function showCameraCoordinates() {
+            // Crea o ottieni l'elemento per le coordinate
+            let coordElement = document.getElementById('camera-coords');
+            if (!coordElement) {
+                coordElement = document.createElement('div');
+                coordElement.id = 'camera-coords';
+                document.body.appendChild(coordElement);
+            }
+            
+            // Formatta le coordinate con 2 decimali
+            const x = camera.position[0].toFixed(2);
+            const y = camera.position[1].toFixed(2);
+            const z = camera.position[2].toFixed(2);
+            
+            const rotX = (camera.rotation[0] * (180/Math.PI)).toFixed(1);
+            const rotY = (camera.rotation[1] * (180/Math.PI)).toFixed(1);
+            
+            coordElement.textContent = `Camera: X=${x} Y=${y} Z=${z} | Rotation: ${rotY}° ${rotX}°`;
+        }
+        
+        // Carica risorse (texture e modelli)
+        function loadResources() {
+            logger.log('Caricamento risorse...');
+            
+            // Carica texture
+            loadTexture('textures/wall.jpg', 'wall');
+            loadTexture('textures/wood.jpg', 'floor');
+            
+            // Commenta il caricamento dei modelli OBJ per ora
+            // loadOBJModel('models/skull.obj', 'models/skull.mtl', 'skull');
+            // loadOBJModel('models/chair.obj', 'models/chair.mtl', 'chair');
+            
+            logger.log('Risorse caricate');
+        }
+        
+        // Carica texture
+        function loadTexture(url, name) {
+            const texture = gl.createTexture();
+            const image = new Image();
+            
+            image.onload = function() {
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                gl.generateMipmap(gl.TEXTURE_2D);
+                gl.bindTexture(gl.TEXTURE_2D, null);
+                
+                textures[name] = texture;
+                logger.log(`Texture caricata: ${name}`);
+            };
+            
+            image.src = url;
+        }
+        
+        // Carica modello OBJ
+        function loadOBJModel(objUrl, mtlUrl, name) {
+            logger.log(`Caricamento modello: ${name}`);
+            
+            // Usa glm_utils.js per caricare il modello OBJ
+            // Verifica che glmReadOBJ sia disponibile (dovrebbe essere definita in glm_utils.js)
+            if (typeof glmReadOBJ !== 'function') {
+                logger.log("ERRORE: glmReadOBJ non è definita. Verifica che glm_utils.js sia caricato correttamente.");
+                return;
+            }
+            
+            // Carica il modello OBJ usando la funzione delle librerie fornite
+            glmReadOBJ(objUrl, function(model) {
+                if (!model) {
+                    logger.log(`ERRORE: Impossibile caricare il modello ${name} da ${objUrl}`);
+                    return;
+                }
+                
+                // Estrai i dati della geometria dal modello caricato
+                const vertices = [];
+                const normals = [];
+                const texcoords = [];
+                
+                // Elabora i vertici
+                for (let i = 0; i < model.vertices.length; i++) {
+                    const vertex = model.vertices[i];
+                    vertices.push(vertex.x, vertex.y, vertex.z);
+                }
+                
+                // Elabora le normali
+                for (let i = 0; i < model.normals.length; i++) {
+                    const normal = model.normals[i];
+                    normals.push(normal.x, normal.y, normal.z);
+                }
+                
+                // Elabora le coordinate texture
+                for (let i = 0; i < model.texcoords.length; i++) {
+                    const texcoord = model.texcoords[i];
+                    texcoords.push(texcoord.s, texcoord.t);
+                }
+                
+                // Memorizza il modello elaborato
+                models[name] = {
+                    vertices: vertices,
+                    normals: normals,
+                    texcoords: texcoords,
+                    position: [0, 0, 0],
+                    scale: [1, 1, 1],
+                    texture: 'wall' // Texture predefinita
+                };
+                
+                logger.log(`Modello caricato: ${name} (${vertices.length / 3} vertici)`);
+            });
+        }
+
+        // Funzione per estrarre la geometria da un oggetto OBJ caricato
+        function extractGeometryFromOBJ(object) {
+            // Array per memorizzare i dati estratti
+            const vertices = [];
+            const normals = [];
+            const texcoords = [];
+            const indices = [];
+            
+            // Contatore per tenere traccia del numero totale di vertici
+            let indexOffset = 0;
+            
+            // Itera attraverso tutti i figli dell'oggetto OBJ
+            object.traverse((child) => {
+                if (child.isMesh) {
+                    // Accedi alla geometria del mesh
+                    const geometry = child.geometry;
+                    
+                    // Ottieni gli attributi della geometria
+                    const position = geometry.attributes.position;
+                    const normal = geometry.attributes.normal;
+                    const uv = geometry.attributes.uv;
+                    
+                    // Estrai i vertici
+                    if (position) {
+                        for (let i = 0; i < position.array.length; i += 3) {
+                            vertices.push(
+                                position.array[i],
+                                position.array[i + 1],
+                                position.array[i + 2]
+                            );
+                        }
+                    }
+                    
+                    // Estrai le normali
+                    if (normal) {
+                        for (let i = 0; i < normal.array.length; i += 3) {
+                            normals.push(
+                                normal.array[i],
+                                normal.array[i + 1],
+                                normal.array[i + 2]
+                            );
+                        }
+                    } else {
+                        // Se non ci sono normali, crea normali fittizie
+                        for (let i = 0; i < position.array.length / 3; i++) {
+                            normals.push(0, 1, 0); // normale verso l'alto come default
+                        }
+                    }
+                    
+                    // Estrai le coordinate texture
+                    if (uv) {
+                        for (let i = 0; i < uv.array.length; i += 2) {
+                            texcoords.push(
+                                uv.array[i],
+                                uv.array[i + 1]
+                            );
+                        }
+                    } else {
+                        // Se non ci sono coordinate texture, crea coordinate fittizie
+                        for (let i = 0; i < position.array.length / 3; i++) {
+                            texcoords.push(0, 0); // coordinate texture di default
+                        }
+                    }
+                    
+                    // Estrai gli indici se sono disponibili
+                    if (geometry.index) {
+                        for (let i = 0; i < geometry.index.array.length; i++) {
+                            indices.push(geometry.index.array[i] + indexOffset);
+                        }
+                    } else {
+                        // Se non ci sono indici, crea indici sequenziali
+                        for (let i = 0; i < position.array.length / 3; i++) {
+                            indices.push(i + indexOffset);
+                        }
+                    }
+                    
+                    // Aggiorna l'offset degli indici per il prossimo mesh
+                    indexOffset += position.array.length / 3;
+                }
+            });
+            
+            // Log del numero di elementi estratti
+            logger.log(`Estratti ${vertices.length / 3} vertici, ${normals.length / 3} normali, ${texcoords.length / 2} coordinate texture`);
+            
+            // Verifica che i dati siano coerenti tra loro
+            if (vertices.length / 3 !== normals.length / 3 || vertices.length / 3 !== texcoords.length / 2) {
+                logger.log("ATTENZIONE: I dati estratti non sono coerenti");
+            }
+            
+            // Se si utilizzano indici, restituisci anche quelli
+            return {
+                vertices: vertices,
+                normals: normals,
+                texcoords: texcoords,
+                indices: indices
+            };
+        }
+
+        // Funzione ausiliaria per calcolare le normali se non sono fornite dal modello
+        function calculateNormals(vertices, indices) {
+            const normals = new Array(vertices.length).fill(0);
+            
+            // Per ogni faccia
+            for (let i = 0; i < indices.length; i += 3) {
+                // Ottieni gli indici dei vertici della faccia
+                const idx1 = indices[i] * 3;
+                const idx2 = indices[i + 1] * 3;
+                const idx3 = indices[i + 2] * 3;
+                
+                // Ottieni i vertici della faccia
+                const v1 = [vertices[idx1], vertices[idx1 + 1], vertices[idx1 + 2]];
+                const v2 = [vertices[idx2], vertices[idx2 + 1], vertices[idx2 + 2]];
+                const v3 = [vertices[idx3], vertices[idx3 + 1], vertices[idx3 + 2]];
+                
+                // Calcola i vettori del lato
+                const edge1 = [v2[0] - v1[0], v2[1] - v1[1], v2[2] - v1[2]];
+                const edge2 = [v3[0] - v1[0], v3[1] - v1[1], v3[2] - v1[2]];
+                
+                // Calcola il prodotto vettoriale per ottenere la normale
+                const normal = [
+                    edge1[1] * edge2[2] - edge1[2] * edge2[1],
+                    edge1[2] * edge2[0] - edge1[0] * edge2[2],
+                    edge1[0] * edge2[1] - edge1[1] * edge2[0]
+                ];
+                
+                // Normalizza il vettore
+                const length = Math.sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]);
+                normal[0] /= length;
+                normal[1] /= length;
+                normal[2] /= length;
+                
+                // Aggiungi la normale a tutti i vertici della faccia
+                normals[idx1] += normal[0];
+                normals[idx1 + 1] += normal[1];
+                normals[idx1 + 2] += normal[2];
+                
+                normals[idx2] += normal[0];
+                normals[idx2 + 1] += normal[1];
+                normals[idx2 + 2] += normal[2];
+                
+                normals[idx3] += normal[0];
+                normals[idx3 + 1] += normal[1];
+                normals[idx3 + 2] += normal[2];
+            }
+            
+            // Normalizza tutte le normali dei vertici
+            for (let i = 0; i < normals.length; i += 3) {
+                const length = Math.sqrt(
+                    normals[i] * normals[i] + 
+                    normals[i + 1] * normals[i + 1] + 
+                    normals[i + 2] * normals[i + 2]
+                );
+                
+                if (length > 0) {
+                    normals[i] /= length;
+                    normals[i + 1] /= length;
+                    normals[i + 2] /= length;
+                } else {
+                    // Se la normale è zero, usa una normale di default
+                    normals[i] = 0;
+                    normals[i + 1] = 1;
+                    normals[i + 2] = 0;
+                }
+            }
+            
+            return normals;
+        }
+        
+        // Configura gli event listener
+        function setupEvents() {
+            // Start button
+            document.getElementById('start-button').addEventListener('click', startGame);
+            
+            // Keyboard events
+            document.addEventListener('keydown', (e) => { keys[e.code] = true; handleSpecialKeys(e); });
+            document.addEventListener('keyup', (e) => { keys[e.code] = false; });
+            
+            // Mouse events
+            canvas.addEventListener('click', requestPointerLock);
+            document.addEventListener('pointerlockchange', handlePointerLockChange);
+            document.addEventListener('mousemove', handleMouseMove);
+            
+            // Touch events
+            canvas.addEventListener('touchstart', handleTouchStart);
+            canvas.addEventListener('touchmove', handleTouchMove);
+            canvas.addEventListener('touchend', handleTouchEnd);
+            
+            // Panel buttons
+            document.getElementById('toggleShadows').addEventListener('click', () => {
+                renderOptions.shadows = !renderOptions.shadows;
+                logger.log(`Ombre ${renderOptions.shadows ? 'attivate' : 'disattivate'}`);
+            });
+            
+            document.getElementById('toggleReflections').addEventListener('click', () => {
+                renderOptions.reflections = !renderOptions.reflections;
+                logger.log(`Riflessioni ${renderOptions.reflections ? 'attivate' : 'disattivate'}`);
+            });
+            
+            document.getElementById('toggleFPS').addEventListener('click', () => {
+                renderOptions.showFPS = !renderOptions.showFPS;
+                logger.log(`FPS counter ${renderOptions.showFPS ? 'attivato' : 'disattivato'}`);
+            });
+            
+            document.getElementById('toggleLogs').addEventListener('click', () => {
+                logger.toggle();
+            });
+            
+            document.getElementById('advancedRendering').addEventListener('click', () => {
+                renderOptions.advancedRendering = !renderOptions.advancedRendering;
+                logger.log(`Rendering avanzato ${renderOptions.advancedRendering ? 'attivato' : 'disattivato'}`);
+            });
+            
+            logger.log('Event listeners configurati');
+        }
+        
+        // Gestione tasti speciali
+        function handleSpecialKeys(e) {
+            if (e.code === 'KeyP') {
+                togglePanel();
+            } else if (e.code === 'KeyF') {
+                toggleLight();
+            }
+        }
+        
+        // Attiva/disattiva pannello
+        function togglePanel() {
+            isPanelOpen = !isPanelOpen;
+            document.getElementById('side-panel').className = isPanelOpen ? 'visible' : '';
+            
+            if (isPanelOpen) {
+                document.exitPointerLock();
+            } else if (mouseLocked) {
+                requestPointerLock();
+            }
+            
+            logger.log(`Pannello ${isPanelOpen ? 'aperto' : 'chiuso'}`);
+        }
+        
+        // Attiva/disattiva luce
+        function toggleLight() {
+            isLightOn = !isLightOn;
+            document.getElementById('instructions').style.visibility = isLightOn ? 'hidden' : 'visible';
+            logger.log(`Luce ${isLightOn ? 'accesa' : 'spenta'}`);
+        }
+        
+        // Avvia il gioco
+        function startGame() {
+            document.getElementById('start-menu').style.display = 'none';
+            document.getElementById('crosshair').style.display = 'block';
+            document.getElementById('top-bar').style.display = 'block';
+            
+            // Mostra controlli
+            document.getElementById('game-controls').innerHTML = 
+                'W: Avanti | S: Indietro | A: Sinistra | D: Destra | F: Luce | P: Pannello';
+            
+            // Richiedi pointer lock
+            requestPointerLock();
+            
+            // Avvia il game loop
+            requestAnimationFrame(gameLoop);
+            
+            logger.log('Gioco avviato');
+        }
+        
+        // Game loop
+        function gameLoop(time) {
+            // Calcola delta time
+            deltaTime = lastTime ? (time - lastTime) / 1000 : 0;
+            lastTime = time;
+            
+            // Aggiorna
+            update(deltaTime);
+            
+            // Renderizza
+            render();
+            
+            // Continua il loop
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Update game state
+        function update(dt) {
+            // Skip update if panel is open
+            if (isPanelOpen) return;
+            
+            // Update camera based on input
+            updateCamera(dt);
+            
+            // Aggiorna il crosshair
+            updateCrosshair();
+        }
+        
+        // Update camera position and rotation
+function updateCamera(dt) {
+    // Handle keyboard input for movement (invertito)
+    if (keys['KeyW']) moveCamera(0, 0, camera.speed); // Invertito (va indietro)
+    if (keys['KeyS']) moveCamera(0, 0, -camera.speed); // Invertito (va avanti)
+    if (keys['KeyA']) moveCamera(camera.speed, 0, 0); // Invertito (va a destra)
+    if (keys['KeyD']) moveCamera(-camera.speed, 0, 0); // Invertito (va a sinistra)
+    
+    // Verifica collisioni con i muri dopo aver mosso la camera
+    checkWallCollisions();
+}
+        
+        // Move camera in local space
+        function moveCamera(dx, dy, dz) {
+            // Apply rotation to movement
+            const cosY = Math.cos(camera.rotation[1]);
+            const sinY = Math.sin(camera.rotation[1]);
+            
+            camera.position[0] += dx * cosY + dz * sinY;
+            camera.position[1] -= dy;  // Inverti il segno se necessario
+            camera.position[2] += dz * cosY - dx * sinY;
+        }
+        
+        // Verifica collisioni con i muri
+        function checkWallCollisions() {
+            const roomSize = 10; // Deve corrispondere alla dimensione della stanza in createSimpleRoom
+            const playerRadius = 0.5; // Raggio di collisione del giocatore
+            
+            // Limiti della stanza con margine per il raggio del giocatore
+            const minX = -roomSize + playerRadius;
+            const maxX = roomSize - playerRadius;
+            const minZ = -roomSize + playerRadius;
+            const maxZ = roomSize - playerRadius;
+            
+            // Controlla e correggi le collisioni con le pareti
+            if (camera.position[0] < minX) camera.position[0] = minX;
+            if (camera.position[0] > maxX) camera.position[0] = maxX;
+            if (camera.position[2] < minZ) camera.position[2] = minZ;
+            if (camera.position[2] > maxZ) camera.position[2] = maxZ;
+        }
+        
+        // Funzione per aggiornare il crosshair in base alla vicinanza a oggetti interattivi
+        function updateCrosshair() {
+            const interactableObjects = [
+                // Lista degli oggetti interattivi con posizione e raggio di interazione
+                { position: [0, 0, 0], radius: 2 } // Esempio
+            ];
+            
+            // Verifica se la camera è vicina a qualche oggetto interattivo
+            let nearInteractable = false;
+            
+            for (const obj of interactableObjects) {
+                const dx = camera.position[0] - obj.position[0];
+                const dy = camera.position[1] - obj.position[1];
+                const dz = camera.position[2] - obj.position[2];
+                const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                
+                if (distance < obj.radius) {
+                    nearInteractable = true;
+                    break;
+                }
+            }
+            
+            // Cambia l'immagine del crosshair in base alla vicinanza
+            if (nearInteractable) {
+                document.getElementById('crosshair').style.backgroundImage = "url('images/crosshair-selection.png')";
+            } else {
+                document.getElementById('crosshair').style.backgroundImage = "url('images/crosshair.png')";
+            }
+        }
+        
+        // Render scene
+        function render() {
+            // Clear canvas
+            gl.clearColor(0.1, 0.1, 0.1, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            
+            // Enable depth testing
+            gl.enable(gl.DEPTH_TEST);
+            
+            // Ottieni locazioni uniform per gli shader
+            const u_modelLoc = gl.getUniformLocation(program, 'u_model');
+            const u_viewLoc = gl.getUniformLocation(program, 'u_view');
+            const u_projectionLoc = gl.getUniformLocation(program, 'u_projection');
+            const u_lightPosLoc = gl.getUniformLocation(program, 'u_lightPos');
+            const u_viewPosLoc = gl.getUniformLocation(program, 'u_viewPos');
+            const u_useTextureLoc = gl.getUniformLocation(program, 'u_useTexture');
+            const u_textureLoc = gl.getUniformLocation(program, 'u_texture');
+            
+            // Posizione della luce (cambia in base allo stato della luce)
+            const lightIntensity = isLightOn ? 1.0 : 0.2;
+            const lightPos = [0, 5, 0];
+            
+            // Imposta la posizione della luce e della camera
+            gl.uniform3fv(u_lightPosLoc, lightPos);
+            gl.uniform3fv(u_viewPosLoc, camera.position);
+            
+            // Crea matrice vista
+            const viewMatrix = m4.lookAt(
+                camera.position,
+                [
+                    camera.position[0] + Math.sin(camera.rotation[1]), 
+                    camera.position[1] + Math.sin(camera.rotation[0]), 
+                    camera.position[2] + Math.cos(camera.rotation[1])
+                ],
+                [0, 1, 0]
+            );
+            
+            // Crea matrice proiezione
+            const aspect = canvas.width / canvas.height;
+            const projectionMatrix = m4.perspective(Math.PI / 4, aspect, 0.1, 100);
+            
+            // Passa matrici view e projection agli shader
+            gl.uniformMatrix4fv(u_viewLoc, false, viewMatrix);
+            gl.uniformMatrix4fv(u_projectionLoc, false, projectionMatrix);
+            
+            // Crea e renderizza una stanza semplice se non abbiamo ancora modelli
+            if (!Object.keys(models).length) {
+                createSimpleRoom();
+            }
+            
+            // Renderizza tutti i modelli
+            for (const modelName in models) {
+                if (models.hasOwnProperty(modelName)) {
+                    const model = models[modelName];
+                    
+                    // Salta modelli senza vertici
+                    if (!model.vertices || model.vertices.length === 0) continue;
+                    
+                    // Crea matrice modello
+                    let modelMatrix = m4.identity();
+                    
+                    // Applica traslazione se specificata
+                    if (model.position) {
+                        modelMatrix = m4.translate(
+                            modelMatrix, 
+                            model.position[0], 
+                            model.position[1], 
+                            model.position[2]
+                        );
+                    }
+                    
+                    // Applica rotazione se specificata
+                    if (model.rotation) {
+                        modelMatrix = m4.xRotate(modelMatrix, model.rotation[0]);
+                        modelMatrix = m4.yRotate(modelMatrix, model.rotation[1]);
+                        modelMatrix = m4.zRotate(modelMatrix, model.rotation[2]);
+                    }
+                    
+                    // Applica scala se specificata
+                    if (model.scale) {
+                        modelMatrix = m4.scale(
+                            modelMatrix, 
+                            model.scale[0], 
+                            model.scale[1], 
+                            model.scale[2]
+                        );
+                    }
+                    
+                    // Passa la matrice modello allo shader
+                    gl.uniformMatrix4fv(u_modelLoc, false, modelMatrix);
+                    
+                    // Configura texture se specificata
+                    if (model.texture && textures[model.texture]) {
+                        gl.uniform1i(u_useTextureLoc, 1);
+                        gl.activeTexture(gl.TEXTURE0);
+                        gl.bindTexture(gl.TEXTURE_2D, textures[model.texture]);
+                        gl.uniform1i(u_textureLoc, 0);
+                    } else {
+                        gl.uniform1i(u_useTextureLoc, 0);
+                    }
+                    
+                    // Configura i buffer per questo modello
+                    setBuffersForModel(model);
+                    
+                    // Disegna il modello
+                    if (model.indices && model.indices.length > 0) {
+                        // Usa gli indici se disponibili
+                        const indexBuffer = gl.createBuffer();
+                        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+                        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(model.indices), gl.STATIC_DRAW);
+                        gl.drawElements(gl.TRIANGLES, model.indices.length, gl.UNSIGNED_SHORT, 0);
+                    } else {
+                        // Altrimenti disegna direttamente
+                        gl.drawArrays(gl.TRIANGLES, 0, model.vertices.length / 3);
+                    }
+                }
+            }
+            
+            // Mostra le coordinate della camera
+            showCameraCoordinates();
+            
+            // Mostra FPS se abilitato
+            if (renderOptions.showFPS) {
+                const fps = Math.round(1 / (deltaTime || 0.016));
+                
+                // Crea o aggiorna elemento FPS
+                let fpsElement = document.getElementById('fps-counter');
+                if (!fpsElement) {
+                    fpsElement = document.createElement('div');
+                    fpsElement.id = 'fps-counter';
+                    document.body.appendChild(fpsElement);
+                }
+                
+                fpsElement.textContent = `FPS: ${fps}`;
+                fpsElement.style.display = renderOptions.showFPS ? 'block' : 'none';
+            }
+        }
+        
+        // Configura i buffer per un modello specifico
+        function setBuffersForModel(model) {
+            // Buffer dei vertici
+            const positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(model.vertices), gl.STATIC_DRAW);
+            
+            const positionLoc = gl.getAttribLocation(program, 'a_position');
+            gl.enableVertexAttribArray(positionLoc);
+            gl.vertexAttribPointer(positionLoc, 3, gl.FLOAT, false, 0, 0);
+            
+            // Buffer delle normali
+            if (model.normals && model.normals.length > 0) {
+                const normalBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(model.normals), gl.STATIC_DRAW);
+                
+                const normalLoc = gl.getAttribLocation(program, 'a_normal');
+                gl.enableVertexAttribArray(normalLoc);
+                gl.vertexAttribPointer(normalLoc, 3, gl.FLOAT, false, 0, 0);
+            }
+            
+            // Buffer delle coordinate texture
+            if (model.texcoords && model.texcoords.length > 0) {
+                const texcoordBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(model.texcoords), gl.STATIC_DRAW);
+                
+                const texcoordLoc = gl.getAttribLocation(program, 'a_texcoord');
+                gl.enableVertexAttribArray(texcoordLoc);
+                gl.vertexAttribPointer(texcoordLoc, 2, gl.FLOAT, false, 0, 0);
+            }
+        }
+        
+        // Crea una stanza semplice come fallback se i modelli non sono ancora caricati
+function createSimpleRoom() {
+    const roomSize = 10;
+    const roomHeight = 5;
+    
+    // Definizione delle pareti, pavimento e soffitto
+    const wallColor = [0.8, 0.8, 0.8];
+    const floorColor = [0.6, 0.6, 0.6];
+    
+    // Pavimento
+    models['floor'] = {
+        vertices: [
+            -roomSize, 0, -roomSize,
+            roomSize, 0, -roomSize,
+            roomSize, 0, roomSize,
+            -roomSize, 0, -roomSize,
+            roomSize, 0, roomSize,
+            -roomSize, 0, roomSize
+        ],
+        normals: [
+            0, 1, 0,
+            0, 1, 0,
+            0, 1, 0,
+            0, 1, 0,
+            0, 1, 0,
+            0, 1, 0
+        ],
+        texcoords: [
+            0, 0,
+            1, 0,
+            1, 1,
+            0, 0,
+            1, 1,
+            0, 1
+        ],
+        position: [0, 0, 0],
+        scale: [1, 1, 1],
+        texture: 'floor'
+    };
+    
+    // Soffitto
+    models['ceiling'] = {
+        vertices: [
+            -roomSize, roomHeight, -roomSize,
+            roomSize, roomHeight, roomSize,
+            roomSize, roomHeight, -roomSize,
+            -roomSize, roomHeight, -roomSize,
+            -roomSize, roomHeight, roomSize,
+            roomSize, roomHeight, roomSize
+        ],
+        normals: [
+            0, -1, 0,
+            0, -1, 0,
+            0, -1, 0,
+            0, -1, 0,
+            0, -1, 0,
+            0, -1, 0
+        ],
+        texcoords: [
+            0, 0,
+            1, 1,
+            1, 0,
+            0, 0,
+            0, 1,
+            1, 1
+        ],
+        position: [0, 0, 0],
+        scale: [1, 1, 1],
+        texture: 'wall'
+    };
+    
+    // Parete frontale
+    models['frontWall'] = {
+        vertices: [
+            -roomSize, 0, -roomSize,
+            roomSize, 0, -roomSize,
+            roomSize, roomHeight, -roomSize,
+            -roomSize, 0, -roomSize,
+            roomSize, roomHeight, -roomSize,
+            -roomSize, roomHeight, -roomSize
+        ],
+        normals: [
+            0, 0, 1,
+            0, 0, 1,
+            0, 0, 1,
+            0, 0, 1,
+            0, 0, 1,
+            0, 0, 1
+        ],
+        texcoords: [
+            0, 0,
+            1, 0,
+            1, 1,
+            0, 0,
+            1, 1,
+            0, 1
+        ],
+        position: [0, 0, 0],
+        scale: [1, 1, 1],
+        texture: 'wall'
+    };
+    
+    // Parete posteriore
+    models['backWall'] = {
+        vertices: [
+            -roomSize, 0, roomSize,
+            roomSize, roomHeight, roomSize,
+            roomSize, 0, roomSize,
+            -roomSize, 0, roomSize,
+            -roomSize, roomHeight, roomSize,
+            roomSize, roomHeight, roomSize
+        ],
+        normals: [
+            0, 0, -1,
+            0, 0, -1,
+            0, 0, -1,
+            0, 0, -1,
+            0, 0, -1,
+            0, 0, -1
+        ],
+        texcoords: [
+            0, 0,
+            1, 1,
+            1, 0,
+            0, 0,
+            0, 1,
+            1, 1
+        ],
+        position: [0, 0, 0],
+        scale: [1, 1, 1],
+        texture: 'wall'
+    };
+    
+    // Parete sinistra
+    models['leftWall'] = {
+        vertices: [
+            -roomSize, 0, -roomSize,
+            -roomSize, roomHeight, -roomSize,
+            -roomSize, roomHeight, roomSize,
+            -roomSize, 0, -roomSize,
+            -roomSize, roomHeight, roomSize,
+            -roomSize, 0, roomSize
+        ],
+        normals: [
+            1, 0, 0,
+            1, 0, 0,
+            1, 0, 0,
+            1, 0, 0,
+            1, 0, 0,
+            1, 0, 0
+        ],
+        texcoords: [
+            0, 0,
+            0, 1,
+            1, 1,
+            0, 0,
+            1, 1,
+            1, 0
+        ],
+        position: [0, 0, 0],
+        scale: [1, 1, 1],
+        texture: 'wall'
+    };
+    
+    // Parete destra
+    models['rightWall'] = {
+        vertices: [
+            roomSize, 0, -roomSize,
+            roomSize, 0, roomSize,
+            roomSize, roomHeight, roomSize,
+            roomSize, 0, -roomSize,
+            roomSize, roomHeight, roomSize,
+            roomSize, roomHeight, -roomSize
+        ],
+        normals: [
+            -1, 0, 0,
+            -1, 0, 0,
+            -1, 0, 0,
+            -1, 0, 0,
+            -1, 0, 0,
+            -1, 0, 0
+        ],
+        texcoords: [
+            1, 0,
+            0, 0,
+            0, 1,
+            1, 0,
+            0, 1,
+            1, 1
+        ],
+        position: [0, 0, 0],
+        scale: [1, 1, 1],
+        texture: 'wall'
+    };
+    
+    logger.log('Stanza semplice creata');
+}
+
+// Richiedi pointer lock
+function requestPointerLock() {
+            canvas.requestPointerLock = canvas.requestPointerLock || 
+                                       canvas.mozRequestPointerLock || 
+                                       canvas.webkitRequestPointerLock;
+            canvas.requestPointerLock();
+        }
+        
+        // Gestisci cambio stato pointer lock
+        function handlePointerLockChange() {
+            mouseLocked = document.pointerLockElement === canvas || 
+                         document.mozPointerLockElement === canvas || 
+                         document.webkitPointerLockElement === canvas;
+        }
+        
+// Gestisci movimento mouse
+function handleMouseMove(e) {
+    if (!mouseLocked || isPanelOpen) return;
+    
+    const sensitivity = 0.002;
+    // Invertiamo solo il movimento orizzontale (asse X)
+    camera.rotation[1] += e.movementX * sensitivity; // Yaw (invertito)
+    camera.rotation[0] -= e.movementY * sensitivity; // Pitch (lasciato come originale)
+    
+    // Limit pitch
+    camera.rotation[0] = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation[0]));
+}
+        
+        // Variabili per touch controls
+        let touchStartX = 0;
+        let touchStartY = 0;
+        
+        // Gestisci inizio touch
+        function handleTouchStart(e) {
+            e.preventDefault();
+            
+            if (e.touches.length === 1) {
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+            }
+        }
+        
+// Gestisci movimento touch
+function handleTouchMove(e) {
+    e.preventDefault();
+    
+    if (e.touches.length === 1) {
+        const touchX = e.touches[0].clientX;
+        const touchY = e.touches[0].clientY;
+        
+        // Ruota camera (solo orizzontale invertito)
+        const sensitivity = 0.005;
+        camera.rotation[1] += (touchX - touchStartX) * sensitivity; // Invertito
+        camera.rotation[0] -= (touchY - touchStartY) * sensitivity; // Originale
+        
+        // Limita pitch
+        camera.rotation[0] = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation[0]));
+        
+        touchStartX = touchX;
+        touchStartY = touchY;
+    }
+}
+        
+        // Gestisci fine touch
+        function handleTouchEnd(e) {
+            e.preventDefault();
+        }
+    </script>
+</body>
+</html>
