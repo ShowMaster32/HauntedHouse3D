@@ -25,7 +25,7 @@
     </div>
     
     <!-- Pannello di controllo -->
-    <div id="side-panel" class="visible">
+    <div id="side-panel" class="hidden">
         <h2>Pannello di Controllo</h2>
         <button id="toggleShadows">Attiva/Disattiva Ombre</button>
         <button id="toggleReflections">Attiva/Disattiva Riflessioni</button>
@@ -59,20 +59,20 @@
         attribute vec4 a_position;
         attribute vec3 a_normal;
         attribute vec2 a_texcoord;
-        
+
         uniform mat4 u_model;
         uniform mat4 u_view;
         uniform mat4 u_projection;
         uniform mat4 u_normalMatrix;
         uniform mat4 u_lightSpaceMatrix;
         uniform bool u_isEmissive;
-        
+
         varying vec3 v_normal;
         varying vec3 v_position;
         varying vec2 v_texcoord;
         varying float v_isEmissive;
         varying vec4 v_fragPosLightSpace;
-        
+
         void main() {
             // Calcola posizione nello spazio mondo
             vec4 worldPosition = u_model * a_position;
@@ -98,7 +98,7 @@
     <!-- Fragment Shader -->
     <script id="fragment-shader" type="x-shader/x-fragment">
         precision mediump float;
-        
+
         uniform vec3 u_lightPos;
         uniform vec3 u_viewPos;
         uniform bool u_useTexture;
@@ -108,13 +108,15 @@
         uniform bool u_lightOn;
         uniform bool u_advancedRendering;
         uniform sampler2D u_shadowMap;
-        
+        uniform vec3 u_externalLightColor;
+        uniform float u_externalLightIntensity;
+
         varying vec3 v_normal;
         varying vec3 v_position;
         varying vec2 v_texcoord;
         varying float v_isEmissive;
         varying vec4 v_fragPosLightSpace;
-        
+
         // Funzione per calcolare l'ombra
         float calculateShadow(vec4 fragPosLightSpace) {
             // Esegue la divisione prospettica
@@ -151,7 +153,7 @@
                 
             return shadow;
         }
-        
+
         void main() {
             vec3 normal = normalize(v_normal);
             vec3 lightDir = normalize(u_lightPos - v_position);
@@ -172,24 +174,31 @@
             }
             
             // Ambient
-            float ambientStrength = u_lightOn ? 0.2 : 0.05;
+            float ambientStrength = 0.05; // Luce ambientale sempre presente
             vec3 ambient = ambientStrength * color;
             
-            // Diffuse (solo se la luce è accesa)
-            float diff = u_lightOn ? max(dot(normal, lightDir), 0.0) : 0.0;
-            vec3 diffuse = diff * vec3(1.0, 0.9, 0.7) * color;  // Luce calda giallognola
+            // Luce esterna (dalle finestre)
+            vec3 externalLight = u_externalLightIntensity * u_externalLightColor * color;
             
-            // Specular (solo se la luce è accesa e riflessi abilitati)
+            // Luce interna (dal lampadario) solo se accesa
+            vec3 diffuse = vec3(0.0);
             vec3 specular = vec3(0.0);
-            if (u_lightOn && u_reflections) {
-                float specularStrength = 0.5;
-                vec3 viewDir = normalize(u_viewPos - v_position);
-                vec3 reflectDir = reflect(-lightDir, normal);
-                float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
-                specular = specularStrength * spec * vec3(1.0, 0.9, 0.7);
+            
+            if (u_lightOn) {
+                float diff = max(dot(normal, lightDir), 0.0);
+                diffuse = diff * vec3(1.0, 0.9, 0.7) * color;  // Luce calda giallognola
+                
+                // Specular solo se riflessi abilitati
+                if (u_reflections) {
+                    float specularStrength = 0.5;
+                    vec3 viewDir = normalize(u_viewPos - v_position);
+                    vec3 reflectDir = reflect(-lightDir, normal);
+                    float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
+                    specular = specularStrength * spec * vec3(1.0, 0.9, 0.7);
+                }
             }
             
-            // Calcola l'ombra
+            // Ombra solo per la luce interna
             float shadow = 0.0;
             if (u_shadows && u_lightOn) {
                 shadow = calculateShadow(v_fragPosLightSpace);
@@ -213,8 +222,8 @@
                 attenuation *= vignette;
             }
             
-            // Combina i risultati, tenendo conto dell'ombra
-            vec3 result = ambient + (1.0 - shadow) * (diffuse + specular) * attenuation;
+            // Combina le luci
+            vec3 result = ambient + externalLight + (1.0 - shadow) * (diffuse + specular) * attenuation;
             
             // Tonemapping semplice per evitare eccessiva luminosità
             result = result / (result + vec3(1.0));
@@ -273,31 +282,44 @@
             }
             
             // Se è un oggetto emissivo (luce), renderizzalo brillante
-            if (v_isEmissive > 0.5) { // Controlla se float > 0.5 invece di bool
+            if (v_isEmissive > 0.5) {
                 float brightness = u_lightOn ? 1.0 : 0.2;
                 gl_FragColor = vec4(color * brightness, 1.0);
                 return;
             }
             
             // Ambient
-            float ambientStrength = u_lightOn ? 0.2 : 0.05;
+            float ambientStrength = 0.05; // Luce ambientale sempre presente
             vec3 ambient = ambientStrength * color;
             
-            // Diffuse (solo se la luce è accesa)
-            float diff = u_lightOn ? max(dot(normal, lightDir), 0.0) : 0.0;
-            vec3 diffuse = diff * vec3(1.0, 0.9, 0.7) * color;  // Luce calda giallognola
+            // Luce esterna (dalle finestre)
+            vec3 externalLight = u_externalLightIntensity * u_externalLightColor * color;
             
-            // Specular (solo se la luce è accesa e riflessi abilitati)
+            // Luce interna (dal lampadario) solo se accesa
+            vec3 diffuse = vec3(0.0);
             vec3 specular = vec3(0.0);
-            if (u_lightOn && u_reflections) {
-                float specularStrength = 0.5;
-                vec3 viewDir = normalize(u_viewPos - v_position);
-                vec3 reflectDir = reflect(-lightDir, normal);
-                float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
-                specular = specularStrength * spec * vec3(1.0, 0.9, 0.7);
+            
+            if (u_lightOn) {
+                float diff = max(dot(normal, lightDir), 0.0);
+                diffuse = diff * vec3(1.0, 0.9, 0.7) * color;  // Luce calda giallognola
+                
+                // Specular solo se riflessi abilitati
+                if (u_reflections) {
+                    float specularStrength = 0.5;
+                    vec3 viewDir = normalize(u_viewPos - v_position);
+                    vec3 reflectDir = reflect(-lightDir, normal);
+                    float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
+                    specular = specularStrength * spec * vec3(1.0, 0.9, 0.7);
+                }
             }
             
-            // Attenuazione della luce con la distanza (ombre)
+            // Ombra solo per la luce interna
+            float shadow = 0.0;
+            if (u_shadows && u_lightOn) {
+                shadow = calculateShadow(v_fragPosLightSpace);
+            }
+            
+            // Attenuazione della luce con la distanza
             float attenuation = 1.0;
             if (u_shadows) {
                 float distance = length(u_lightPos - v_position);
@@ -315,8 +337,8 @@
                 attenuation *= vignette;
             }
             
-            // Combina i risultati
-            vec3 result = (ambient + (diffuse + specular) * attenuation);
+            // Combina le luci
+            vec3 result = ambient + externalLight + (1.0 - shadow) * (diffuse + specular) * attenuation;
             
             // Tonemapping semplice per evitare eccessiva luminosità
             result = result / (result + vec3(1.0));
@@ -403,6 +425,7 @@
         let isLightOn = false;
         let mouseLocked = false;
         let gameStarted = false;
+        let isNearSwitch = false;
         
         // Rendering options
         let renderOptions = {
@@ -582,6 +605,7 @@
             loadTexture('textures/wall.jpg', 'wall');
             loadTexture('textures/wood.jpg', 'floor');
             loadTexture('textures/wood.jpg', 'ceiling'); // Usa wood.jpg anche per il soffitto
+            loadTexture('textures/glass.png', 'glass');
             
             // Carica texture per lo skybox
             loadSkyboxTextures();
@@ -887,6 +911,25 @@
             }
         }
 
+        // Funzione per caricare il lampadario
+        function addCeilingLamp() {
+            loadOBJModel('models/lamp.obj', 'models/lamp.mtl', 'lamp');
+            
+            // Posizionamento e configurazione del lampadario verranno fatti nella funzione loadOBJModel
+            // quando il modello sarà caricato
+        }
+
+        // Aggiungi questo nella parte relativa alla gestione del modello 'lamp' nella funzione loadOBJModel
+        if (name === 'lamp') {
+            models[name].position = [0, -roomHeight + 0.1, 0]; // Vicino al soffitto, che sarà a -roomHeight
+            models[name].rotation = [0, 0, 0];
+            models[name].scale = [0.5, 0.5, 0.5]; // Adatta la scala in base alle dimensioni reali
+            models[name].isEmissive = true; // Rendilo emissivo
+            
+            // Imposta la posizione della luce per le shadow map
+            lightPosition = [0, -roomHeight + 0.5, 0];
+        }
+
         // Funzione per creare un interruttore semplice con geometria di base
         function createSwitch() {
             const switchSize = 0.2;
@@ -986,7 +1029,7 @@
             };
             
             // Definisci la posizione dell'interruttore per l'interazione
-            switchPosition = new Float32Array([-roomSize + 0.1, 2, -1]);
+            switchPosition = new Float32Array([-roomSize + 0.1, 1.5, 0]);
             
             logger.log('Interruttore creato');
         }
@@ -1215,7 +1258,10 @@
             if (e.code === 'KeyP') {
                 togglePanel();
             } else if (e.code === 'KeyF') {
-                toggleLight();
+                // Verifica che siamo vicini all'interruttore prima di attivare la funzione
+                if (isNearSwitch) {
+                    toggleLight();
+                }
             }
         }
         
@@ -1235,16 +1281,22 @@
         
         // Attiva/disattiva luce
         function toggleLight() {
-            isLightOn = !isLightOn;
-            document.getElementById('instructions').style.visibility = isLightOn ? 'hidden' : 'visible';
-            
-            // Effetto di flickering quando la luce si accende
-            if (isLightOn) {
-                flickerLight();
-                sounds.flicker.play();
+            // Verifica se il giocatore è vicino all'interruttore
+            if (isNearSwitch) {
+                isLightOn = !isLightOn;
+                document.getElementById('instructions').style.visibility = isLightOn ? 'hidden' : 'visible';
+                
+                // Effetto di flickering quando la luce si accende
+                if (isLightOn) {
+                    flickerLight();
+                    sounds.flicker.play();
+                }
+                
+                logger.log(`Luce ${isLightOn ? 'accesa' : 'spenta'}`);
+            } else {
+                // Opzionale: aggiungi un messaggio di log o feedback se vuoi
+                logger.log("Devi essere vicino all'interruttore per accendere/spegnere la luce");
             }
-            
-            logger.log(`Luce ${isLightOn ? 'accesa' : 'spenta'}`);
         }
         
         // Effetto flickering della luce
@@ -1403,6 +1455,9 @@
                 { position: switchPosition, radius: 3, name: 'switch' }
             ];
             
+            // Reset dello stato di vicinanza all'interruttore
+            isNearSwitch = false;
+            
             // Verifica se la camera è vicina a qualche oggetto interattivo
             let nearInteractable = false;
             
@@ -1415,9 +1470,10 @@
                 if (distance < obj.radius) {
                     nearInteractable = true;
                     
-                    // Se è vicino all'interruttore, mostra le istruzioni
+                    // Se è vicino all'interruttore, mostra le istruzioni e aggiorna lo stato
                     if (obj.name === 'switch') {
                         document.getElementById('instructions').style.visibility = 'visible';
+                        isNearSwitch = true;
                     }
                     
                     break;
@@ -1501,11 +1557,19 @@
             const u_advancedRenderingLoc = gl.getUniformLocation(program, 'u_advancedRendering');
             const u_isEmissiveLoc = gl.getUniformLocation(program, 'u_isEmissive');
             
+            // Ottieni le locazioni per le uniform della luce esterna
+            const u_externalLightColorLoc = gl.getUniformLocation(program, 'u_externalLightColor');
+            const u_externalLightIntensityLoc = gl.getUniformLocation(program, 'u_externalLightIntensity');
+            
             // Passa le opzioni di rendering
             gl.uniform1i(u_shadowsLoc, renderOptions.shadows);
             gl.uniform1i(u_reflectionsLoc, renderOptions.reflections);
             gl.uniform1i(u_lightOnLoc, isLightOn);
             gl.uniform1i(u_advancedRenderingLoc, renderOptions.advancedRendering);
+            
+            // Imposta i valori per la luce esterna
+            gl.uniform3f(u_externalLightColorLoc, 0.6, 0.6, 1.0); // Luce bluastra per simulare la luce esterna
+            gl.uniform1f(u_externalLightIntensityLoc, 0.1); // Intensità bassa
             
             // Imposta la posizione della luce e della camera
             gl.uniform3fv(u_lightPosLoc, lightPosition);
@@ -1515,69 +1579,136 @@
             gl.uniformMatrix4fv(u_viewLoc, false, viewMatrix);
             gl.uniformMatrix4fv(u_projectionLoc, false, projectionMatrix);
             
-            // Renderizza tutti i modelli (escluso skybox)
+            // Renderizza prima tutti gli oggetti non trasparenti
             for (const modelName in models) {
                 if (modelName === 'skybox') continue; // Skybox già renderizzato
                 
-                if (models.hasOwnProperty(modelName)) {
-                    const model = models[modelName];
-                    
-                    // Salta modelli senza vertici
-                    if (!model.vertices || model.vertices.length === 0) continue;
-                    
-                    // Crea matrice modello
-                    let modelMatrix = m4.identity();
-                    
-                    // Applica traslazione se specificata
-                    if (model.position) {
-                        modelMatrix = m4.translate(
-                            modelMatrix, 
-                            model.position[0], 
-                            model.position[1], 
-                            model.position[2]
-                        );
-                    }
-                    
-                    // Applica rotazione se specificata
-                    if (model.rotation) {
-                        modelMatrix = m4.xRotate(modelMatrix, model.rotation[0]);
-                        modelMatrix = m4.yRotate(modelMatrix, model.rotation[1]);
-                        modelMatrix = m4.zRotate(modelMatrix, model.rotation[2]);
-                    }
-                    
-                    // Applica scala se specificata
-                    if (model.scale) {
-                        modelMatrix = m4.scale(
-                            modelMatrix, 
-                            model.scale[0], 
-                            model.scale[1], 
-                            model.scale[2]
-                        );
-                    }
-                    
-                    // Passa la matrice modello allo shader
-                    gl.uniformMatrix4fv(u_modelLoc, false, modelMatrix);
-                    
-                    // Flag per oggetti emissivi
-                    gl.uniform1i(u_isEmissiveLoc, model.isEmissive || false);
-                    
-                    // Configura texture se specificata
-                    if (model.texture && textures[model.texture]) {
-                        gl.uniform1i(u_useTextureLoc, 1);
-                        gl.activeTexture(gl.TEXTURE0);
-                        gl.bindTexture(gl.TEXTURE_2D, textures[model.texture]);
-                        gl.uniform1i(u_textureLoc, 0);
-                    } else {
-                        gl.uniform1i(u_useTextureLoc, 0);
-                    }
-                    
-                    // Configura i buffer per questo modello
-                    setBuffersForModel(model);
-                    
-                    // Disegna il modello
-                    gl.drawArrays(gl.TRIANGLES, 0, model.vertices.length / 3);
+                const model = models[modelName];
+                if (!model || model.isTransparent || !model.vertices || model.vertices.length === 0) continue;
+                
+                // Crea matrice modello
+                let modelMatrix = m4.identity();
+                
+                // Applica traslazione se specificata
+                if (model.position) {
+                    modelMatrix = m4.translate(
+                        modelMatrix, 
+                        model.position[0], 
+                        model.position[1], 
+                        model.position[2]
+                    );
                 }
+
+                // Applica rotazione se specificata
+                if (model.rotation) {
+                    modelMatrix = m4.xRotate(modelMatrix, model.rotation[0]);
+                    modelMatrix = m4.yRotate(modelMatrix, model.rotation[1]);
+                    modelMatrix = m4.zRotate(modelMatrix, model.rotation[2]);
+                }
+
+                // Applica scala se specificata
+                if (model.scale) {
+                    modelMatrix = m4.scale(
+                        modelMatrix, 
+                        model.scale[0], 
+                        model.scale[1], 
+                        model.scale[2]
+                    );
+                }
+
+                // Passa la matrice modello allo shader
+                gl.uniformMatrix4fv(u_modelLoc, false, modelMatrix);
+
+                // Calcola la matrice normale (inversa trasposta della matrice modello)
+                const normalMatrix = m4.transpose(m4.inverse(modelMatrix));
+                const u_normalMatrixLoc = gl.getUniformLocation(program, 'u_normalMatrix');
+                gl.uniformMatrix4fv(u_normalMatrixLoc, false, normalMatrix);
+                
+                // Flag per oggetti emissivi
+                gl.uniform1i(u_isEmissiveLoc, model.isEmissive || false);
+                
+                // Configura texture se specificata
+                if (model.texture && textures[model.texture]) {
+                    gl.uniform1i(u_useTextureLoc, 1);
+                    gl.activeTexture(gl.TEXTURE0);
+                    gl.bindTexture(gl.TEXTURE_2D, textures[model.texture]);
+                    gl.uniform1i(u_textureLoc, 0);
+                } else {
+                    gl.uniform1i(u_useTextureLoc, 0);
+                }
+                
+                // Configura i buffer per questo modello
+                setBuffersForModel(model);
+                
+                // Disegna il modello
+                gl.drawArrays(gl.TRIANGLES, 0, model.vertices.length / 3);
             }
+            
+            // Poi renderizza gli oggetti trasparenti
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+            
+            for (const modelName in models) {
+                if (modelName === 'skybox') continue;
+                
+                const model = models[modelName];
+                if (!model || !model.isTransparent || !model.vertices || model.vertices.length === 0) continue;
+                
+                // Crea matrice modello
+                let modelMatrix = m4.identity();
+                
+                // Applica traslazione se specificata
+                if (model.position) {
+                    modelMatrix = m4.translate(
+                        modelMatrix, 
+                        model.position[0], 
+                        model.position[1], 
+                        model.position[2]
+                    );
+                }
+                
+                // Applica rotazione se specificata
+                if (model.rotation) {
+                    modelMatrix = m4.xRotate(modelMatrix, model.rotation[0]);
+                    modelMatrix = m4.yRotate(modelMatrix, model.rotation[1]);
+                    modelMatrix = m4.zRotate(modelMatrix, model.rotation[2]);
+                }
+                
+                // Applica scala se specificata
+                if (model.scale) {
+                    modelMatrix = m4.scale(
+                        modelMatrix, 
+                        model.scale[0], 
+                        model.scale[1], 
+                        model.scale[2]
+                    );
+                }
+                
+                // Passa la matrice modello allo shader
+                gl.uniformMatrix4fv(u_modelLoc, false, modelMatrix);
+                
+                // Flag per oggetti emissivi
+                gl.uniform1i(u_isEmissiveLoc, model.isEmissive || false);
+                
+                // Configura texture se specificata
+                if (model.texture && textures[model.texture]) {
+                    gl.uniform1i(u_useTextureLoc, 1);
+                    gl.activeTexture(gl.TEXTURE0);
+                    gl.bindTexture(gl.TEXTURE_2D, textures[model.texture]);
+                    gl.uniform1i(u_textureLoc, 0);
+                } else {
+                    gl.uniform1i(u_useTextureLoc, 0);
+                }
+                
+                // Configura i buffer per questo modello
+                setBuffersForModel(model);
+                
+                // Disegna il modello
+                gl.drawArrays(gl.TRIANGLES, 0, model.vertices.length / 3);
+            }
+            
+            // Disabilita il blending dopo aver renderizzato gli oggetti trasparenti
+            gl.disable(gl.BLEND);
         }
         
         // Funzione per renderizzare lo skybox
@@ -1663,8 +1794,7 @@
         
         // Crea una stanza semplice
         function createSimpleRoom() {
-            // Definizione delle pareti, pavimento e soffitto            
-            // Pavimento
+            // Pavimento (a Y=0)
             models['floor'] = {
                 vertices: [
                     -roomSize, 0, -roomSize,
@@ -1695,15 +1825,15 @@
                 texture: 'floor'
             };
             
-            // Soffitto
+            // Soffitto (a Y=-roomHeight)
             models['ceiling'] = {
                 vertices: [
-                    -roomSize, roomHeight, -roomSize,
-                    roomSize, roomHeight, roomSize,
-                    roomSize, roomHeight, -roomSize,
-                    -roomSize, roomHeight, -roomSize,
-                    -roomSize, roomHeight, roomSize,
-                    roomSize, roomHeight, roomSize
+                    -roomSize, -roomHeight, -roomSize,
+                    roomSize, -roomHeight, roomSize,
+                    roomSize, -roomHeight, -roomSize,
+                    -roomSize, -roomHeight, -roomSize,
+                    -roomSize, -roomHeight, roomSize,
+                    roomSize, -roomHeight, roomSize
                 ],
                 normals: [
                     0, -1, 0,
@@ -1731,10 +1861,10 @@
                 vertices: [
                     -roomSize, 0, -roomSize,
                     roomSize, 0, -roomSize,
-                    roomSize, roomHeight, -roomSize,
+                    roomSize, -roomHeight, -roomSize,
                     -roomSize, 0, -roomSize,
-                    roomSize, roomHeight, -roomSize,
-                    -roomSize, roomHeight, -roomSize
+                    roomSize, -roomHeight, -roomSize,
+                    -roomSize, -roomHeight, -roomSize
                 ],
                 normals: [
                     0, 0, 1,
@@ -1761,11 +1891,11 @@
             models['backWall'] = {
                 vertices: [
                     -roomSize, 0, roomSize,
-                    roomSize, roomHeight, roomSize,
+                    roomSize, -roomHeight, roomSize,
                     roomSize, 0, roomSize,
                     -roomSize, 0, roomSize,
-                    -roomSize, roomHeight, roomSize,
-                    roomSize, roomHeight, roomSize
+                    -roomSize, -roomHeight, roomSize,
+                    roomSize, -roomHeight, roomSize
                 ],
                 normals: [
                     0, 0, -1,
@@ -1792,10 +1922,10 @@
             models['leftWall'] = {
                 vertices: [
                     -roomSize, 0, -roomSize,
-                    -roomSize, roomHeight, -roomSize,
-                    -roomSize, roomHeight, roomSize,
+                    -roomSize, -roomHeight, -roomSize,
+                    -roomSize, -roomHeight, roomSize,
                     -roomSize, 0, -roomSize,
-                    -roomSize, roomHeight, roomSize,
+                    -roomSize, -roomHeight, roomSize,
                     -roomSize, 0, roomSize
                 ],
                 normals: [
@@ -1824,10 +1954,10 @@
                 vertices: [
                     roomSize, 0, -roomSize,
                     roomSize, 0, roomSize,
-                    roomSize, roomHeight, roomSize,
+                    roomSize, -roomHeight, roomSize,
                     roomSize, 0, -roomSize,
-                    roomSize, roomHeight, roomSize,
-                    roomSize, roomHeight, -roomSize
+                    roomSize, -roomHeight, roomSize,
+                    roomSize, -roomHeight, -roomSize
                 ],
                 normals: [
                     -1, 0, 0,
@@ -1850,7 +1980,102 @@
                 texture: 'wall'
             };
             
+            // Aggiungi finestre
+            addWindows();
+            
             logger.log('Stanza semplice creata');
+        }
+
+        // Funzione per aggiungere finestre
+        function addWindows() {
+            // Texture per il vetro
+            if (!textures['glass']) {
+                // Crea una texture semplice se non è caricata
+                const glassCanvas = document.createElement('canvas');
+                glassCanvas.width = 2;
+                glassCanvas.height = 2;
+                const ctx = glassCanvas.getContext('2d');
+                ctx.fillStyle = 'rgba(180, 200, 255, 0.3)';
+                ctx.fillRect(0, 0, 2, 2);
+                
+                const glassTexture = gl.createTexture();
+                gl.bindTexture(gl.TEXTURE_2D, glassTexture);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, glassCanvas);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                gl.bindTexture(gl.TEXTURE_2D, null);
+                
+                textures['glass'] = glassTexture;
+                logger.log('Texture vetro creata');
+            }
+            
+            // Finestra sulla parete frontale
+            models['frontWindow'] = {
+                vertices: [
+                    -2, -1, -roomSize + 0.01,
+                    2, -1, -roomSize + 0.01,
+                    2, -4, -roomSize + 0.01,
+                    -2, -1, -roomSize + 0.01,
+                    2, -4, -roomSize + 0.01,
+                    -2, -4, -roomSize + 0.01
+                ],
+                normals: [
+                    0, 0, 1,
+                    0, 0, 1,
+                    0, 0, 1,
+                    0, 0, 1,
+                    0, 0, 1,
+                    0, 0, 1
+                ],
+                texcoords: [
+                    0, 0,
+                    1, 0,
+                    1, 1,
+                    0, 0,
+                    1, 1,
+                    0, 1
+                ],
+                position: [0, 0, 0],
+                scale: [1, 1, 1],
+                texture: 'glass',
+                isTransparent: true
+            };
+            
+            // Finestra sulla parete posteriore
+            models['backWindow'] = {
+                vertices: [
+                    -2, -1, roomSize - 0.01,
+                    2, -4, roomSize - 0.01,
+                    2, -1, roomSize - 0.01,
+                    -2, -1, roomSize - 0.01,
+                    -2, -4, roomSize - 0.01,
+                    2, -4, roomSize - 0.01
+                ],
+                normals: [
+                    0, 0, -1,
+                    0, 0, -1,
+                    0, 0, -1,
+                    0, 0, -1,
+                    0, 0, -1,
+                    0, 0, -1
+                ],
+                texcoords: [
+                    0, 0,
+                    1, 1,
+                    1, 0,
+                    0, 0,
+                    0, 1,
+                    1, 1
+                ],
+                position: [0, 0, 0],
+                scale: [1, 1, 1],
+                texture: 'glass',
+                isTransparent: true
+            };
+            
+            logger.log('Finestre create');
         }
 
         // Richiedi pointer lock
@@ -1873,8 +2098,9 @@
             if (!mouseLocked || isPanelOpen) return;
             
             const sensitivity = 0.002;
-            camera.rotation[1] -= e.movementX * sensitivity; // Yaw
-            camera.rotation[0] -= e.movementY * sensitivity; // Pitch
+            // Invertiamo entrambi gli assi aggiungendo il segno + invece di -
+            camera.rotation[1] += e.movementX * sensitivity; // Yaw (invertito)
+            camera.rotation[0] += e.movementY * sensitivity; // Pitch (invertito)
             
             // Limit pitch
             camera.rotation[0] = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation[0]));
