@@ -36,6 +36,15 @@
     
     <!-- Container per i log -->
     <div id="log-container"></div>
+
+    <!-- Controlli touch per dispositivi mobili (nascosti per default) -->
+    <div class="touch-controls" style="display: none;">
+        <div class="touch-button" id="touch-forward">W</div>
+        <div class="touch-button" id="touch-left">A</div>
+        <div class="touch-button" id="touch-backward">S</div>
+        <div class="touch-button" id="touch-right">D</div>
+        <div class="touch-button" id="touch-light">F</div>
+    </div>
     
     <!-- Inclusione delle librerie richieste dal professore -->
     <script src="lib/glm_utils.js"></script>
@@ -54,16 +63,35 @@
         uniform mat4 u_model;
         uniform mat4 u_view;
         uniform mat4 u_projection;
+        uniform mat4 u_normalMatrix;
+        uniform mat4 u_lightSpaceMatrix;
+        uniform bool u_isEmissive;
         
         varying vec3 v_normal;
         varying vec3 v_position;
         varying vec2 v_texcoord;
+        varying float v_isEmissive;
+        varying vec4 v_fragPosLightSpace;
         
         void main() {
-            gl_Position = u_projection * u_view * u_model * a_position;
-            v_normal = mat3(u_model) * a_normal;
-            v_position = vec3(u_model * a_position);
+            // Calcola posizione nello spazio mondo
+            vec4 worldPosition = u_model * a_position;
+            v_position = worldPosition.xyz;
+            
+            // Trasforma normale usando matrice normale
+            v_normal = mat3(u_normalMatrix) * a_normal;
+            
+            // Passa coordinate texture
             v_texcoord = a_texcoord;
+            
+            // Calcola posizione nello spazio della luce per le ombre
+            v_fragPosLightSpace = u_lightSpaceMatrix * worldPosition;
+            
+            // Flag emissivo
+            v_isEmissive = u_isEmissive ? 1.0 : 0.0;
+            
+            // Posizione finale del vertice
+            gl_Position = u_projection * u_view * worldPosition;
         }
     </script>
     
@@ -75,38 +103,262 @@
         uniform vec3 u_viewPos;
         uniform bool u_useTexture;
         uniform sampler2D u_texture;
+        uniform bool u_shadows;
+        uniform bool u_reflections;
+        uniform bool u_lightOn;
+        uniform bool u_advancedRendering;
+        uniform sampler2D u_shadowMap;
         
         varying vec3 v_normal;
         varying vec3 v_position;
         varying vec2 v_texcoord;
+        varying float v_isEmissive;
+        varying vec4 v_fragPosLightSpace;
+        
+        // Funzione per calcolare l'ombra
+        float calculateShadow(vec4 fragPosLightSpace) {
+            // Esegue la divisione prospettica
+            vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+            
+            // Trasforma da [-1,1] a [0,1]
+            projCoords = projCoords * 0.5 + 0.5;
+            
+            // Ottiene la profondità più vicina dal punto di vista della luce
+            float closestDepth = texture2D(u_shadowMap, projCoords.xy).r;
+            
+            // Profondità attuale del frammento dal punto di vista della luce
+            float currentDepth = projCoords.z;
+            
+            // Calcola bias basato sull'angolo tra normale e direzione della luce
+            vec3 normal = normalize(v_normal);
+            vec3 lightDir = normalize(u_lightPos - v_position);
+            float bias = max(0.05 * (1.0 - dot(normal, lightDir)), 0.005);
+            
+            // Esegue PCF (Percentage Closer Filtering) per ombre più morbide
+            float shadow = 0.0;
+            vec2 texelSize = vec2(1.0) / vec2(1024.0); // Dimensione della shadow map
+            for(int x = -1; x <= 1; ++x) {
+                for(int y = -1; y <= 1; ++y) {
+                    float pcfDepth = texture2D(u_shadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
+                    shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;
+                }
+            }
+            shadow /= 9.0;
+            
+            // Mantieni l'ombra a 0.0 quando fuori dalla frustum della luce
+            if(projCoords.z > 1.0)
+                shadow = 0.0;
+                
+            return shadow;
+        }
         
         void main() {
             vec3 normal = normalize(v_normal);
             vec3 lightDir = normalize(u_lightPos - v_position);
             
-            // Ambient
-            float ambientStrength = 0.1;
-            vec3 ambient = ambientStrength * vec3(1.0, 1.0, 1.0);
-            
-            // Diffuse
-            float diff = max(dot(normal, lightDir), 0.0);
-            vec3 diffuse = diff * vec3(1.0, 1.0, 1.0);
-            
-            // Specular
-            float specularStrength = 0.5;
-            vec3 viewDir = normalize(u_viewPos - v_position);
-            vec3 reflectDir = reflect(-lightDir, normal);
-            float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
-            vec3 specular = specularStrength * spec * vec3(1.0, 1.0, 1.0);
-            
-            // Combine
-            vec3 color = vec3(0.8, 0.8, 0.8);
+            // Colore base (dalla texture o predefinito)
+            vec3 color;
             if (u_useTexture) {
                 color = texture2D(u_texture, v_texcoord).rgb;
+            } else {
+                color = vec3(0.8, 0.8, 0.8);
             }
             
-            vec3 result = (ambient + diffuse + specular) * color;
+            // Se è un oggetto emissivo (luce), renderizzalo brillante
+            if (v_isEmissive > 0.5) {
+                float brightness = u_lightOn ? 1.0 : 0.2;
+                gl_FragColor = vec4(color * brightness, 1.0);
+                return;
+            }
+            
+            // Ambient
+            float ambientStrength = u_lightOn ? 0.2 : 0.05;
+            vec3 ambient = ambientStrength * color;
+            
+            // Diffuse (solo se la luce è accesa)
+            float diff = u_lightOn ? max(dot(normal, lightDir), 0.0) : 0.0;
+            vec3 diffuse = diff * vec3(1.0, 0.9, 0.7) * color;  // Luce calda giallognola
+            
+            // Specular (solo se la luce è accesa e riflessi abilitati)
+            vec3 specular = vec3(0.0);
+            if (u_lightOn && u_reflections) {
+                float specularStrength = 0.5;
+                vec3 viewDir = normalize(u_viewPos - v_position);
+                vec3 reflectDir = reflect(-lightDir, normal);
+                float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
+                specular = specularStrength * spec * vec3(1.0, 0.9, 0.7);
+            }
+            
+            // Calcola l'ombra
+            float shadow = 0.0;
+            if (u_shadows && u_lightOn) {
+                shadow = calculateShadow(v_fragPosLightSpace);
+            }
+            
+            // Attenuazione della luce con la distanza
+            float attenuation = 1.0;
+            if (u_shadows) {
+                float distance = length(u_lightPos - v_position);
+                attenuation = 1.0 / (1.0 + 0.01 * distance + 0.001 * distance * distance);
+            }
+            
+            // Rendering avanzato (aggiunge effetti di penombra)
+            if (u_advancedRendering) {
+                // Effetto vignette (bordi scuri)
+                vec2 center = vec2(0.5, 0.5);
+                float dist = distance(v_texcoord, center);
+                float vignette = smoothstep(0.5, 0.35, dist);
+                
+                // Applica vignette all'illuminazione
+                attenuation *= vignette;
+            }
+            
+            // Combina i risultati, tenendo conto dell'ombra
+            vec3 result = ambient + (1.0 - shadow) * (diffuse + specular) * attenuation;
+            
+            // Tonemapping semplice per evitare eccessiva luminosità
+            result = result / (result + vec3(1.0));
+            
             gl_FragColor = vec4(result, 1.0);
+        }
+    </script>
+    
+    <!-- Shadow Vertex Shader -->
+    <script id="shadow-vertex-shader" type="x-shader/x-vertex">
+        attribute vec4 a_position;
+        
+        uniform mat4 u_model;
+        uniform mat4 u_lightSpaceMatrix;
+        
+        void main() {
+            gl_Position = u_lightSpaceMatrix * u_model * a_position;
+        }
+    </script>
+    
+    <!-- Shadow Fragment Shader -->
+    <script id="shadow-fragment-shader" type="x-shader/x-fragment">
+        precision mediump float;
+        
+        void main() {
+            // Questo shader non scrive colori, solo profondità
+            // gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0); // Non necessario per shadow map
+        }
+    </script>fragment-shader" type="x-shader/x-fragment">
+        precision mediump float;
+        
+        uniform vec3 u_lightPos;
+        uniform vec3 u_viewPos;
+        uniform bool u_useTexture;
+        uniform sampler2D u_texture;
+        uniform bool u_shadows;
+        uniform bool u_reflections;
+        uniform bool u_lightOn;
+        uniform bool u_advancedRendering;
+        
+        varying vec3 v_normal;
+        varying vec3 v_position;
+        varying vec2 v_texcoord;
+        varying float v_isEmissive;
+        
+        void main() {
+            vec3 normal = normalize(v_normal);
+            vec3 lightDir = normalize(u_lightPos - v_position);
+            
+            // Colore base (dalla texture o predefinito)
+            vec3 color;
+            if (u_useTexture) {
+                color = texture2D(u_texture, v_texcoord).rgb;
+            } else {
+                color = vec3(0.8, 0.8, 0.8);
+            }
+            
+            // Se è un oggetto emissivo (luce), renderizzalo brillante
+            if (v_isEmissive > 0.5) { // Controlla se float > 0.5 invece di bool
+                float brightness = u_lightOn ? 1.0 : 0.2;
+                gl_FragColor = vec4(color * brightness, 1.0);
+                return;
+            }
+            
+            // Ambient
+            float ambientStrength = u_lightOn ? 0.2 : 0.05;
+            vec3 ambient = ambientStrength * color;
+            
+            // Diffuse (solo se la luce è accesa)
+            float diff = u_lightOn ? max(dot(normal, lightDir), 0.0) : 0.0;
+            vec3 diffuse = diff * vec3(1.0, 0.9, 0.7) * color;  // Luce calda giallognola
+            
+            // Specular (solo se la luce è accesa e riflessi abilitati)
+            vec3 specular = vec3(0.0);
+            if (u_lightOn && u_reflections) {
+                float specularStrength = 0.5;
+                vec3 viewDir = normalize(u_viewPos - v_position);
+                vec3 reflectDir = reflect(-lightDir, normal);
+                float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
+                specular = specularStrength * spec * vec3(1.0, 0.9, 0.7);
+            }
+            
+            // Attenuazione della luce con la distanza (ombre)
+            float attenuation = 1.0;
+            if (u_shadows) {
+                float distance = length(u_lightPos - v_position);
+                attenuation = 1.0 / (1.0 + 0.01 * distance + 0.001 * distance * distance);
+            }
+            
+            // Rendering avanzato (aggiunge effetti di penombra)
+            if (u_advancedRendering) {
+                // Effetto vignette (bordi scuri)
+                vec2 center = vec2(0.5, 0.5);
+                float dist = distance(v_texcoord, center);
+                float vignette = smoothstep(0.5, 0.35, dist);
+                
+                // Applica vignette all'illuminazione
+                attenuation *= vignette;
+            }
+            
+            // Combina i risultati
+            vec3 result = (ambient + (diffuse + specular) * attenuation);
+            
+            // Tonemapping semplice per evitare eccessiva luminosità
+            result = result / (result + vec3(1.0));
+            
+            gl_FragColor = vec4(result, 1.0);
+        }
+    </script>
+    
+    <!-- Skybox Vertex Shader -->
+    <script id="skybox-vertex-shader" type="x-shader/x-vertex">
+        attribute vec4 a_position;
+        
+        uniform mat4 u_view;
+        uniform mat4 u_projection;
+        
+        varying vec3 v_texCoord;
+        
+        void main() {
+            vec4 position = u_projection * mat4(mat3(u_view)) * a_position;
+            gl_Position = position.xyww;
+            v_texCoord = a_position.xyz;
+        }
+    </script>
+    
+    <!-- Skybox Fragment Shader -->
+    <script id="skybox-fragment-shader" type="x-shader/x-fragment">
+        precision mediump float;
+        
+        uniform samplerCube u_skybox;
+        uniform bool u_lightOn;
+        
+        varying vec3 v_texCoord;
+        
+        void main() {
+            vec3 color = textureCube(u_skybox, v_texCoord).rgb;
+            
+            // Scurisci il cielo se la luce è spenta
+            if (!u_lightOn) {
+                color *= 0.2;
+            }
+            
+            gl_FragColor = vec4(color, 1.0);
         }
     </script>
 
@@ -140,13 +392,19 @@
         
         // Inizializzazione WebGL
         let gl, canvas;
-        let program;
+        let program, skyboxProgram;
         let lastTime = 0;
         let deltaTime = 0;
+        let frameCount = 0;
+        let lastFpsUpdate = 0;
         
         // Stato del gioco
         let isPanelOpen = false;
-        let isLightOn = true;
+        let isLightOn = false;
+        let mouseLocked = false;
+        let gameStarted = false;
+        
+        // Rendering options
         let renderOptions = {
             shadows: true,
             reflections: false,
@@ -156,18 +414,29 @@
         
         // Input utente
         let keys = {};
-        let mouseLocked = false;
         
         // Camera e player
         let camera = {
-            position: [0, -3, 5],
-            rotation: [0, 0],
+            position: [0, 1.7, 5],
+            rotation: [0, Math.PI],
             speed: 0.1
         };
         
+        // Dimensioni stanza
+        const roomSize = 10;
+        const roomHeight = 5;
+        
         // Elementi della scena
-        let models = [];
+        let models = {};
         let textures = {};
+        let lightPosition = [0, roomHeight - 0.5, 0];
+        
+        // Suoni
+        const sounds = {
+            ambient: null,
+            flicker: null,
+            footsteps: null
+        };
         
         // Inizializzazione dell'app
         window.onload = function() {
@@ -187,11 +456,21 @@
             // Compila shaders
             initShaders();
             
+            // Inizializza i suoni
+            initSounds();
+            
             // Carica risorse (texture e modelli)
             loadResources();
             
             // Configura gli event listener
             setupEvents();
+            
+            // Crea modelli di base
+            createSimpleRoom();
+            addCeilingLight();
+            
+            // Inizializza DAT.GUI per un pannello di controllo avanzato
+            initGUI();
             
             logger.log('Inizializzazione completata');
         };
@@ -206,6 +485,7 @@
         
         // Inizializzazione shaders
         function initShaders() {
+            // Shader principali per gli oggetti
             const vertexShaderSource = document.getElementById('vertex-shader').textContent;
             const fragmentShaderSource = document.getElementById('fragment-shader').textContent;
             
@@ -240,44 +520,81 @@
                 return;
             }
             
-            gl.useProgram(program);
+            // Shader per lo skybox
+            const skyboxVertexShaderSource = document.getElementById('skybox-vertex-shader').textContent;
+            const skyboxFragmentShaderSource = document.getElementById('skybox-fragment-shader').textContent;
+            
+            // Compila vertex shader per skybox
+            const skyboxVertexShader = gl.createShader(gl.VERTEX_SHADER);
+            gl.shaderSource(skyboxVertexShader, skyboxVertexShaderSource);
+            gl.compileShader(skyboxVertexShader);
+            
+            if (!gl.getShaderParameter(skyboxVertexShader, gl.COMPILE_STATUS)) {
+                logger.log('Errore nel vertex shader skybox: ' + gl.getShaderInfoLog(skyboxVertexShader));
+                return;
+            }
+            
+            // Compila fragment shader per skybox
+            const skyboxFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+            gl.shaderSource(skyboxFragmentShader, skyboxFragmentShaderSource);
+            gl.compileShader(skyboxFragmentShader);
+            
+            if (!gl.getShaderParameter(skyboxFragmentShader, gl.COMPILE_STATUS)) {
+                logger.log('Errore nel fragment shader skybox: ' + gl.getShaderInfoLog(skyboxFragmentShader));
+                return;
+            }
+            
+            // Crea e collega il program dello skybox
+            skyboxProgram = gl.createProgram();
+            gl.attachShader(skyboxProgram, skyboxVertexShader);
+            gl.attachShader(skyboxProgram, skyboxFragmentShader);
+            gl.linkProgram(skyboxProgram);
+            
+            if (!gl.getProgramParameter(skyboxProgram, gl.LINK_STATUS)) {
+                logger.log('Errore nel link del program skybox: ' + gl.getProgramInfoLog(skyboxProgram));
+                return;
+            }
+            
             logger.log('Shaders inizializzati con successo');
         }
 
-        // Funzione per mostrare le coordinate della camera
-        function showCameraCoordinates() {
-            // Crea o ottieni l'elemento per le coordinate
-            let coordElement = document.getElementById('camera-coords');
-            if (!coordElement) {
-                coordElement = document.createElement('div');
-                coordElement.id = 'camera-coords';
-                document.body.appendChild(coordElement);
-            }
+        // Inizializzazione suoni
+        function initSounds() {
+            // Creazione di elementi audio per i suoni del gioco
+            sounds.ambient = new Audio('sounds/ambient.mp3');
+            sounds.ambient.loop = true;
+            sounds.ambient.volume = 0.5;
             
-            // Formatta le coordinate con 2 decimali
-            const x = camera.position[0].toFixed(2);
-            const y = camera.position[1].toFixed(2);
-            const z = camera.position[2].toFixed(2);
+            sounds.flicker = new Audio('sounds/flicker.wav');
+            sounds.flicker.volume = 0.7;
             
-            const rotX = (camera.rotation[0] * (180/Math.PI)).toFixed(1);
-            const rotY = (camera.rotation[1] * (180/Math.PI)).toFixed(1);
+            sounds.footsteps = new Audio('sounds/random-ghost.mp3');
+            sounds.footsteps.volume = 0.3;
             
-            coordElement.textContent = `Camera: X=${x} Y=${y} Z=${z} | Rotation: ${rotY}° ${rotX}°`;
+            logger.log('Suoni inizializzati');
         }
         
         // Carica risorse (texture e modelli)
         function loadResources() {
             logger.log('Caricamento risorse...');
             
-            // Carica texture
+            // Carica texture di base
             loadTexture('textures/wall.jpg', 'wall');
             loadTexture('textures/wood.jpg', 'floor');
+            loadTexture('textures/wood.jpg', 'ceiling'); // Usa wood.jpg anche per il soffitto
             
-            // Commenta il caricamento dei modelli OBJ per ora
-            // loadOBJModel('models/skull.obj', 'models/skull.mtl', 'skull');
-            // loadOBJModel('models/chair.obj', 'models/chair.mtl', 'chair');
+            // Carica texture per lo skybox
+            loadSkyboxTextures();
             
-            logger.log('Risorse caricate');
+            // Carica modelli OBJ 
+            loadOBJModel('models/skull.obj', 'models/skull.mtl', 'skull');
+            loadOBJModel('models/chair.obj', 'models/chair.mtl', 'chair');
+            loadOBJModel('models/doll.obj', 'models/doll.mtl', 'doll'); // Aggiungi la bambola
+            
+            // Crea l'interruttore
+            createSwitch();
+            
+            logger.log('Risorse in caricamento...');
         }
         
         // Carica texture
@@ -302,227 +619,520 @@
             image.src = url;
         }
         
+        // Carica le texture dello skybox
+        function loadSkyboxTextures() {
+            // Nomi dei file della cubemap
+            const faces = [
+                'textures/skybox/px.png', // Right
+                'textures/skybox/nx.png', // Left
+                'textures/skybox/py.png', // Top
+                'textures/skybox/ny.png', // Bottom
+                'textures/skybox/pz.png', // Front
+                'textures/skybox/nz.png'  // Back
+            ];
+
+            // Crea la cubemap texture
+            const skyboxTexture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyboxTexture);
+
+            // Imposta parametri della texture
+            gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+            // Carica ciascuna faccia della cubemap
+            let imagesLoaded = 0;
+            const targets = [
+                gl.TEXTURE_CUBE_MAP_POSITIVE_X,
+                gl.TEXTURE_CUBE_MAP_NEGATIVE_X,
+                gl.TEXTURE_CUBE_MAP_POSITIVE_Y,
+                gl.TEXTURE_CUBE_MAP_NEGATIVE_Y,
+                gl.TEXTURE_CUBE_MAP_POSITIVE_Z,
+                gl.TEXTURE_CUBE_MAP_NEGATIVE_Z
+            ];
+
+            for (let i = 0; i < faces.length; i++) {
+                const img = new Image();
+                img.onload = function() {
+                    gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyboxTexture);
+                    gl.texImage2D(targets[i], 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+                    imagesLoaded++;
+                    if (imagesLoaded === 6) {
+                        textures['skybox'] = skyboxTexture;
+                        logger.log('Texture della skybox caricate');
+                        createSkybox();  // Crea la geometria dello skybox dopo aver caricato le texture
+                    }
+                };
+                img.src = faces[i];
+            }
+        }
+        
+        // Crea lo skybox
+        function createSkybox() {
+            // Definisci i vertici del cubo
+            const skyboxVertices = [
+                // Posizioni          
+                -1.0,  1.0, -1.0,
+                -1.0, -1.0, -1.0,
+                 1.0, -1.0, -1.0,
+                 1.0, -1.0, -1.0,
+                 1.0,  1.0, -1.0,
+                -1.0,  1.0, -1.0,
+
+                -1.0, -1.0,  1.0,
+                -1.0, -1.0, -1.0,
+                -1.0,  1.0, -1.0,
+                -1.0,  1.0, -1.0,
+                -1.0,  1.0,  1.0,
+                -1.0, -1.0,  1.0,
+
+                 1.0, -1.0, -1.0,
+                 1.0, -1.0,  1.0,
+                 1.0,  1.0,  1.0,
+                 1.0,  1.0,  1.0,
+                 1.0,  1.0, -1.0,
+                 1.0, -1.0, -1.0,
+
+                -1.0, -1.0,  1.0,
+                -1.0,  1.0,  1.0,
+                 1.0,  1.0,  1.0,
+                 1.0,  1.0,  1.0,
+                 1.0, -1.0,  1.0,
+                -1.0, -1.0,  1.0,
+
+                -1.0,  1.0, -1.0,
+                 1.0,  1.0, -1.0,
+                 1.0,  1.0,  1.0,
+                 1.0,  1.0,  1.0,
+                -1.0,  1.0,  1.0,
+                -1.0,  1.0, -1.0,
+
+                -1.0, -1.0, -1.0,
+                -1.0, -1.0,  1.0,
+                 1.0, -1.0, -1.0,
+                 1.0, -1.0, -1.0,
+                -1.0, -1.0,  1.0,
+                 1.0, -1.0,  1.0
+            ];
+
+            // Crea e configura lo skybox nel tuo oggetto 'models'
+            models['skybox'] = {
+                vertices: skyboxVertices,
+                position: [0, 0, 0],
+                scale: [100, 100, 100]  // Scala grande per avvolgere la scena
+            };
+
+            logger.log('Skybox creato');
+        }
+
         // Carica modello OBJ
         function loadOBJModel(objUrl, mtlUrl, name) {
             logger.log(`Caricamento modello: ${name}`);
+
+            // Controlla se i percorsi sono definiti
+            if (!objUrl) {
+                logger.log(`ERRORE: Percorso OBJ non specificato per ${name}`);
+                return;
+            }
             
             // Usa glm_utils.js per caricare il modello OBJ
-            // Verifica che glmReadOBJ sia disponibile (dovrebbe essere definita in glm_utils.js)
             if (typeof glmReadOBJ !== 'function') {
                 logger.log("ERRORE: glmReadOBJ non è definita. Verifica che glm_utils.js sia caricato correttamente.");
                 return;
             }
             
-            // Carica il modello OBJ usando la funzione delle librerie fornite
-            glmReadOBJ(objUrl, function(model) {
-                if (!model) {
-                    logger.log(`ERRORE: Impossibile caricare il modello ${name} da ${objUrl}`);
-                    return;
-                }
-                
-                // Estrai i dati della geometria dal modello caricato
-                const vertices = [];
-                const normals = [];
-                const texcoords = [];
-                
-                // Elabora i vertici
-                for (let i = 0; i < model.vertices.length; i++) {
-                    const vertex = model.vertices[i];
-                    vertices.push(vertex.x, vertex.y, vertex.z);
-                }
-                
-                // Elabora le normali
-                for (let i = 0; i < model.normals.length; i++) {
-                    const normal = model.normals[i];
-                    normals.push(normal.x, normal.y, normal.z);
-                }
-                
-                // Elabora le coordinate texture
-                for (let i = 0; i < model.texcoords.length; i++) {
-                    const texcoord = model.texcoords[i];
-                    texcoords.push(texcoord.s, texcoord.t);
-                }
-                
-                // Memorizza il modello elaborato
-                models[name] = {
-                    vertices: vertices,
-                    normals: normals,
-                    texcoords: texcoords,
-                    position: [0, 0, 0],
-                    scale: [1, 1, 1],
-                    texture: 'wall' // Texture predefinita
-                };
-                
-                logger.log(`Modello caricato: ${name} (${vertices.length / 3} vertici)`);
-            });
+            // Carica il modello OBJ
+            try {
+                glmReadOBJ(objUrl, function(model) {
+                    if (!model) {
+                        logger.log(`ERRORE: Impossibile caricare il modello ${name} da ${objUrl}`);
+                        return;
+                    }
+                    
+                    // Controlla che model.vertices esista e sia un array
+                    if (!model.vertices || !Array.isArray(model.vertices)) {
+                        logger.log(`ERRORE: I vertici del modello ${name} non sono validi`);
+                        return;
+                    }
+                    
+                    // Estrai i dati della geometria dal modello caricato
+                    const vertices = [];
+                    const normals = [];
+                    const texcoords = [];
+                    
+                    // Elabora i vertici
+                    for (let i = 0; i < model.vertices.length; i++) {
+                        const vertex = model.vertices[i];
+                        if (vertex && typeof vertex.x === 'number' && 
+                            typeof vertex.y === 'number' && 
+                            typeof vertex.z === 'number') {
+                            vertices.push(vertex.x, vertex.y, vertex.z);
+                        } else {
+                            // Salta vertici non validi
+                            logger.log(`Vertice non valido trovato in ${name} all'indice ${i}`);
+                        }
+                    }
+                    
+                    // Controlla che ci siano vertici validi
+                    if (vertices.length === 0) {
+                        logger.log(`ERRORE: Nessun vertice valido trovato in ${name}`);
+                        return;
+                    }
+                    
+                    // Elabora le normali (se disponibili)
+                    if (model.normals && Array.isArray(model.normals)) {
+                        for (let i = 0; i < model.normals.length; i++) {
+                            const normal = model.normals[i];
+                            if (normal && typeof normal.x === 'number' && 
+                                typeof normal.y === 'number' && 
+                                typeof normal.z === 'number') {
+                                normals.push(normal.x, normal.y, normal.z);
+                            } else {
+                                // Usa normale predefinita se non valida
+                                normals.push(0, 1, 0);
+                            }
+                        }
+                    } else {
+                        // Se non ci sono normali, crea normali fittizie (una per ogni vertice)
+                        for (let i = 0; i < vertices.length / 3; i++) {
+                            normals.push(0, 1, 0);
+                        }
+                        logger.log(`Avviso: Normali non trovate in ${name}, utilizzando normali predefinite`);
+                    }
+                    
+                    // Elabora le coordinate texture (se disponibili)
+                    if (model.texcoords && Array.isArray(model.texcoords)) {
+                        for (let i = 0; i < model.texcoords.length; i++) {
+                            const texcoord = model.texcoords[i];
+                            if (texcoord && typeof texcoord.s === 'number' && 
+                                typeof texcoord.t === 'number') {
+                                texcoords.push(texcoord.s, texcoord.t);
+                            } else {
+                                // Usa coordinate texture predefinite se non valide
+                                texcoords.push(0, 0);
+                            }
+                        }
+                    } else {
+                        // Se non ci sono coordinate texture, crea coordinate texture fittizie
+                        for (let i = 0; i < vertices.length / 3; i++) {
+                            texcoords.push(0, 0);
+                        }
+                        logger.log(`Avviso: Coordinate texture non trovate in ${name}, utilizzando valori predefiniti`);
+                    }
+                    
+                    // Assicurati che gli array abbiano le dimensioni corrette
+                    while (normals.length < vertices.length) {
+                        normals.push(0, 1, 0);
+                    }
+                    while (texcoords.length < (vertices.length / 3) * 2) {
+                        texcoords.push(0, 0);
+                    }
+                    
+                    // Memorizza il modello elaborato
+                    models[name] = {
+                        vertices: vertices,
+                        normals: normals,
+                        texcoords: texcoords,
+                        position: [0, 0, 0],
+                        rotation: [0, 0, 0],
+                        scale: [1, 1, 1],
+                        texture: 'wall' // Texture predefinita
+                    };
+                    
+                    // Posiziona i modelli in base al nome
+                    if (name === 'skull') {
+                        // Posiziona i teschi lungo le pareti
+                        for (let i = 0; i < 5; i++) {
+                            const angle = i * Math.PI * 0.4;
+                            const distance = roomSize * 0.9;
+                            const x = Math.sin(angle) * distance;
+                            const z = Math.cos(angle) * distance;
+                            const y = Math.random() * 2 + 0.5;
+                            
+                            const cloneName = `skull_${i}`;
+                            models[cloneName] = Object.assign({}, models[name]);
+                            models[cloneName].position = [x, y, z];
+                            models[cloneName].rotation = [0, -angle + Math.PI, 0];
+                            models[cloneName].scale = [0.05, 0.05, 0.05];
+                        }
+                    } else if (name === 'chair') {
+                        // Posiziona sedie nella stanza
+                        models[name].position = [3, 0, -3];
+                        models[name].rotation = [0, Math.PI / 4, 0];
+                        models[name].scale = [0.02, 0.02, 0.02];
+                        
+                        // Aggiungi una seconda sedia
+                        const cloneName = `${name}_2`;
+                        models[cloneName] = Object.assign({}, models[name]);
+                        models[cloneName].position = [-3, 0, 2];
+                        models[cloneName].rotation = [0, -Math.PI / 3, 0];
+                    } else if (name === 'doll') {
+                        // Posiziona la bambola in modo casuale nella stanza
+                        const randomX = (Math.random() * 2 - 1) * (roomSize * 0.7);
+                        const randomZ = (Math.random() * 2 - 1) * (roomSize * 0.7);
+                        models[name].position = [randomX, 0, randomZ];
+                        models[name].rotation = [0, Math.random() * Math.PI * 2, 0];
+                        models[name].scale = [0.2, 0.2, 0.2]; // Adatta la scala in base alle dimensioni della bambola
+                        
+                        // Aggiorna la posizione della bambola per l'interazione
+                        dollPosition = new Float32Array([randomX, 0, randomZ]);
+                        logger.log(`Bambola posizionata a: [${randomX}, 0, ${randomZ}]`);
+                    }
+                    
+                    logger.log(`Modello caricato: ${name} (${vertices.length / 3} vertici)`);
+                });
+            } catch (error) {
+                logger.log(`Errore durante il caricamento di ${name}: ${error.message}`);
+            }
         }
 
-        // Funzione per estrarre la geometria da un oggetto OBJ caricato
-        function extractGeometryFromOBJ(object) {
-            // Array per memorizzare i dati estratti
-            const vertices = [];
-            const normals = [];
-            const texcoords = [];
-            const indices = [];
+        // Funzione per creare un interruttore semplice con geometria di base
+        function createSwitch() {
+            const switchSize = 0.2;
             
-            // Contatore per tenere traccia del numero totale di vertici
-            let indexOffset = 0;
+            // Definisci vertici dell'interruttore (un parallelepipedo semplice)
+            const switchVertices = [
+                // Fronte
+                -switchSize, -switchSize, switchSize,
+                switchSize, -switchSize, switchSize,
+                switchSize, switchSize, switchSize,
+                -switchSize, -switchSize, switchSize,
+                switchSize, switchSize, switchSize,
+                -switchSize, switchSize, switchSize,
+                
+                // Retro
+                -switchSize, -switchSize, -switchSize,
+                -switchSize, switchSize, -switchSize,
+                switchSize, switchSize, -switchSize,
+                -switchSize, -switchSize, -switchSize,
+                switchSize, switchSize, -switchSize,
+                switchSize, -switchSize, -switchSize,
+                
+                // Alto
+                -switchSize, switchSize, -switchSize,
+                -switchSize, switchSize, switchSize,
+                switchSize, switchSize, switchSize,
+                -switchSize, switchSize, -switchSize,
+                switchSize, switchSize, switchSize,
+                switchSize, switchSize, -switchSize,
+                
+                // Basso
+                -switchSize, -switchSize, -switchSize,
+                switchSize, -switchSize, -switchSize,
+                switchSize, -switchSize, switchSize,
+                -switchSize, -switchSize, -switchSize,
+                switchSize, -switchSize, switchSize,
+                -switchSize, -switchSize, switchSize,
+                
+                // Destra
+                switchSize, -switchSize, -switchSize,
+                switchSize, switchSize, -switchSize,
+                switchSize, switchSize, switchSize,
+                switchSize, -switchSize, -switchSize,
+                switchSize, switchSize, switchSize,
+                switchSize, -switchSize, switchSize,
+                
+                // Sinistra
+                -switchSize, -switchSize, -switchSize,
+                -switchSize, -switchSize, switchSize,
+                -switchSize, switchSize, switchSize,
+                -switchSize, -switchSize, -switchSize,
+                -switchSize, switchSize, switchSize,
+                -switchSize, switchSize, -switchSize
+            ];
             
-            // Itera attraverso tutti i figli dell'oggetto OBJ
-            object.traverse((child) => {
-                if (child.isMesh) {
-                    // Accedi alla geometria del mesh
-                    const geometry = child.geometry;
-                    
-                    // Ottieni gli attributi della geometria
-                    const position = geometry.attributes.position;
-                    const normal = geometry.attributes.normal;
-                    const uv = geometry.attributes.uv;
-                    
-                    // Estrai i vertici
-                    if (position) {
-                        for (let i = 0; i < position.array.length; i += 3) {
-                            vertices.push(
-                                position.array[i],
-                                position.array[i + 1],
-                                position.array[i + 2]
-                            );
-                        }
-                    }
-                    
-                    // Estrai le normali
-                    if (normal) {
-                        for (let i = 0; i < normal.array.length; i += 3) {
-                            normals.push(
-                                normal.array[i],
-                                normal.array[i + 1],
-                                normal.array[i + 2]
-                            );
-                        }
-                    } else {
-                        // Se non ci sono normali, crea normali fittizie
-                        for (let i = 0; i < position.array.length / 3; i++) {
-                            normals.push(0, 1, 0); // normale verso l'alto come default
-                        }
-                    }
-                    
-                    // Estrai le coordinate texture
-                    if (uv) {
-                        for (let i = 0; i < uv.array.length; i += 2) {
-                            texcoords.push(
-                                uv.array[i],
-                                uv.array[i + 1]
-                            );
-                        }
-                    } else {
-                        // Se non ci sono coordinate texture, crea coordinate fittizie
-                        for (let i = 0; i < position.array.length / 3; i++) {
-                            texcoords.push(0, 0); // coordinate texture di default
-                        }
-                    }
-                    
-                    // Estrai gli indici se sono disponibili
-                    if (geometry.index) {
-                        for (let i = 0; i < geometry.index.array.length; i++) {
-                            indices.push(geometry.index.array[i] + indexOffset);
-                        }
-                    } else {
-                        // Se non ci sono indici, crea indici sequenziali
-                        for (let i = 0; i < position.array.length / 3; i++) {
-                            indices.push(i + indexOffset);
-                        }
-                    }
-                    
-                    // Aggiorna l'offset degli indici per il prossimo mesh
-                    indexOffset += position.array.length / 3;
-                }
-            });
+            // Definisci le normali
+            const switchNormals = [
+                // Fronte
+                0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
+                // Retro
+                0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1,
+                // Alto
+                0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0,
+                // Basso
+                0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0,
+                // Destra
+                1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0,
+                // Sinistra
+                -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0
+            ];
             
-            // Log del numero di elementi estratti
-            logger.log(`Estratti ${vertices.length / 3} vertici, ${normals.length / 3} normali, ${texcoords.length / 2} coordinate texture`);
+            // Coordinate texture
+            const switchTexcoords = [
+                // Fronte
+                0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1,
+                // Retro
+                1, 0, 1, 1, 0, 1, 1, 0, 0, 1, 0, 0,
+                // Alto
+                0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 1, 1,
+                // Basso
+                1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0,
+                // Destra
+                1, 0, 1, 1, 0, 1, 1, 0, 0, 1, 0, 0,
+                // Sinistra
+                0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1
+            ];
             
-            // Verifica che i dati siano coerenti tra loro
-            if (vertices.length / 3 !== normals.length / 3 || vertices.length / 3 !== texcoords.length / 2) {
-                logger.log("ATTENZIONE: I dati estratti non sono coerenti");
-            }
-            
-            // Se si utilizzano indici, restituisci anche quelli
-            return {
-                vertices: vertices,
-                normals: normals,
-                texcoords: texcoords,
-                indices: indices
+            // Aggiungi l'interruttore ai modelli
+            models['switch'] = {
+                vertices: switchVertices,
+                normals: switchNormals,
+                texcoords: switchTexcoords,
+                position: [-roomSize + 0.1, 2, -1], // Posiziona sulla parete
+                rotation: [0, Math.PI/2, 0],
+                scale: [1, 1, 1],
+                texture: 'wall' // Usa la texture della parete
             };
+            
+            // Definisci la posizione dell'interruttore per l'interazione
+            switchPosition = new Float32Array([-roomSize + 0.1, 2, -1]);
+            
+            logger.log('Interruttore creato');
         }
-
-        // Funzione ausiliaria per calcolare le normali se non sono fornite dal modello
-        function calculateNormals(vertices, indices) {
-            const normals = new Array(vertices.length).fill(0);
+        
+        // Aggiunta della luce al soffitto
+        function addCeilingLight() {
+            // Crea un semplice modello per la sorgente luminosa
+            const lightSize = 0.5;
             
-            // Per ogni faccia
-            for (let i = 0; i < indices.length; i += 3) {
-                // Ottieni gli indici dei vertici della faccia
-                const idx1 = indices[i] * 3;
-                const idx2 = indices[i + 1] * 3;
-                const idx3 = indices[i + 2] * 3;
+            // Definisci vertici della luce (una semplice scatola/lampadario)
+            const lightVertices = [
+                // Faccia inferiore (visibile dalla stanza)
+                -lightSize, -lightSize, -lightSize,
+                lightSize, -lightSize, -lightSize,
+                lightSize, -lightSize, lightSize,
+                -lightSize, -lightSize, -lightSize,
+                lightSize, -lightSize, lightSize,
+                -lightSize, -lightSize, lightSize,
                 
-                // Ottieni i vertici della faccia
-                const v1 = [vertices[idx1], vertices[idx1 + 1], vertices[idx1 + 2]];
-                const v2 = [vertices[idx2], vertices[idx2 + 1], vertices[idx2 + 2]];
-                const v3 = [vertices[idx3], vertices[idx3 + 1], vertices[idx3 + 2]];
+                // Lati
+                -lightSize, -lightSize, -lightSize,
+                -lightSize, lightSize, -lightSize,
+                lightSize, lightSize, -lightSize,
+                -lightSize, -lightSize, -lightSize,
+                lightSize, lightSize, -lightSize,
+                lightSize, -lightSize, -lightSize,
                 
-                // Calcola i vettori del lato
-                const edge1 = [v2[0] - v1[0], v2[1] - v1[1], v2[2] - v1[2]];
-                const edge2 = [v3[0] - v1[0], v3[1] - v1[1], v3[2] - v1[2]];
+                lightSize, -lightSize, -lightSize,
+                lightSize, lightSize, -lightSize,
+                lightSize, lightSize, lightSize,
+                lightSize, -lightSize, -lightSize,
+                lightSize, lightSize, lightSize,
+                lightSize, -lightSize, lightSize,
                 
-                // Calcola il prodotto vettoriale per ottenere la normale
-                const normal = [
-                    edge1[1] * edge2[2] - edge1[2] * edge2[1],
-                    edge1[2] * edge2[0] - edge1[0] * edge2[2],
-                    edge1[0] * edge2[1] - edge1[1] * edge2[0]
-                ];
+                lightSize, -lightSize, lightSize,
+                lightSize, lightSize, lightSize,
+                -lightSize, lightSize, lightSize,
+                lightSize, -lightSize, lightSize,
+                -lightSize, lightSize, lightSize,
+                -lightSize, -lightSize, lightSize,
                 
-                // Normalizza il vettore
-                const length = Math.sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]);
-                normal[0] /= length;
-                normal[1] /= length;
-                normal[2] /= length;
+                -lightSize, -lightSize, lightSize,
+                -lightSize, lightSize, lightSize,
+                -lightSize, lightSize, -lightSize,
+                -lightSize, -lightSize, lightSize,
+                -lightSize, lightSize, -lightSize,
+                -lightSize, -lightSize, -lightSize,
                 
-                // Aggiungi la normale a tutti i vertici della faccia
-                normals[idx1] += normal[0];
-                normals[idx1 + 1] += normal[1];
-                normals[idx1 + 2] += normal[2];
-                
-                normals[idx2] += normal[0];
-                normals[idx2 + 1] += normal[1];
-                normals[idx2 + 2] += normal[2];
-                
-                normals[idx3] += normal[0];
-                normals[idx3 + 1] += normal[1];
-                normals[idx3 + 2] += normal[2];
-            }
+                // Faccia superiore
+                -lightSize, lightSize, -lightSize,
+                -lightSize, lightSize, lightSize,
+                lightSize, lightSize, lightSize,
+                -lightSize, lightSize, -lightSize,
+                lightSize, lightSize, lightSize,
+                lightSize, lightSize, -lightSize
+            ];
             
-            // Normalizza tutte le normali dei vertici
-            for (let i = 0; i < normals.length; i += 3) {
-                const length = Math.sqrt(
-                    normals[i] * normals[i] + 
-                    normals[i + 1] * normals[i + 1] + 
-                    normals[i + 2] * normals[i + 2]
-                );
-                
-                if (length > 0) {
-                    normals[i] /= length;
-                    normals[i + 1] /= length;
-                    normals[i + 2] /= length;
+            // Definisci le normali per ogni vertice
+            const lightNormals = [];
+            for (let i = 0; i < lightVertices.length / 3; i++) {
+                // Calcola le normali corrette per ogni faccia della scatola
+                const idx = i % 6;
+                if (idx < 2 || idx >= 4) {
+                    lightNormals.push(0, -1, 0); // Faccia inferiore
+                } else if (i < 12) {
+                    lightNormals.push(0, 0, -1); // Faccia frontale
+                } else if (i < 18) {
+                    lightNormals.push(1, 0, 0);  // Faccia destra
+                } else if (i < 24) {
+                    lightNormals.push(0, 0, 1);  // Faccia posteriore
+                } else if (i < 30) {
+                    lightNormals.push(-1, 0, 0); // Faccia sinistra
                 } else {
-                    // Se la normale è zero, usa una normale di default
-                    normals[i] = 0;
-                    normals[i + 1] = 1;
-                    normals[i + 2] = 0;
+                    lightNormals.push(0, 1, 0);  // Faccia superiore
                 }
             }
             
-            return normals;
+            // Coordinate texture di base
+            const lightTexcoords = [];
+            for (let i = 0; i < lightVertices.length / 3; i++) {
+                if (i % 6 === 0 || i % 6 === 3) {
+                    lightTexcoords.push(0, 0);
+                } else if (i % 6 === 1) {
+                    lightTexcoords.push(1, 0);
+                } else if (i % 6 === 2 || i % 6 === 4) {
+                    lightTexcoords.push(1, 1);
+                } else if (i % 6 === 5) {
+                    lightTexcoords.push(0, 1);
+                }
+            }
+            
+            // Aggiungi la luce ai modelli
+            models['ceilingLight'] = {
+                vertices: lightVertices,
+                normals: lightNormals,
+                texcoords: lightTexcoords,
+                position: [0, roomHeight - 0.1, 0], // Posiziona vicino al soffitto
+                rotation: [0, 0, 0],
+                scale: [1, 0.2, 1], // Appiattisci per renderlo più come un lampadario
+                texture: 'wall', // Usa una texture esistente invece di 'light'
+                isEmissive: true // Flag per renderlo luminoso
+            };
+            
+            logger.log('Luce a soffitto aggiunta');
+            
+            // Aggiorna la posizione della luce per le uniform
+            lightPosition = [0, roomHeight - 0.5, 0]; // Coordinate della luce
+        }
+        
+        // Inizializzazione del pannello GUI avanzato
+        function initGUI() {
+            const gui = new dat.GUI({ autoPlace: false });
+            
+            // Posiziona manualmente il pannello GUI
+            const guiContainer = document.createElement('div');
+            guiContainer.id = 'gui-container';
+            guiContainer.style.position = 'absolute';
+            guiContainer.style.top = '10px';
+            guiContainer.style.right = '10px';
+            guiContainer.style.zIndex = '5';
+            guiContainer.style.display = 'none'; // Nascondi all'inizio
+            guiContainer.appendChild(gui.domElement);
+            document.body.appendChild(guiContainer);
+            
+            // Aggiungi controlli per la luce
+            const lightFolder = gui.addFolder('Illuminazione');
+            lightFolder.add({ intensity: 1.0 }, 'intensity', 0.1, 2.0).name('Intensità').onChange(value => {
+                // Logica per cambiare l'intensità della luce
+                logger.log(`Intensità luce modificata: ${value}`);
+            });
+            
+            // Aggiungi controlli per la camera
+            const cameraFolder = gui.addFolder('Camera');
+            cameraFolder.add(camera, 'speed', 0.05, 0.3).name('Velocità');
+            cameraFolder.add({ fov: 70 }, 'fov', 60, 100).name('Campo visivo').onChange(value => {
+                // Logica per cambiare il FOV
+                logger.log(`FOV modificato: ${value}`);
+            });
+            
+            // Aggiungi controlli per gli effetti di rendering avanzati
+            const renderingFolder = gui.addFolder('Rendering');
+            renderingFolder.add(renderOptions, 'advancedRendering').name('Rendering Avanzato');
+            renderingFolder.add(renderOptions, 'shadows').name('Ombre');
+            renderingFolder.add(renderOptions, 'reflections').name('Riflessioni');
+            
+            logger.log('GUI inizializzata');
         }
         
         // Configura gli event listener
@@ -540,9 +1150,7 @@
             document.addEventListener('mousemove', handleMouseMove);
             
             // Touch events
-            canvas.addEventListener('touchstart', handleTouchStart);
-            canvas.addEventListener('touchmove', handleTouchMove);
-            canvas.addEventListener('touchend', handleTouchEnd);
+            setupTouchControls();
             
             // Panel buttons
             document.getElementById('toggleShadows').addEventListener('click', () => {
@@ -572,6 +1180,36 @@
             logger.log('Event listeners configurati');
         }
         
+        // Configurazione controlli touch
+        function setupTouchControls() {
+            // Mostra controlli touch su dispositivi mobili
+            if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+                document.querySelector('.touch-controls').style.display = 'flex';
+                
+                // Aggiungi event listeners per i pulsanti touch
+                document.getElementById('touch-forward').addEventListener('touchstart', () => { keys['KeyW'] = true; });
+                document.getElementById('touch-forward').addEventListener('touchend', () => { keys['KeyW'] = false; });
+                
+                document.getElementById('touch-left').addEventListener('touchstart', () => { keys['KeyA'] = true; });
+                document.getElementById('touch-left').addEventListener('touchend', () => { keys['KeyA'] = false; });
+                
+                document.getElementById('touch-backward').addEventListener('touchstart', () => { keys['KeyS'] = true; });
+                document.getElementById('touch-backward').addEventListener('touchend', () => { keys['KeyS'] = false; });
+                
+                document.getElementById('touch-right').addEventListener('touchstart', () => { keys['KeyD'] = true; });
+                document.getElementById('touch-right').addEventListener('touchend', () => { keys['KeyD'] = false; });
+                
+                document.getElementById('touch-light').addEventListener('touchstart', toggleLight);
+                
+                // Touch per spostare la camera
+                canvas.addEventListener('touchstart', handleTouchStart);
+                canvas.addEventListener('touchmove', handleTouchMove);
+                canvas.addEventListener('touchend', handleTouchEnd);
+                
+                logger.log('Controlli touch configurati');
+            }
+        }
+        
         // Gestione tasti speciali
         function handleSpecialKeys(e) {
             if (e.code === 'KeyP') {
@@ -599,21 +1237,50 @@
         function toggleLight() {
             isLightOn = !isLightOn;
             document.getElementById('instructions').style.visibility = isLightOn ? 'hidden' : 'visible';
+            
+            // Effetto di flickering quando la luce si accende
+            if (isLightOn) {
+                flickerLight();
+                sounds.flicker.play();
+            }
+            
             logger.log(`Luce ${isLightOn ? 'accesa' : 'spenta'}`);
+        }
+        
+        // Effetto flickering della luce
+        function flickerLight() {
+            let flickerCount = Math.floor(Math.random() * 5) + 3; // Numero di lampeggi tra 3 e 7
+            const originalStatus = isLightOn;
+            
+            const flickerInterval = setInterval(() => {
+                isLightOn = !isLightOn;
+                flickerCount--;
+                
+                if (flickerCount <= 0) {
+                    clearInterval(flickerInterval);
+                    isLightOn = originalStatus; // Ripristina lo stato originale
+                }
+            }, 100);
         }
         
         // Avvia il gioco
         function startGame() {
             document.getElementById('start-menu').style.display = 'none';
             document.getElementById('crosshair').style.display = 'block';
-            document.getElementById('top-bar').style.display = 'block';
+            document.getElementById('top-bar').style.display = 'flex';
             
             // Mostra controlli
             document.getElementById('game-controls').innerHTML = 
                 'W: Avanti | S: Indietro | A: Sinistra | D: Destra | F: Luce | P: Pannello';
             
+            // Avvia l'audio ambientale
+            sounds.ambient.play();
+            
             // Richiedi pointer lock
             requestPointerLock();
+            
+            // Imposta flag di gioco avviato
+            gameStarted = true;
             
             // Avvia il game loop
             requestAnimationFrame(gameLoop);
@@ -627,6 +1294,14 @@
             deltaTime = lastTime ? (time - lastTime) / 1000 : 0;
             lastTime = time;
             
+            // Aggiorna FPS counter ogni secondo
+            frameCount++;
+            if (time - lastFpsUpdate > 1000) {
+                updateFPSCounter(frameCount);
+                frameCount = 0;
+                lastFpsUpdate = time;
+            }
+            
             // Aggiorna
             update(deltaTime);
             
@@ -637,29 +1312,61 @@
             requestAnimationFrame(gameLoop);
         }
         
+        // Funzione per aggiornare il contatore FPS
+        function updateFPSCounter(fps) {
+            if (!renderOptions.showFPS) return;
+            
+            // Crea o aggiorna elemento FPS
+            let fpsElement = document.getElementById('fps-counter');
+            if (!fpsElement) {
+                fpsElement = document.createElement('div');
+                fpsElement.id = 'fps-counter';
+                document.body.appendChild(fpsElement);
+            }
+            
+            fpsElement.textContent = `FPS: ${fps}`;
+            fpsElement.style.display = 'block';
+        }
+        
         // Update game state
         function update(dt) {
             // Skip update if panel is open
-            if (isPanelOpen) return;
+            if (isPanelOpen || !gameStarted) return;
             
             // Update camera based on input
             updateCamera(dt);
             
             // Aggiorna il crosshair
             updateCrosshair();
+            
+            // Mostra le coordinate della camera
+            showCameraCoordinates();
         }
         
         // Update camera position and rotation
-function updateCamera(dt) {
-    // Handle keyboard input for movement (invertito)
-    if (keys['KeyW']) moveCamera(0, 0, camera.speed); // Invertito (va indietro)
-    if (keys['KeyS']) moveCamera(0, 0, -camera.speed); // Invertito (va avanti)
-    if (keys['KeyA']) moveCamera(camera.speed, 0, 0); // Invertito (va a destra)
-    if (keys['KeyD']) moveCamera(-camera.speed, 0, 0); // Invertito (va a sinistra)
-    
-    // Verifica collisioni con i muri dopo aver mosso la camera
-    checkWallCollisions();
-}
+        function updateCamera(dt) {
+            // Handle keyboard input for movement
+            if (keys['KeyW']) moveCamera(0, 0, -camera.speed); // Forward
+            if (keys['KeyS']) moveCamera(0, 0, camera.speed); // Backward
+            if (keys['KeyA']) moveCamera(-camera.speed, 0, 0); // Left
+            if (keys['KeyD']) moveCamera(camera.speed, 0, 0); // Right
+            
+            // Verifica collisioni con i muri dopo aver mosso la camera
+            checkWallCollisions();
+            
+            // Riproduci suono dei passi se il giocatore si sta muovendo
+            if (keys['KeyW'] || keys['KeyS'] || keys['KeyA'] || keys['KeyD']) {
+                if (!sounds.footsteps.playing) {
+                    sounds.footsteps.play();
+                    sounds.footsteps.playing = true;
+                    
+                    // Reset quando termina
+                    sounds.footsteps.onended = () => {
+                        sounds.footsteps.playing = false;
+                    };
+                }
+            }
+        }
         
         // Move camera in local space
         function moveCamera(dx, dy, dz) {
@@ -667,14 +1374,13 @@ function updateCamera(dt) {
             const cosY = Math.cos(camera.rotation[1]);
             const sinY = Math.sin(camera.rotation[1]);
             
-            camera.position[0] += dx * cosY + dz * sinY;
-            camera.position[1] -= dy;  // Inverti il segno se necessario
-            camera.position[2] += dz * cosY - dx * sinY;
+            camera.position[0] += dx * cosY - dz * sinY;
+            camera.position[1] += dy;
+            camera.position[2] += dz * cosY + dx * sinY;
         }
         
         // Verifica collisioni con i muri
         function checkWallCollisions() {
-            const roomSize = 10; // Deve corrispondere alla dimensione della stanza in createSimpleRoom
             const playerRadius = 0.5; // Raggio di collisione del giocatore
             
             // Limiti della stanza con margine per il raggio del giocatore
@@ -693,8 +1399,8 @@ function updateCamera(dt) {
         // Funzione per aggiornare il crosshair in base alla vicinanza a oggetti interattivi
         function updateCrosshair() {
             const interactableObjects = [
-                // Lista degli oggetti interattivi con posizione e raggio di interazione
-                { position: [0, 0, 0], radius: 2 } // Esempio
+                // Definisci oggetti interattivi con posizione e raggio
+                { position: switchPosition, radius: 3, name: 'switch' }
             ];
             
             // Verifica se la camera è vicina a qualche oggetto interattivo
@@ -708,16 +1414,44 @@ function updateCamera(dt) {
                 
                 if (distance < obj.radius) {
                     nearInteractable = true;
+                    
+                    // Se è vicino all'interruttore, mostra le istruzioni
+                    if (obj.name === 'switch') {
+                        document.getElementById('instructions').style.visibility = 'visible';
+                    }
+                    
                     break;
                 }
             }
             
-            // Cambia l'immagine del crosshair in base alla vicinanza
+            // Cambia il colore del crosshair in base alla vicinanza
             if (nearInteractable) {
                 document.getElementById('crosshair').style.backgroundImage = "url('images/crosshair-selection.png')";
             } else {
                 document.getElementById('crosshair').style.backgroundImage = "url('images/crosshair.png')";
+                document.getElementById('instructions').style.visibility = 'hidden';
             }
+        }
+        
+        // Funzione per mostrare le coordinate della camera
+        function showCameraCoordinates() {
+            // Crea o ottieni l'elemento per le coordinate
+            let coordElement = document.getElementById('camera-coords');
+            if (!coordElement) {
+                coordElement = document.createElement('div');
+                coordElement.id = 'camera-coords';
+                document.body.appendChild(coordElement);
+            }
+            
+            // Formatta le coordinate con 2 decimali
+            const x = camera.position[0].toFixed(2);
+            const y = camera.position[1].toFixed(2);
+            const z = camera.position[2].toFixed(2);
+            
+            const rotX = (camera.rotation[0] * (180/Math.PI)).toFixed(1);
+            const rotY = (camera.rotation[1] * (180/Math.PI)).toFixed(1);
+            
+            coordElement.textContent = `Camera: X=${x} Y=${y} Z=${z} | Rotation: ${rotY}° ${rotX}°`;
         }
         
         // Render scene
@@ -726,25 +1460,11 @@ function updateCamera(dt) {
             gl.clearColor(0.1, 0.1, 0.1, 1.0);
             gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
             
+            // Skip rendering if game not started
+            if (!gameStarted) return;
+            
             // Enable depth testing
             gl.enable(gl.DEPTH_TEST);
-            
-            // Ottieni locazioni uniform per gli shader
-            const u_modelLoc = gl.getUniformLocation(program, 'u_model');
-            const u_viewLoc = gl.getUniformLocation(program, 'u_view');
-            const u_projectionLoc = gl.getUniformLocation(program, 'u_projection');
-            const u_lightPosLoc = gl.getUniformLocation(program, 'u_lightPos');
-            const u_viewPosLoc = gl.getUniformLocation(program, 'u_viewPos');
-            const u_useTextureLoc = gl.getUniformLocation(program, 'u_useTexture');
-            const u_textureLoc = gl.getUniformLocation(program, 'u_texture');
-            
-            // Posizione della luce (cambia in base allo stato della luce)
-            const lightIntensity = isLightOn ? 1.0 : 0.2;
-            const lightPos = [0, 5, 0];
-            
-            // Imposta la posizione della luce e della camera
-            gl.uniform3fv(u_lightPosLoc, lightPos);
-            gl.uniform3fv(u_viewPosLoc, camera.position);
             
             // Crea matrice vista
             const viewMatrix = m4.lookAt(
@@ -761,17 +1481,44 @@ function updateCamera(dt) {
             const aspect = canvas.width / canvas.height;
             const projectionMatrix = m4.perspective(Math.PI / 4, aspect, 0.1, 100);
             
+            // Renderizza skybox
+            renderSkybox(viewMatrix, projectionMatrix);
+            
+            // Usa il programma principale per il resto della scena
+            gl.useProgram(program);
+            
+            // Ottieni locazioni uniform per gli shader
+            const u_modelLoc = gl.getUniformLocation(program, 'u_model');
+            const u_viewLoc = gl.getUniformLocation(program, 'u_view');
+            const u_projectionLoc = gl.getUniformLocation(program, 'u_projection');
+            const u_lightPosLoc = gl.getUniformLocation(program, 'u_lightPos');
+            const u_viewPosLoc = gl.getUniformLocation(program, 'u_viewPos');
+            const u_useTextureLoc = gl.getUniformLocation(program, 'u_useTexture');
+            const u_textureLoc = gl.getUniformLocation(program, 'u_texture');
+            const u_shadowsLoc = gl.getUniformLocation(program, 'u_shadows');
+            const u_reflectionsLoc = gl.getUniformLocation(program, 'u_reflections');
+            const u_lightOnLoc = gl.getUniformLocation(program, 'u_lightOn');
+            const u_advancedRenderingLoc = gl.getUniformLocation(program, 'u_advancedRendering');
+            const u_isEmissiveLoc = gl.getUniformLocation(program, 'u_isEmissive');
+            
+            // Passa le opzioni di rendering
+            gl.uniform1i(u_shadowsLoc, renderOptions.shadows);
+            gl.uniform1i(u_reflectionsLoc, renderOptions.reflections);
+            gl.uniform1i(u_lightOnLoc, isLightOn);
+            gl.uniform1i(u_advancedRenderingLoc, renderOptions.advancedRendering);
+            
+            // Imposta la posizione della luce e della camera
+            gl.uniform3fv(u_lightPosLoc, lightPosition);
+            gl.uniform3fv(u_viewPosLoc, camera.position);
+            
             // Passa matrici view e projection agli shader
             gl.uniformMatrix4fv(u_viewLoc, false, viewMatrix);
             gl.uniformMatrix4fv(u_projectionLoc, false, projectionMatrix);
             
-            // Crea e renderizza una stanza semplice se non abbiamo ancora modelli
-            if (!Object.keys(models).length) {
-                createSimpleRoom();
-            }
-            
-            // Renderizza tutti i modelli
+            // Renderizza tutti i modelli (escluso skybox)
             for (const modelName in models) {
+                if (modelName === 'skybox') continue; // Skybox già renderizzato
+                
                 if (models.hasOwnProperty(modelName)) {
                     const model = models[modelName];
                     
@@ -811,6 +1558,9 @@ function updateCamera(dt) {
                     // Passa la matrice modello allo shader
                     gl.uniformMatrix4fv(u_modelLoc, false, modelMatrix);
                     
+                    // Flag per oggetti emissivi
+                    gl.uniform1i(u_isEmissiveLoc, model.isEmissive || false);
+                    
                     // Configura texture se specificata
                     if (model.texture && textures[model.texture]) {
                         gl.uniform1i(u_useTextureLoc, 1);
@@ -825,37 +1575,56 @@ function updateCamera(dt) {
                     setBuffersForModel(model);
                     
                     // Disegna il modello
-                    if (model.indices && model.indices.length > 0) {
-                        // Usa gli indici se disponibili
-                        const indexBuffer = gl.createBuffer();
-                        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-                        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(model.indices), gl.STATIC_DRAW);
-                        gl.drawElements(gl.TRIANGLES, model.indices.length, gl.UNSIGNED_SHORT, 0);
-                    } else {
-                        // Altrimenti disegna direttamente
-                        gl.drawArrays(gl.TRIANGLES, 0, model.vertices.length / 3);
-                    }
+                    gl.drawArrays(gl.TRIANGLES, 0, model.vertices.length / 3);
                 }
             }
+        }
+        
+        // Funzione per renderizzare lo skybox
+        function renderSkybox(viewMatrix, projectionMatrix) {
+            // Verifica che il programma e texture dello skybox esistano
+            if (!skyboxProgram || !textures['skybox'] || !models['skybox']) return;
             
-            // Mostra le coordinate della camera
-            showCameraCoordinates();
+            // Usa il programma shader per lo skybox
+            gl.useProgram(skyboxProgram);
             
-            // Mostra FPS se abilitato
-            if (renderOptions.showFPS) {
-                const fps = Math.round(1 / (deltaTime || 0.016));
-                
-                // Crea o aggiorna elemento FPS
-                let fpsElement = document.getElementById('fps-counter');
-                if (!fpsElement) {
-                    fpsElement = document.createElement('div');
-                    fpsElement.id = 'fps-counter';
-                    document.body.appendChild(fpsElement);
-                }
-                
-                fpsElement.textContent = `FPS: ${fps}`;
-                fpsElement.style.display = renderOptions.showFPS ? 'block' : 'none';
-            }
+            // Disabilita depth write (per disegnare lo skybox dietro tutto)
+            gl.depthFunc(gl.LEQUAL);
+            
+            // Crea una versione della view matrix senza traslazione (solo rotazione)
+            const skyboxViewMatrix = m4.copy(viewMatrix);
+            skyboxViewMatrix[12] = 0;
+            skyboxViewMatrix[13] = 0;
+            skyboxViewMatrix[14] = 0;
+            
+            // Imposta le uniform per gli shader dello skybox
+            const skyboxViewLoc = gl.getUniformLocation(skyboxProgram, 'u_view');
+            const skyboxProjLoc = gl.getUniformLocation(skyboxProgram, 'u_projection');
+            const skyboxTexLoc = gl.getUniformLocation(skyboxProgram, 'u_skybox');
+            const skyboxLightOnLoc = gl.getUniformLocation(skyboxProgram, 'u_lightOn');
+            
+            gl.uniformMatrix4fv(skyboxViewLoc, false, skyboxViewMatrix);
+            gl.uniformMatrix4fv(skyboxProjLoc, false, projectionMatrix);
+            gl.uniform1i(skyboxTexLoc, 0);
+            gl.uniform1i(skyboxLightOnLoc, isLightOn);
+            
+            // Attiva la cubemap texture dello skybox
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_CUBE_MAP, textures['skybox']);
+            
+            // Configura i buffer dei vertici dello skybox
+            const skyboxPositionLoc = gl.getAttribLocation(skyboxProgram, 'a_position');
+            const skyboxVertexBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, skyboxVertexBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(models['skybox'].vertices), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(skyboxPositionLoc);
+            gl.vertexAttribPointer(skyboxPositionLoc, 3, gl.FLOAT, false, 0, 0);
+            
+            // Disegna lo skybox
+            gl.drawArrays(gl.TRIANGLES, 0, 36);
+            
+            // Ripristina il depth test normale
+            gl.depthFunc(gl.LESS);
         }
         
         // Configura i buffer per un modello specifico
@@ -892,231 +1661,224 @@ function updateCamera(dt) {
             }
         }
         
-        // Crea una stanza semplice come fallback se i modelli non sono ancora caricati
-function createSimpleRoom() {
-    const roomSize = 10;
-    const roomHeight = 5;
-    
-    // Definizione delle pareti, pavimento e soffitto
-    const wallColor = [0.8, 0.8, 0.8];
-    const floorColor = [0.6, 0.6, 0.6];
-    
-    // Pavimento
-    models['floor'] = {
-        vertices: [
-            -roomSize, 0, -roomSize,
-            roomSize, 0, -roomSize,
-            roomSize, 0, roomSize,
-            -roomSize, 0, -roomSize,
-            roomSize, 0, roomSize,
-            -roomSize, 0, roomSize
-        ],
-        normals: [
-            0, 1, 0,
-            0, 1, 0,
-            0, 1, 0,
-            0, 1, 0,
-            0, 1, 0,
-            0, 1, 0
-        ],
-        texcoords: [
-            0, 0,
-            1, 0,
-            1, 1,
-            0, 0,
-            1, 1,
-            0, 1
-        ],
-        position: [0, 0, 0],
-        scale: [1, 1, 1],
-        texture: 'floor'
-    };
-    
-    // Soffitto
-    models['ceiling'] = {
-        vertices: [
-            -roomSize, roomHeight, -roomSize,
-            roomSize, roomHeight, roomSize,
-            roomSize, roomHeight, -roomSize,
-            -roomSize, roomHeight, -roomSize,
-            -roomSize, roomHeight, roomSize,
-            roomSize, roomHeight, roomSize
-        ],
-        normals: [
-            0, -1, 0,
-            0, -1, 0,
-            0, -1, 0,
-            0, -1, 0,
-            0, -1, 0,
-            0, -1, 0
-        ],
-        texcoords: [
-            0, 0,
-            1, 1,
-            1, 0,
-            0, 0,
-            0, 1,
-            1, 1
-        ],
-        position: [0, 0, 0],
-        scale: [1, 1, 1],
-        texture: 'wall'
-    };
-    
-    // Parete frontale
-    models['frontWall'] = {
-        vertices: [
-            -roomSize, 0, -roomSize,
-            roomSize, 0, -roomSize,
-            roomSize, roomHeight, -roomSize,
-            -roomSize, 0, -roomSize,
-            roomSize, roomHeight, -roomSize,
-            -roomSize, roomHeight, -roomSize
-        ],
-        normals: [
-            0, 0, 1,
-            0, 0, 1,
-            0, 0, 1,
-            0, 0, 1,
-            0, 0, 1,
-            0, 0, 1
-        ],
-        texcoords: [
-            0, 0,
-            1, 0,
-            1, 1,
-            0, 0,
-            1, 1,
-            0, 1
-        ],
-        position: [0, 0, 0],
-        scale: [1, 1, 1],
-        texture: 'wall'
-    };
-    
-    // Parete posteriore
-    models['backWall'] = {
-        vertices: [
-            -roomSize, 0, roomSize,
-            roomSize, roomHeight, roomSize,
-            roomSize, 0, roomSize,
-            -roomSize, 0, roomSize,
-            -roomSize, roomHeight, roomSize,
-            roomSize, roomHeight, roomSize
-        ],
-        normals: [
-            0, 0, -1,
-            0, 0, -1,
-            0, 0, -1,
-            0, 0, -1,
-            0, 0, -1,
-            0, 0, -1
-        ],
-        texcoords: [
-            0, 0,
-            1, 1,
-            1, 0,
-            0, 0,
-            0, 1,
-            1, 1
-        ],
-        position: [0, 0, 0],
-        scale: [1, 1, 1],
-        texture: 'wall'
-    };
-    
-    // Parete sinistra
-    models['leftWall'] = {
-        vertices: [
-            -roomSize, 0, -roomSize,
-            -roomSize, roomHeight, -roomSize,
-            -roomSize, roomHeight, roomSize,
-            -roomSize, 0, -roomSize,
-            -roomSize, roomHeight, roomSize,
-            -roomSize, 0, roomSize
-        ],
-        normals: [
-            1, 0, 0,
-            1, 0, 0,
-            1, 0, 0,
-            1, 0, 0,
-            1, 0, 0,
-            1, 0, 0
-        ],
-        texcoords: [
-            0, 0,
-            0, 1,
-            1, 1,
-            0, 0,
-            1, 1,
-            1, 0
-        ],
-        position: [0, 0, 0],
-        scale: [1, 1, 1],
-        texture: 'wall'
-    };
-    
-    // Parete destra
-    models['rightWall'] = {
-        vertices: [
-            roomSize, 0, -roomSize,
-            roomSize, 0, roomSize,
-            roomSize, roomHeight, roomSize,
-            roomSize, 0, -roomSize,
-            roomSize, roomHeight, roomSize,
-            roomSize, roomHeight, -roomSize
-        ],
-        normals: [
-            -1, 0, 0,
-            -1, 0, 0,
-            -1, 0, 0,
-            -1, 0, 0,
-            -1, 0, 0,
-            -1, 0, 0
-        ],
-        texcoords: [
-            1, 0,
-            0, 0,
-            0, 1,
-            1, 0,
-            0, 1,
-            1, 1
-        ],
-        position: [0, 0, 0],
-        scale: [1, 1, 1],
-        texture: 'wall'
-    };
-    
-    logger.log('Stanza semplice creata');
-}
+        // Crea una stanza semplice
+        function createSimpleRoom() {
+            // Definizione delle pareti, pavimento e soffitto            
+            // Pavimento
+            models['floor'] = {
+                vertices: [
+                    -roomSize, 0, -roomSize,
+                    roomSize, 0, -roomSize,
+                    roomSize, 0, roomSize,
+                    -roomSize, 0, -roomSize,
+                    roomSize, 0, roomSize,
+                    -roomSize, 0, roomSize
+                ],
+                normals: [
+                    0, 1, 0,
+                    0, 1, 0,
+                    0, 1, 0,
+                    0, 1, 0,
+                    0, 1, 0,
+                    0, 1, 0
+                ],
+                texcoords: [
+                    0, 0,
+                    1, 0,
+                    1, 1,
+                    0, 0,
+                    1, 1,
+                    0, 1
+                ],
+                position: [0, 0, 0],
+                scale: [1, 1, 1],
+                texture: 'floor'
+            };
+            
+            // Soffitto
+            models['ceiling'] = {
+                vertices: [
+                    -roomSize, roomHeight, -roomSize,
+                    roomSize, roomHeight, roomSize,
+                    roomSize, roomHeight, -roomSize,
+                    -roomSize, roomHeight, -roomSize,
+                    -roomSize, roomHeight, roomSize,
+                    roomSize, roomHeight, roomSize
+                ],
+                normals: [
+                    0, -1, 0,
+                    0, -1, 0,
+                    0, -1, 0,
+                    0, -1, 0,
+                    0, -1, 0,
+                    0, -1, 0
+                ],
+                texcoords: [
+                    0, 0,
+                    1, 1,
+                    1, 0,
+                    0, 0,
+                    0, 1,
+                    1, 1
+                ],
+                position: [0, 0, 0],
+                scale: [1, 1, 1],
+                texture: 'ceiling'
+            };
+            
+            // Parete frontale
+            models['frontWall'] = {
+                vertices: [
+                    -roomSize, 0, -roomSize,
+                    roomSize, 0, -roomSize,
+                    roomSize, roomHeight, -roomSize,
+                    -roomSize, 0, -roomSize,
+                    roomSize, roomHeight, -roomSize,
+                    -roomSize, roomHeight, -roomSize
+                ],
+                normals: [
+                    0, 0, 1,
+                    0, 0, 1,
+                    0, 0, 1,
+                    0, 0, 1,
+                    0, 0, 1,
+                    0, 0, 1
+                ],
+                texcoords: [
+                    0, 0,
+                    1, 0,
+                    1, 1,
+                    0, 0,
+                    1, 1,
+                    0, 1
+                ],
+                position: [0, 0, 0],
+                scale: [1, 1, 1],
+                texture: 'wall'
+            };
+            
+            // Parete posteriore
+            models['backWall'] = {
+                vertices: [
+                    -roomSize, 0, roomSize,
+                    roomSize, roomHeight, roomSize,
+                    roomSize, 0, roomSize,
+                    -roomSize, 0, roomSize,
+                    -roomSize, roomHeight, roomSize,
+                    roomSize, roomHeight, roomSize
+                ],
+                normals: [
+                    0, 0, -1,
+                    0, 0, -1,
+                    0, 0, -1,
+                    0, 0, -1,
+                    0, 0, -1,
+                    0, 0, -1
+                ],
+                texcoords: [
+                    0, 0,
+                    1, 1,
+                    1, 0,
+                    0, 0,
+                    0, 1,
+                    1, 1
+                ],
+                position: [0, 0, 0],
+                scale: [1, 1, 1],
+                texture: 'wall'
+            };
+            
+            // Parete sinistra
+            models['leftWall'] = {
+                vertices: [
+                    -roomSize, 0, -roomSize,
+                    -roomSize, roomHeight, -roomSize,
+                    -roomSize, roomHeight, roomSize,
+                    -roomSize, 0, -roomSize,
+                    -roomSize, roomHeight, roomSize,
+                    -roomSize, 0, roomSize
+                ],
+                normals: [
+                    1, 0, 0,
+                    1, 0, 0,
+                    1, 0, 0,
+                    1, 0, 0,
+                    1, 0, 0,
+                    1, 0, 0
+                ],
+                texcoords: [
+                    0, 0,
+                    0, 1,
+                    1, 1,
+                    0, 0,
+                    1, 1,
+                    1, 0
+                ],
+                position: [0, 0, 0],
+                scale: [1, 1, 1],
+                texture: 'wall'
+            };
+            
+            // Parete destra
+            models['rightWall'] = {
+                vertices: [
+                    roomSize, 0, -roomSize,
+                    roomSize, 0, roomSize,
+                    roomSize, roomHeight, roomSize,
+                    roomSize, 0, -roomSize,
+                    roomSize, roomHeight, roomSize,
+                    roomSize, roomHeight, -roomSize
+                ],
+                normals: [
+                    -1, 0, 0,
+                    -1, 0, 0,
+                    -1, 0, 0,
+                    -1, 0, 0,
+                    -1, 0, 0,
+                    -1, 0, 0
+                ],
+                texcoords: [
+                    1, 0,
+                    0, 0,
+                    0, 1,
+                    1, 0,
+                    0, 1,
+                    1, 1
+                ],
+                position: [0, 0, 0],
+                scale: [1, 1, 1],
+                texture: 'wall'
+            };
+            
+            logger.log('Stanza semplice creata');
+        }
 
-// Richiedi pointer lock
-function requestPointerLock() {
+        // Richiedi pointer lock
+        function requestPointerLock() {
             canvas.requestPointerLock = canvas.requestPointerLock || 
-                                       canvas.mozRequestPointerLock || 
-                                       canvas.webkitRequestPointerLock;
+                                        canvas.mozRequestPointerLock || 
+                                        canvas.webkitRequestPointerLock;
             canvas.requestPointerLock();
         }
         
         // Gestisci cambio stato pointer lock
         function handlePointerLockChange() {
             mouseLocked = document.pointerLockElement === canvas || 
-                         document.mozPointerLockElement === canvas || 
-                         document.webkitPointerLockElement === canvas;
+                          document.mozPointerLockElement === canvas || 
+                          document.webkitPointerLockElement === canvas;
         }
         
-// Gestisci movimento mouse
-function handleMouseMove(e) {
-    if (!mouseLocked || isPanelOpen) return;
-    
-    const sensitivity = 0.002;
-    // Invertiamo solo il movimento orizzontale (asse X)
-    camera.rotation[1] += e.movementX * sensitivity; // Yaw (invertito)
-    camera.rotation[0] -= e.movementY * sensitivity; // Pitch (lasciato come originale)
-    
-    // Limit pitch
-    camera.rotation[0] = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation[0]));
-}
+        // Gestisci movimento mouse
+        function handleMouseMove(e) {
+            if (!mouseLocked || isPanelOpen) return;
+            
+            const sensitivity = 0.002;
+            camera.rotation[1] -= e.movementX * sensitivity; // Yaw
+            camera.rotation[0] -= e.movementY * sensitivity; // Pitch
+            
+            // Limit pitch
+            camera.rotation[0] = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation[0]));
+        }
         
         // Variabili per touch controls
         let touchStartX = 0;
@@ -1132,26 +1894,26 @@ function handleMouseMove(e) {
             }
         }
         
-// Gestisci movimento touch
-function handleTouchMove(e) {
-    e.preventDefault();
-    
-    if (e.touches.length === 1) {
-        const touchX = e.touches[0].clientX;
-        const touchY = e.touches[0].clientY;
-        
-        // Ruota camera (solo orizzontale invertito)
-        const sensitivity = 0.005;
-        camera.rotation[1] += (touchX - touchStartX) * sensitivity; // Invertito
-        camera.rotation[0] -= (touchY - touchStartY) * sensitivity; // Originale
-        
-        // Limita pitch
-        camera.rotation[0] = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation[0]));
-        
-        touchStartX = touchX;
-        touchStartY = touchY;
-    }
-}
+        // Gestisci movimento touch
+        function handleTouchMove(e) {
+            e.preventDefault();
+            
+            if (e.touches.length === 1) {
+                const touchX = e.touches[0].clientX;
+                const touchY = e.touches[0].clientY;
+                
+                // Ruota camera
+                const sensitivity = 0.005;
+                camera.rotation[1] -= (touchX - touchStartX) * sensitivity;
+                camera.rotation[0] -= (touchY - touchStartY) * sensitivity;
+                
+                // Limita pitch
+                camera.rotation[0] = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation[0]));
+                
+                touchStartX = touchX;
+                touchStartY = touchY;
+            }
+        }
         
         // Gestisci fine touch
         function handleTouchEnd(e) {
