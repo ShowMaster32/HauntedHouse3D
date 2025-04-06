@@ -31,11 +31,15 @@
         <button id="toggleReflections">Attiva/Disattiva Riflessioni</button>
         <button id="toggleFPS">Attiva/Disattiva FPS</button>
         <button id="toggleLogs">Attiva/Disattiva Log</button>
+        <button id="toggleCameraInfo">Attiva/Disattiva Info Camera</button>
+        <button id="toggleSpectatorMode">Modalità Spettatore</button>
+        <button id="toggleExternalLight">Luce Esterna</button>
         <button id="advancedRendering">Rendering Avanzato</button>
     </div>
     
     <!-- Container per i log -->
-    <div id="log-container"></div>
+    <div id="log-container" style="display: none;"></div>
+    <div id="camera-coords" style="display: none;"></div>
 
     <!-- Controlli touch per dispositivi mobili (nascosti per default) -->
     <div class="touch-controls" style="display: none;">
@@ -105,11 +109,12 @@
         uniform sampler2D u_texture;
         uniform bool u_shadows;
         uniform bool u_reflections;
-        uniform bool u_lightOn;
         uniform bool u_advancedRendering;
         uniform sampler2D u_shadowMap;
         uniform vec3 u_externalLightColor;
         uniform float u_externalLightIntensity;
+        uniform bool u_lightOn;          // Luce interna (lampadario)
+        uniform bool u_externalLightOn;  // Luce esterna (per la skybox)
 
         varying vec3 v_normal;
         varying vec3 v_position;
@@ -252,7 +257,10 @@
             // Questo shader non scrive colori, solo profondità
             // gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0); // Non necessario per shadow map
         }
-    </script>fragment-shader" type="x-shader/x-fragment">
+    </script>
+
+    <!-- Fragment Shader -->
+    <script id="fragment-shader" type="x-shader/x-fragment">    
         precision mediump float;
         
         uniform vec3 u_lightPos;
@@ -263,6 +271,7 @@
         uniform bool u_reflections;
         uniform bool u_lightOn;
         uniform bool u_advancedRendering;
+        uniform bool u_externalLightOn; // Luce esterna (per la skybox)
         
         varying vec3 v_normal;
         varying vec3 v_position;
@@ -368,7 +377,7 @@
         precision mediump float;
         
         uniform samplerCube u_skybox;
-        uniform bool u_lightOn;
+        uniform bool u_externalLightOn;
         
         varying vec3 v_texCoord;
         
@@ -376,7 +385,7 @@
             vec3 color = textureCube(u_skybox, v_texCoord).rgb;
             
             // Scurisci il cielo se la luce è spenta
-            if (!u_lightOn) {
+            if (!u_externalLightOn) {
                 color *= 0.2;
             }
             
@@ -423,6 +432,7 @@
         // Stato del gioco
         let isPanelOpen = false;
         let isLightOn = false;
+        let isExternalLightOn = true; // Nuova variabile per la luce esterna
         let mouseLocked = false;
         let gameStarted = false;
         let isNearSwitch = false;
@@ -431,8 +441,9 @@
         let renderOptions = {
             shadows: true,
             reflections: false,
-            showFPS: true,
-            advancedRendering: false
+            showFPS: false,
+            advancedRendering: false,
+            showLogs: false
         };
         
         // Input utente
@@ -442,7 +453,9 @@
         let camera = {
             position: [0, 1.7, 5],
             rotation: [0, Math.PI],
-            speed: 0.1
+            speed: 0.1,
+            originalPosition: [0, 1.7, 5], 
+            originalRotation: [0, Math.PI]
         };
         
         // Dimensioni stanza
@@ -453,12 +466,22 @@
         let models = {};
         let textures = {};
         let lightPosition = [0, roomHeight - 0.5, 0];
+        let dollPosition = [0, 0, 0]; // Posizione della bambola per effetti sonori
+        let switchPosition = [-roomSize + 0.1, 1.5, 0]; // Posizione dell'interruttore
+
+        // Aggiungi modalità spettatore
+        let isSpectatorMode = false;
+        let showCameraCoordinates = false;
         
         // Suoni
         const sounds = {
-            ambient: null,
-            flicker: null,
-            footsteps: null
+            ambient: new Audio('sounds/ambient.mp3'),
+            flicker: new Audio('sounds/flicker.wav'),
+            footsteps: new Audio('sounds/random-ghost.mp3'),
+            intro: new Audio('sounds/intro.mp3'),
+            startGame: new Audio('sounds/start-game.mp3'),
+            laLaLa: new Audio('sounds/la-la-la.mp3'),
+            demonLaugh: new Audio('sounds/demon-laugh.mp3')
         };
         
         // Inizializzazione dell'app
@@ -476,8 +499,11 @@
             resizeCanvas();
             window.addEventListener('resize', resizeCanvas);
             
-            // Compila shaders
-            initShaders();
+            // Compila shaders una sola volta
+            if (!initShaders()) {
+                logger.log('ERRORE CRITICO: Inizializzazione shader fallita. L\'applicazione non può continuare.');
+                return; // Esci dall'inizializzazione
+            }
             
             // Inizializza i suoni
             initSounds();
@@ -505,7 +531,166 @@
             gl.viewport(0, 0, canvas.width, canvas.height);
             logger.log(`Canvas ridimensionato: ${canvas.width}x${canvas.height}`);
         }
-        
+
+        function setupSounds() {
+            sounds.ambient.loop = true;
+            sounds.ambient.volume = 0.5;
+            
+            sounds.flicker.volume = 0.7;
+            
+            sounds.footsteps.volume = 0.3;
+            
+            sounds.intro.loop = true;
+            sounds.intro.volume = 0.6;
+            
+            sounds.startGame.volume = 0.6;
+            
+            sounds.laLaLa.volume = 0.5;
+            sounds.demonLaugh.volume = 0.5;
+            
+            logger.log('Suoni configurati');
+        }
+
+        function createGlassTexture() {
+            const glassTexture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, glassTexture);
+            
+            // Crea un'immagine trasparente azzurrina
+            const width = 2, height = 2;
+            const pixels = new Uint8Array([
+                180, 200, 255, 80, // azzurro chiaro semi-trasparente
+                180, 200, 255, 80,
+                180, 200, 255, 80,
+                180, 200, 255, 80
+            ]);
+            
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            
+            textures['glass'] = glassTexture;
+            logger.log('Texture vetro creata');
+        }
+
+        function createFakeDoor() {
+            // Dimensioni della porta
+            const doorWidth = 2.0;
+            const doorHeight = 4.0;
+            
+            // Vertici della porta (un semplice piano)
+            const doorVertices = [
+                -doorWidth/2, 0, 0,
+                doorWidth/2, 0, 0,
+                doorWidth/2, doorHeight, 0,
+                -doorWidth/2, 0, 0,
+                doorWidth/2, doorHeight, 0,
+                -doorWidth/2, doorHeight, 0
+            ];
+            
+            // Normali (tutti verso lo spettatore)
+            const doorNormals = [
+                0, 0, 1,
+                0, 0, 1,
+                0, 0, 1,
+                0, 0, 1,
+                0, 0, 1,
+                0, 0, 1
+            ];
+            
+            // Coordinate texture
+            const doorTexcoords = [
+                0, 1,
+                1, 1,
+                1, 0,
+                0, 1,
+                1, 0,
+                0, 0
+            ];
+            
+            // Aggiungi la porta al modello
+            models['fakeDoor'] = {
+                vertices: doorVertices,
+                normals: doorNormals,
+                texcoords: doorTexcoords,
+                position: [0, 0, roomSize - 0.05], // Posiziona sulla parete posteriore
+                rotation: [0, Math.PI, 0], // Ruota per farla guardare verso l'interno
+                scale: [1, 1, 1],
+                texture: 'door'
+            };
+            
+            logger.log('Porta finta creata');
+        }
+
+        function toggleSpectatorMode() {
+            isSpectatorMode = !isSpectatorMode;
+            
+            if (isSpectatorMode) {
+                // Salva la posizione originale
+                camera.originalPosition = [...camera.position];
+                camera.originalRotation = [...camera.rotation];
+                
+                // Aumenta la velocità
+                camera.speed = 0.3;
+                logger.log('Modalità spettatore attivata (collisioni disabilitate)');
+            } else {
+                // Ripristina velocità normale
+                camera.speed = 0.1;
+                
+                // Ritorna alla posizione originale
+                camera.position = [...camera.originalPosition];
+                camera.rotation = [...camera.originalRotation];
+                
+                logger.log('Modalità spettatore disattivata');
+            }
+        }
+
+        function setupGamepadSupport() {
+            window.addEventListener('gamepadconnected', (e) => {
+                logger.log(`Gamepad connesso: ${e.gamepad.id}`);
+                gamepad = e.gamepad;
+            });
+            
+            window.addEventListener('gamepaddisconnected', (e) => {
+                logger.log(`Gamepad disconnesso: ${e.gamepad.id}`);
+                gamepad = null;
+            });
+            
+            setInterval(pollGamepads, 100);
+        }
+
+        function pollGamepads() {
+            if (!gameStarted) return;
+            
+            const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+            
+            for (let i = 0; i < gamepads.length; i++) {
+                const gp = gamepads[i];
+                if (gp) {
+                    gamepad = gp;
+                    break;
+                }
+            }
+            
+            if (gamepad) {
+                processGamepadInput(gamepad);
+            }
+        }
+
+        document.getElementById('toggleCameraInfo').addEventListener('click', () => {
+            showCameraCoordinates = !showCameraCoordinates;
+            const coordElement = document.getElementById('camera-coords');
+            if (coordElement) {
+                coordElement.style.display = showCameraCoordinates ? 'block' : 'none';
+            }
+            logger.log(`Info camera ${showCameraCoordinates ? 'attivate' : 'disattivate'}`);
+        });
+
+        document.getElementById('toggleSpectatorMode').addEventListener('click', () => {
+            toggleSpectatorMode();
+        });
+
         // Inizializzazione shaders
         function initShaders() {
             // Shader principali per gli oggetti
@@ -573,12 +758,20 @@
             gl.attachShader(skyboxProgram, skyboxFragmentShader);
             gl.linkProgram(skyboxProgram);
             
-            if (!gl.getProgramParameter(skyboxProgram, gl.LINK_STATUS)) {
-                logger.log('Errore nel link del program skybox: ' + gl.getProgramInfoLog(skyboxProgram));
-                return;
+            
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                const infoLog = gl.getProgramInfoLog(program);
+                logger.log('Errore nel link del program: ' + infoLog);
+                
+                // Stampa log dettagliati per debug
+                logger.log('Vertex shader info: ' + gl.getShaderInfoLog(vertexShader));
+                logger.log('Fragment shader info: ' + gl.getShaderInfoLog(fragmentShader));
+                
+                return false; // Indica che l'inizializzazione è fallita
             }
             
-            logger.log('Shaders inizializzati con successo');
+            logger.log('Shader program compilato con successo');
+            return true; // Indica che l'inizializzazione è riuscita
         }
 
         // Inizializzazione suoni
@@ -611,8 +804,9 @@
             loadSkyboxTextures();
             
             // Carica modelli OBJ 
-            loadOBJModel('models/skull.obj', 'models/skull.mtl', 'skull');
-            loadOBJModel('models/chair.obj', 'models/chair.mtl', 'chair');
+            loadOBJModel('models/12140_Skull_v3_L2.obj', 'models/12140_Skull_v3_L2.mtl', 'skull');
+            loadOBJModel('models/kurumaisu.unity_1.obj', 'models/kurumaisu.unity_1.mtl', 'chair');
+            loadOBJModel('models/UnsavedScene_1.obj', 'models/UnsavedScene_1.mtl', 'chair');
             loadOBJModel('models/doll.obj', 'models/doll.mtl', 'doll'); // Aggiungi la bambola
             
             // Crea l'interruttore
@@ -623,25 +817,39 @@
         
         // Carica texture
         function loadTexture(url, name) {
-            const texture = gl.createTexture();
-            const image = new Image();
+        const texture = gl.createTexture();
+        const image = new Image();
+        
+        image.onload = function() {
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
             
-            image.onload = function() {
-                gl.bindTexture(gl.TEXTURE_2D, texture);
-                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+            // Verifica se le dimensioni sono potenze di 2
+            const isPowerOf2Width = (image.width & (image.width - 1)) === 0;
+            const isPowerOf2Height = (image.height & (image.height - 1)) === 0;
+            
+            if (isPowerOf2Width && isPowerOf2Height) {
+                // Impostazioni per texture con dimensioni potenze di 2
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+                gl.generateMipmap(gl.TEXTURE_2D);
+            } else {
+                // Impostazioni per texture con dimensioni NON potenze di 2
                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-                gl.generateMipmap(gl.TEXTURE_2D);
-                gl.bindTexture(gl.TEXTURE_2D, null);
-                
-                textures[name] = texture;
-                logger.log(`Texture caricata: ${name}`);
-            };
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            }
             
-            image.src = url;
-        }
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.bindTexture(gl.TEXTURE_2D, null);
+            
+            textures[name] = texture;
+            logger.log(`Texture caricata: ${name}`);
+        };
+        
+        image.src = url;
+    }
         
         // Carica le texture dello skybox
         function loadSkyboxTextures() {
@@ -769,8 +977,12 @@
             // Carica il modello OBJ
             try {
                 glmReadOBJ(objUrl, function(model) {
+                    // Aggiungi ulteriori controlli di sicurezza
                     if (!model) {
-                        logger.log(`ERRORE: Impossibile caricare il modello ${name} da ${objUrl}`);
+                        logger.log(`ERRORE: Modello ${name} non caricato correttamente.`);
+                        
+                        // Crea un modello vuoto di fallback
+                        createFallbackModel(name);
                         return;
                     }
                     
@@ -899,16 +1111,62 @@
                         models[name].rotation = [0, Math.random() * Math.PI * 2, 0];
                         models[name].scale = [0.2, 0.2, 0.2]; // Adatta la scala in base alle dimensioni della bambola
                         
-                        // Aggiorna la posizione della bambola per l'interazione
-                        dollPosition = new Float32Array([randomX, 0, randomZ]);
+                        // Aggiorna la posizione della bambola per l'interazione (usa array normale, non Float32Array)
+                        dollPosition = [randomX, 0, randomZ];
                         logger.log(`Bambola posizionata a: [${randomX}, 0, ${randomZ}]`);
+                    } else if (name === 'lamp') {
+                        // Posiziona il lampadario al centro della stanza, vicino al soffitto
+                        models[name].position = [0, -roomHeight + 0.5, 0]; 
+                        models[name].rotation = [0, 0, 0];
+                        models[name].scale = [0.5, 0.5, 0.5];
+                        models[name].isEmissive = true; // Per far brillare il lampadario
+                        
+                        // Posiziona la luce esattamente dove si trova il lampadario
+                        lightPosition = [0, -roomHeight + 0.5, 0];
+                        logger.log('Lampadario posizionato e luce configurata');
                     }
                     
                     logger.log(`Modello caricato: ${name} (${vertices.length / 3} vertici)`);
                 });
             } catch (error) {
                 logger.log(`Errore durante il caricamento di ${name}: ${error.message}`);
+                // Crea un modello vuoto di fallback
+                createFallbackModel(name);
             }
+        }
+
+        // Funzione per creare un modello fallback
+        function createFallbackModel(name) {
+            // Crea un cubo semplice come modello di fallback
+            const size = 0.5;
+            models[name] = {
+                vertices: [
+                    // Definisci qui i vertici di un cubo semplice
+                    -size, -size, -size,
+                    size, -size, -size,
+                    size, size, -size,
+                    -size, -size, -size,
+                    size, size, -size,
+                    -size, size, -size,
+                    // ... altri vertici del cubo
+                ],
+                normals: [
+                    // Normali semplici
+                    0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1,
+                    // ... altre normali
+                ],
+                texcoords: [
+                    // Coordinate texture semplici
+                    0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1,
+                    // ... altre coordinate
+                ],
+                position: [0, 1, 0], // Posizione di default
+                rotation: [0, 0, 0],
+                scale: [1, 1, 1],
+                texture: 'wall'
+            };
+            
+            logger.log(`Creato modello fallback per ${name}`);
         }
 
         // Funzione per caricare il lampadario
@@ -1212,12 +1470,19 @@
             });
             
             document.getElementById('toggleLogs').addEventListener('click', () => {
+                renderOptions.showshowLogsFPS = !renderOptions.showLogs;
+                logger.log(`TextArea Log ${renderOptions.showLogs ? 'attivato' : 'disattivato'}`);
                 logger.toggle();
             });
             
             document.getElementById('advancedRendering').addEventListener('click', () => {
                 renderOptions.advancedRendering = !renderOptions.advancedRendering;
                 logger.log(`Rendering avanzato ${renderOptions.advancedRendering ? 'attivato' : 'disattivato'}`);
+            });
+
+            document.getElementById('toggleExternalLight').addEventListener('click', () => {
+                isExternalLightOn = !isExternalLightOn;
+                logger.log(`Luce esterna ${isExternalLightOn ? 'accesa' : 'spenta'}`);
             });
             
             logger.log('Event listeners configurati');
@@ -1325,16 +1590,19 @@
             document.getElementById('game-controls').innerHTML = 
                 'W: Avanti | S: Indietro | A: Sinistra | D: Destra | F: Luce | P: Pannello';
             
-            // Avvia l'audio ambientale
-            sounds.ambient.play();
+            // Stoppa la musica di intro e avvia quella del gioco
+            sounds.intro.pause();
+            sounds.startGame.play();
+            
+            // Avvia l'audio ambientale quando termina la musica di inizio
+            sounds.startGame.onended = () => {
+                sounds.ambient.play();
+            };
             
             // Richiedi pointer lock
             requestPointerLock();
             
-            // Imposta flag di gioco avviato
             gameStarted = true;
-            
-            // Avvia il game loop
             requestAnimationFrame(gameLoop);
             
             logger.log('Gioco avviato');
@@ -1392,30 +1660,67 @@
             updateCrosshair();
             
             // Mostra le coordinate della camera
-            showCameraCoordinates();
+            updateCameraCoordinates(); // <-- Qui modificare il nome
+            
+            // Controlla la vicinanza alla bambola
+            checkDollProximity();
         }
         
         // Update camera position and rotation
         function updateCamera(dt) {
-            // Handle keyboard input for movement
-            if (keys['KeyW']) moveCamera(0, 0, -camera.speed); // Forward
-            if (keys['KeyS']) moveCamera(0, 0, camera.speed); // Backward
-            if (keys['KeyA']) moveCamera(-camera.speed, 0, 0); // Left
-            if (keys['KeyD']) moveCamera(camera.speed, 0, 0); // Right
+            // Controlli della modalità spettatore
+            if (isSpectatorMode) {
+                // Movimenti standard
+                if (keys['KeyW']) moveCamera(0, 0, -camera.speed);
+                if (keys['KeyS']) moveCamera(0, 0, camera.speed);
+                if (keys['KeyA']) moveCamera(-camera.speed, 0, 0);
+                if (keys['KeyD']) moveCamera(camera.speed, 0, 0);
+                
+                // Movimenti verticali aggiuntivi
+                if (keys['KeyE'] || keys['Space']) moveCamera(0, camera.speed, 0);
+                if (keys['KeyQ'] || keys['ShiftLeft']) moveCamera(0, -camera.speed, 0);
+            } else {
+                // Controlli normali
+                if (keys['KeyW']) moveCamera(0, 0, -camera.speed);
+                if (keys['KeyS']) moveCamera(0, 0, camera.speed);
+                if (keys['KeyA']) moveCamera(-camera.speed, 0, 0);
+                if (keys['KeyD']) moveCamera(camera.speed, 0, 0);
+            }
             
-            // Verifica collisioni con i muri dopo aver mosso la camera
             checkWallCollisions();
             
-            // Riproduci suono dei passi se il giocatore si sta muovendo
-            if (keys['KeyW'] || keys['KeyS'] || keys['KeyA'] || keys['KeyD']) {
+            // Suono passi
+            if (!isSpectatorMode && (keys['KeyW'] || keys['KeyS'] || keys['KeyA'] || keys['KeyD'])) {
                 if (!sounds.footsteps.playing) {
                     sounds.footsteps.play();
                     sounds.footsteps.playing = true;
-                    
-                    // Reset quando termina
                     sounds.footsteps.onended = () => {
                         sounds.footsteps.playing = false;
                     };
+                }
+            }
+        }
+
+        function checkDollProximity() {
+            // Calcola distanza tra giocatore e bambola
+            const dx = camera.position[0] - dollPosition[0];
+            const dy = camera.position[1] - dollPosition[1];
+            const dz = camera.position[2] - dollPosition[2];
+            const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            
+            // Se è vicino e la luce è spenta, attiva suono
+            const proximityRadius = 5;
+            if (distance < proximityRadius && !isLightOn) {
+                if (!sounds.laLaLa.playing && !sounds.demonLaugh.playing) {
+                    const randomSound = Math.random() < 0.5 ? sounds.laLaLa : sounds.demonLaugh;
+                    randomSound.play();
+                    randomSound.playing = true;
+                    
+                    randomSound.onended = () => {
+                        randomSound.playing = false;
+                    };
+                    
+                    logger.log('Suono bambola attivato dalla vicinanza');
                 }
             }
         }
@@ -1433,19 +1738,29 @@
         
         // Verifica collisioni con i muri
         function checkWallCollisions() {
-            const playerRadius = 0.5; // Raggio di collisione del giocatore
+            // Se in modalità spettatore, ignora le collisioni
+            if (isSpectatorMode) return;
             
-            // Limiti della stanza con margine per il raggio del giocatore
+            const playerRadius = 0.5;
+            
+            // Limiti della stanza
             const minX = -roomSize + playerRadius;
             const maxX = roomSize - playerRadius;
             const minZ = -roomSize + playerRadius;
             const maxZ = roomSize - playerRadius;
             
-            // Controlla e correggi le collisioni con le pareti
+            // Limiti verticali (pavimento e soffitto)
+            const minY = 0.5;
+            const maxY = roomHeight - 0.5;
+            
+            // Correggi le collisioni
             if (camera.position[0] < minX) camera.position[0] = minX;
             if (camera.position[0] > maxX) camera.position[0] = maxX;
             if (camera.position[2] < minZ) camera.position[2] = minZ;
             if (camera.position[2] > maxZ) camera.position[2] = maxZ;
+            
+            if (camera.position[1] < minY) camera.position[1] = minY;
+            if (camera.position[1] > maxY) camera.position[1] = maxY;
         }
         
         // Funzione per aggiornare il crosshair in base alla vicinanza a oggetti interattivi
@@ -1490,7 +1805,10 @@
         }
         
         // Funzione per mostrare le coordinate della camera
-        function showCameraCoordinates() {
+        function updateCameraCoordinates() {
+            // Se non è attivata la visualizzazione delle coordinate, esci
+            if (!showCameraCoordinates) return;
+            
             // Crea o ottieni l'elemento per le coordinate
             let coordElement = document.getElementById('camera-coords');
             if (!coordElement) {
@@ -1507,7 +1825,11 @@
             const rotX = (camera.rotation[0] * (180/Math.PI)).toFixed(1);
             const rotY = (camera.rotation[1] * (180/Math.PI)).toFixed(1);
             
-            coordElement.textContent = `Camera: X=${x} Y=${y} Z=${z} | Rotation: ${rotY}° ${rotX}°`;
+            // Aggiungi informazioni sulla modalità spettatore
+            const modeText = isSpectatorMode ? "[SPETTATORE]" : "";
+            
+            coordElement.textContent = `${modeText} Camera: X=${x} Y=${y} Z=${z} | Rotation: ${rotY}° ${rotX}°`;
+            coordElement.style.display = 'block';
         }
         
         // Render scene
@@ -1543,7 +1865,13 @@
             // Usa il programma principale per il resto della scena
             gl.useProgram(program);
             
-            // Ottieni locazioni uniform per gli shader
+            // IMPORTANTE: Verifica che program sia valido prima di ottenere uniform locations
+            if (!program) {
+                logger.log("ERRORE: Programma shader non valido");
+                return;
+            }
+            
+            // Ottieni tutte le locazioni uniform per gli shader
             const u_modelLoc = gl.getUniformLocation(program, 'u_model');
             const u_viewLoc = gl.getUniformLocation(program, 'u_view');
             const u_projectionLoc = gl.getUniformLocation(program, 'u_projection');
@@ -1551,25 +1879,20 @@
             const u_viewPosLoc = gl.getUniformLocation(program, 'u_viewPos');
             const u_useTextureLoc = gl.getUniformLocation(program, 'u_useTexture');
             const u_textureLoc = gl.getUniformLocation(program, 'u_texture');
-            const u_shadowsLoc = gl.getUniformLocation(program, 'u_shadows');
-            const u_reflectionsLoc = gl.getUniformLocation(program, 'u_reflections');
-            const u_lightOnLoc = gl.getUniformLocation(program, 'u_lightOn');
-            const u_advancedRenderingLoc = gl.getUniformLocation(program, 'u_advancedRendering');
             const u_isEmissiveLoc = gl.getUniformLocation(program, 'u_isEmissive');
-            
-            // Ottieni le locazioni per le uniform della luce esterna
             const u_externalLightColorLoc = gl.getUniformLocation(program, 'u_externalLightColor');
             const u_externalLightIntensityLoc = gl.getUniformLocation(program, 'u_externalLightIntensity');
             
             // Passa le opzioni di rendering
-            gl.uniform1i(u_shadowsLoc, renderOptions.shadows);
-            gl.uniform1i(u_reflectionsLoc, renderOptions.reflections);
-            gl.uniform1i(u_lightOnLoc, isLightOn);
-            gl.uniform1i(u_advancedRenderingLoc, renderOptions.advancedRendering);
+            gl.uniform1i(gl.getUniformLocation(program, 'u_shadows'), renderOptions.shadows);
+            gl.uniform1i(gl.getUniformLocation(program, 'u_reflections'), renderOptions.reflections);
+            gl.uniform1i(gl.getUniformLocation(program, 'u_lightOn'), isLightOn);
+            gl.uniform1i(gl.getUniformLocation(program, 'u_externalLightOn'), isExternalLightOn);
+            gl.uniform1i(gl.getUniformLocation(program, 'u_advancedRendering'), renderOptions.advancedRendering);
             
             // Imposta i valori per la luce esterna
-            gl.uniform3f(u_externalLightColorLoc, 0.6, 0.6, 1.0); // Luce bluastra per simulare la luce esterna
-            gl.uniform1f(u_externalLightIntensityLoc, 0.1); // Intensità bassa
+            gl.uniform3f(u_externalLightColorLoc, 0.6, 0.6, 1.0); // Luce bluastra
+            gl.uniform1f(u_externalLightIntensityLoc, 0.1);      // Intensità bassa
             
             // Imposta la posizione della luce e della camera
             gl.uniform3fv(u_lightPosLoc, lightPosition);
@@ -1719,6 +2042,12 @@
             // Usa il programma shader per lo skybox
             gl.useProgram(skyboxProgram);
             
+            // IMPORTANTE: Verifica che skyboxProgram sia valido
+            if (!skyboxProgram) {
+                logger.log("ERRORE: Programma shader skybox non valido");
+                return;
+            }
+            
             // Disabilita depth write (per disegnare lo skybox dietro tutto)
             gl.depthFunc(gl.LEQUAL);
             
@@ -1732,12 +2061,12 @@
             const skyboxViewLoc = gl.getUniformLocation(skyboxProgram, 'u_view');
             const skyboxProjLoc = gl.getUniformLocation(skyboxProgram, 'u_projection');
             const skyboxTexLoc = gl.getUniformLocation(skyboxProgram, 'u_skybox');
-            const skyboxLightOnLoc = gl.getUniformLocation(skyboxProgram, 'u_lightOn');
+            const skyboxLightOnLoc = gl.getUniformLocation(skyboxProgram, 'u_externalLightOn');
             
             gl.uniformMatrix4fv(skyboxViewLoc, false, skyboxViewMatrix);
             gl.uniformMatrix4fv(skyboxProjLoc, false, projectionMatrix);
             gl.uniform1i(skyboxTexLoc, 0);
-            gl.uniform1i(skyboxLightOnLoc, isLightOn);
+            gl.uniform1i(skyboxLightOnLoc, isExternalLightOn);
             
             // Attiva la cubemap texture dello skybox
             gl.activeTexture(gl.TEXTURE0);
