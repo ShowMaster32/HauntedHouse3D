@@ -965,174 +965,105 @@
             // Controlla se i percorsi sono definiti
             if (!objUrl) {
                 logger.log(`ERRORE: Percorso OBJ non specificato per ${name}`);
-                return;
-            }
-            
-            // Usa glm_utils.js per caricare il modello OBJ
-            if (typeof glmReadOBJ !== 'function') {
-                logger.log("ERRORE: glmReadOBJ non è definita. Verifica che glm_utils.js sia caricato correttamente.");
-                return;
-            }
-            
-            // Carica il modello OBJ
-            try {
-                glmReadOBJ(objUrl, function(model) {
-                    // Aggiungi ulteriori controlli di sicurezza
-                    if (!model) {
-                        logger.log(`ERRORE: Modello ${name} non caricato correttamente.`);
-                        
-                        // Crea un modello vuoto di fallback
-                        createFallbackModel(name);
-                        return;
-                    }
-                    
-                    // Controlla che model.vertices esista e sia un array
-                    if (!model.vertices || !Array.isArray(model.vertices)) {
-                        logger.log(`ERRORE: I vertici del modello ${name} non sono validi`);
-                        return;
-                    }
-                    
-                    // Estrai i dati della geometria dal modello caricato
-                    const vertices = [];
-                    const normals = [];
-                    const texcoords = [];
-                    
-                    // Elabora i vertici
-                    for (let i = 0; i < model.vertices.length; i++) {
-                        const vertex = model.vertices[i];
-                        if (vertex && typeof vertex.x === 'number' && 
-                            typeof vertex.y === 'number' && 
-                            typeof vertex.z === 'number') {
-                            vertices.push(vertex.x, vertex.y, vertex.z);
-                        } else {
-                            // Salta vertici non validi
-                            logger.log(`Vertice non valido trovato in ${name} all'indice ${i}`);
-                        }
-                    }
-                    
-                    // Controlla che ci siano vertici validi
-                    if (vertices.length === 0) {
-                        logger.log(`ERRORE: Nessun vertice valido trovato in ${name}`);
-                        return;
-                    }
-                    
-                    // Elabora le normali (se disponibili)
-                    if (model.normals && Array.isArray(model.normals)) {
-                        for (let i = 0; i < model.normals.length; i++) {
-                            const normal = model.normals[i];
-                            if (normal && typeof normal.x === 'number' && 
-                                typeof normal.y === 'number' && 
-                                typeof normal.z === 'number') {
-                                normals.push(normal.x, normal.y, normal.z);
-                            } else {
-                                // Usa normale predefinita se non valida
-                                normals.push(0, 1, 0);
-                            }
-                        }
-                    } else {
-                        // Se non ci sono normali, crea normali fittizie (una per ogni vertice)
-                        for (let i = 0; i < vertices.length / 3; i++) {
-                            normals.push(0, 1, 0);
-                        }
-                        logger.log(`Avviso: Normali non trovate in ${name}, utilizzando normali predefinite`);
-                    }
-                    
-                    // Elabora le coordinate texture (se disponibili)
-                    if (model.texcoords && Array.isArray(model.texcoords)) {
-                        for (let i = 0; i < model.texcoords.length; i++) {
-                            const texcoord = model.texcoords[i];
-                            if (texcoord && typeof texcoord.s === 'number' && 
-                                typeof texcoord.t === 'number') {
-                                texcoords.push(texcoord.s, texcoord.t);
-                            } else {
-                                // Usa coordinate texture predefinite se non valide
-                                texcoords.push(0, 0);
-                            }
-                        }
-                    } else {
-                        // Se non ci sono coordinate texture, crea coordinate texture fittizie
-                        for (let i = 0; i < vertices.length / 3; i++) {
-                            texcoords.push(0, 0);
-                        }
-                        logger.log(`Avviso: Coordinate texture non trovate in ${name}, utilizzando valori predefiniti`);
-                    }
-                    
-                    // Assicurati che gli array abbiano le dimensioni corrette
-                    while (normals.length < vertices.length) {
-                        normals.push(0, 1, 0);
-                    }
-                    while (texcoords.length < (vertices.length / 3) * 2) {
-                        texcoords.push(0, 0);
-                    }
-                    
-                    // Memorizza il modello elaborato
-                    models[name] = {
-                        vertices: vertices,
-                        normals: normals,
-                        texcoords: texcoords,
-                        position: [0, 0, 0],
-                        rotation: [0, 0, 0],
-                        scale: [1, 1, 1],
-                        texture: 'wall' // Texture predefinita
-                    };
-                    
-                    // Posiziona i modelli in base al nome
-                    if (name === 'skull') {
-                        // Posiziona i teschi lungo le pareti
-                        for (let i = 0; i < 5; i++) {
-                            const angle = i * Math.PI * 0.4;
-                            const distance = roomSize * 0.9;
-                            const x = Math.sin(angle) * distance;
-                            const z = Math.cos(angle) * distance;
-                            const y = Math.random() * 2 + 0.5;
-                            
-                            const cloneName = `skull_${i}`;
-                            models[cloneName] = Object.assign({}, models[name]);
-                            models[cloneName].position = [x, y, z];
-                            models[cloneName].rotation = [0, -angle + Math.PI, 0];
-                            models[cloneName].scale = [0.05, 0.05, 0.05];
-                        }
-                    } else if (name === 'chair') {
-                        // Posiziona sedie nella stanza
-                        models[name].position = [3, 0, -3];
-                        models[name].rotation = [0, Math.PI / 4, 0];
-                        models[name].scale = [0.02, 0.02, 0.02];
-                        
-                        // Aggiungi una seconda sedia
-                        const cloneName = `${name}_2`;
-                        models[cloneName] = Object.assign({}, models[name]);
-                        models[cloneName].position = [-3, 0, 2];
-                        models[cloneName].rotation = [0, -Math.PI / 3, 0];
-                    } else if (name === 'doll') {
-                        // Posiziona la bambola in modo casuale nella stanza
-                        const randomX = (Math.random() * 2 - 1) * (roomSize * 0.7);
-                        const randomZ = (Math.random() * 2 - 1) * (roomSize * 0.7);
-                        models[name].position = [randomX, 0, randomZ];
-                        models[name].rotation = [0, Math.random() * Math.PI * 2, 0];
-                        models[name].scale = [0.2, 0.2, 0.2]; // Adatta la scala in base alle dimensioni della bambola
-                        
-                        // Aggiorna la posizione della bambola per l'interazione (usa array normale, non Float32Array)
-                        dollPosition = [randomX, 0, randomZ];
-                        logger.log(`Bambola posizionata a: [${randomX}, 0, ${randomZ}]`);
-                    } else if (name === 'lamp') {
-                        // Posiziona il lampadario al centro della stanza, vicino al soffitto
-                        models[name].position = [0, -roomHeight + 0.5, 0]; 
-                        models[name].rotation = [0, 0, 0];
-                        models[name].scale = [0.5, 0.5, 0.5];
-                        models[name].isEmissive = true; // Per far brillare il lampadario
-                        
-                        // Posiziona la luce esattamente dove si trova il lampadario
-                        lightPosition = [0, -roomHeight + 0.5, 0];
-                        logger.log('Lampadario posizionato e luce configurata');
-                    }
-                    
-                    logger.log(`Modello caricato: ${name} (${vertices.length / 3} vertici)`);
-                });
-            } catch (error) {
-                logger.log(`Errore durante il caricamento di ${name}: ${error.message}`);
-                // Crea un modello vuoto di fallback
                 createFallbackModel(name);
+                return;
             }
+            
+            // Usa jQuery per caricare il file OBJ come testo
+            $.ajax({
+                url: objUrl,
+                dataType: 'text',
+                success: function(objData) {
+                    try {
+                        // Verifica che objData non sia vuoto
+                        if (!objData || objData.trim() === "") {
+                            logger.log(`ERRORE: File OBJ vuoto per ${name}`);
+                            createFallbackModel(name);
+                            return;
+                        }
+                        
+                        // Prova a parsare il modello OBJ usando il parser personalizzato
+                        const model = parseOBJ(objData);
+                        
+                        // Verifica che il modello abbia vertici validi
+                        if (!model || !model.vertices || model.vertices.length === 0) {
+                            logger.log(`ERRORE: Il modello ${name} non ha vertici validi`);
+                            createFallbackModel(name);
+                            return;
+                        }
+                        
+                        // Memorizza il modello elaborato
+                        models[name] = {
+                            vertices: model.vertices,
+                            normals: model.normals,
+                            texcoords: model.texcoords,
+                            position: [0, 0, 0],
+                            rotation: [0, 0, 0],
+                            scale: [1, 1, 1],
+                            texture: 'wall' // Texture predefinita
+                        };
+                        
+                        // Posiziona i modelli in base al nome
+                        if (name === 'skull') {
+                            // Posiziona i teschi lungo le pareti
+                            for (let i = 0; i < 5; i++) {
+                                const angle = i * Math.PI * 0.4;
+                                const distance = roomSize * 0.9;
+                                const x = Math.sin(angle) * distance;
+                                const z = Math.cos(angle) * distance;
+                                const y = Math.random() * 2 + 0.5;
+                                
+                                const cloneName = `skull_${i}`;
+                                models[cloneName] = Object.assign({}, models[name]);
+                                models[cloneName].position = [x, y, z];
+                                models[cloneName].rotation = [0, -angle + Math.PI, 0];
+                                models[cloneName].scale = [0.05, 0.05, 0.05];
+                            }
+                        } else if (name === 'chair') {
+                            // Posiziona sedie nella stanza
+                            models[name].position = [3, 0, -3];
+                            models[name].rotation = [0, Math.PI / 4, 0];
+                            models[name].scale = [0.02, 0.02, 0.02];
+                            
+                            // Aggiungi una seconda sedia
+                            const cloneName = `${name}_2`;
+                            models[cloneName] = Object.assign({}, models[name]);
+                            models[cloneName].position = [-3, 0, 2];
+                            models[cloneName].rotation = [0, -Math.PI / 3, 0];
+                        } else if (name === 'doll') {
+                            // Posiziona la bambola in modo casuale nella stanza
+                            const randomX = (Math.random() * 2 - 1) * (roomSize * 0.7);
+                            const randomZ = (Math.random() * 2 - 1) * (roomSize * 0.7);
+                            models[name].position = [randomX, 0, randomZ];
+                            models[name].rotation = [0, Math.random() * Math.PI * 2, 0];
+                            models[name].scale = [0.2, 0.2, 0.2]; // Adatta la scala in base alle dimensioni della bambola
+                            
+                            // Aggiorna la posizione della bambola per l'interazione
+                            dollPosition = [randomX, 0, randomZ];
+                            logger.log(`Bambola posizionata a: [${randomX}, 0, ${randomZ}]`);
+                        } else if (name === 'lamp') {
+                            // Posiziona il lampadario al centro della stanza, vicino al soffitto
+                            models[name].position = [0, -roomHeight + 0.1, 0]; 
+                            models[name].rotation = [0, 0, 0];
+                            models[name].scale = [0.5, 0.5, 0.5];
+                            models[name].isEmissive = true; // Per far brillare il lampadario
+                            
+                            // Posiziona la luce esattamente dove si trova il lampadario
+                            lightPosition = [0, -roomHeight + 0.5, 0];
+                            logger.log('Lampadario posizionato e luce configurata');
+                        }
+                        
+                        logger.log(`Modello caricato: ${name} (${model.vertices.length / 3} vertici)`);
+                    } catch (error) {
+                        logger.log(`Errore durante il parsing di ${name}: ${error.message}`);
+                        createFallbackModel(name);
+                    }
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    logger.log(`Errore durante il caricamento di ${name}: ${textStatus} - ${errorThrown}`);
+                    createFallbackModel(name);
+                }
+            });
         }
 
         // Funzione per creare un modello fallback
@@ -1141,24 +1072,91 @@
             const size = 0.5;
             models[name] = {
                 vertices: [
-                    // Definisci qui i vertici di un cubo semplice
+                    // Faccia frontale
                     -size, -size, -size,
                     size, -size, -size,
                     size, size, -size,
                     -size, -size, -size,
                     size, size, -size,
                     -size, size, -size,
-                    // ... altri vertici del cubo
+                    
+                    // Faccia posteriore
+                    -size, -size, size,
+                    -size, size, size,
+                    size, size, size,
+                    -size, -size, size,
+                    size, size, size,
+                    size, -size, size,
+                    
+                    // Faccia superiore
+                    -size, size, -size,
+                    size, size, -size,
+                    size, size, size,
+                    -size, size, -size,
+                    size, size, size,
+                    -size, size, size,
+                    
+                    // Faccia inferiore
+                    -size, -size, -size,
+                    -size, -size, size,
+                    size, -size, size,
+                    -size, -size, -size,
+                    size, -size, size,
+                    size, -size, -size,
+                    
+                    // Faccia destra
+                    size, -size, -size,
+                    size, -size, size,
+                    size, size, size,
+                    size, -size, -size,
+                    size, size, size,
+                    size, size, -size,
+                    
+                    // Faccia sinistra
+                    -size, -size, -size,
+                    -size, size, -size,
+                    -size, size, size,
+                    -size, -size, -size,
+                    -size, size, size,
+                    -size, -size, size
                 ],
                 normals: [
-                    // Normali semplici
+                    // Faccia frontale (normale: 0, 0, -1)
                     0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1,
-                    // ... altre normali
+                    
+                    // Faccia posteriore (normale: 0, 0, 1)
+                    0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
+                    
+                    // Faccia superiore (normale: 0, 1, 0)
+                    0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0,
+                    
+                    // Faccia inferiore (normale: 0, -1, 0)
+                    0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0,
+                    
+                    // Faccia destra (normale: 1, 0, 0)
+                    1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0,
+                    
+                    // Faccia sinistra (normale: -1, 0, 0)
+                    -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0
                 ],
                 texcoords: [
-                    // Coordinate texture semplici
+                    // Faccia frontale
                     0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1,
-                    // ... altre coordinate
+                    
+                    // Faccia posteriore
+                    1, 0, 1, 1, 0, 1, 1, 0, 0, 1, 0, 0,
+                    
+                    // Faccia superiore
+                    0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0,
+                    
+                    // Faccia inferiore
+                    1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0,
+                    
+                    // Faccia destra
+                    1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1,
+                    
+                    // Faccia sinistra
+                    0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1
                 ],
                 position: [0, 1, 0], // Posizione di default
                 rotation: [0, 0, 0],
@@ -1172,20 +1170,6 @@
         // Funzione per caricare il lampadario
         function addCeilingLamp() {
             loadOBJModel('models/lamp.obj', 'models/lamp.mtl', 'lamp');
-            
-            // Posizionamento e configurazione del lampadario verranno fatti nella funzione loadOBJModel
-            // quando il modello sarà caricato
-        }
-
-        // Aggiungi questo nella parte relativa alla gestione del modello 'lamp' nella funzione loadOBJModel
-        if (name === 'lamp') {
-            models[name].position = [0, -roomHeight + 0.1, 0]; // Vicino al soffitto, che sarà a -roomHeight
-            models[name].rotation = [0, 0, 0];
-            models[name].scale = [0.5, 0.5, 0.5]; // Adatta la scala in base alle dimensioni reali
-            models[name].isEmissive = true; // Rendilo emissivo
-            
-            // Imposta la posizione della luce per le shadow map
-            lightPosition = [0, -roomHeight + 0.5, 0];
         }
 
         // Funzione per creare un interruttore semplice con geometria di base
@@ -1668,26 +1652,53 @@
         
         // Update camera position and rotation
         function updateCamera(dt) {
+            let moveX = 0, moveZ = 0;
+            
             // Controlli della modalità spettatore
             if (isSpectatorMode) {
                 // Movimenti standard
-                if (keys['KeyW']) moveCamera(0, 0, -camera.speed);
-                if (keys['KeyS']) moveCamera(0, 0, camera.speed);
-                if (keys['KeyA']) moveCamera(-camera.speed, 0, 0);
-                if (keys['KeyD']) moveCamera(camera.speed, 0, 0);
+                if (keys['KeyW']) moveZ -= camera.speed;
+                if (keys['KeyS']) moveZ += camera.speed;
+                if (keys['KeyA']) moveX -= camera.speed;
+                if (keys['KeyD']) moveX += camera.speed;
                 
                 // Movimenti verticali aggiuntivi
                 if (keys['KeyE'] || keys['Space']) moveCamera(0, camera.speed, 0);
                 if (keys['KeyQ'] || keys['ShiftLeft']) moveCamera(0, -camera.speed, 0);
             } else {
                 // Controlli normali
-                if (keys['KeyW']) moveCamera(0, 0, -camera.speed);
-                if (keys['KeyS']) moveCamera(0, 0, camera.speed);
-                if (keys['KeyA']) moveCamera(-camera.speed, 0, 0);
-                if (keys['KeyD']) moveCamera(camera.speed, 0, 0);
+                if (keys['KeyW']) moveZ -= camera.speed;
+                if (keys['KeyS']) moveZ += camera.speed;
+                if (keys['KeyA']) moveX -= camera.speed;
+                if (keys['KeyD']) moveX += camera.speed;
             }
             
-            checkWallCollisions();
+            // Applica smorzamento
+            if (moveX !== 0 || moveZ !== 0) {
+                // Normalizza la direzione per evitare velocità maggiore in diagonale
+                const length = Math.sqrt(moveX * moveX + moveZ * moveZ);
+                if (length > 0) {
+                    moveX /= length;
+                    moveZ /= length;
+                }
+                
+                // Applica velocità
+                moveCamera(moveX * camera.speed, 0, moveZ * camera.speed);
+            }
+            
+            // Controlla collisioni con le pareti
+            if (!isSpectatorMode) {
+                checkWallCollisions();
+            }
+            
+            // Aggiorna il crosshair
+            updateCrosshair();
+            
+            // Mostra le coordinate della camera
+            updateCameraCoordinates();
+            
+            // Controlla la vicinanza alla bambola
+            checkDollProximity();
             
             // Suono passi
             if (!isSpectatorMode && (keys['KeyW'] || keys['KeyS'] || keys['KeyA'] || keys['KeyD'])) {
@@ -1848,11 +1859,11 @@
             const viewMatrix = m4.lookAt(
                 camera.position,
                 [
-                    camera.position[0] + Math.sin(camera.rotation[1]), 
-                    camera.position[1] + Math.sin(camera.rotation[0]), 
+                    camera.position[0] + Math.sin(camera.rotation[1]),
+                    camera.position[1] + Math.sin(camera.rotation[0]),
                     camera.position[2] + Math.cos(camera.rotation[1])
                 ],
-                [0, 1, 0]
+                [0, 1, 0]  // Questo vettore "up" garantisce che l'asse Y rimanga perpendicolare al pavimento
             );
             
             // Crea matrice proiezione
@@ -2427,12 +2438,15 @@
             if (!mouseLocked || isPanelOpen) return;
             
             const sensitivity = 0.002;
-            // Invertiamo entrambi gli assi aggiungendo il segno + invece di -
-            camera.rotation[1] += e.movementX * sensitivity; // Yaw (invertito)
-            camera.rotation[0] += e.movementY * sensitivity; // Pitch (invertito)
             
-            // Limit pitch
-            camera.rotation[0] = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation[0]));
+            // Invertire il segno per il movimento orizzontale (cambia da - a +)
+            camera.rotation[1] += e.movementX * sensitivity;
+            
+            // Mantieni lo stesso comportamento per il movimento verticale
+            camera.rotation[0] += e.movementY * sensitivity;
+            
+            // Limita il pitch per evitare capovolgimenti
+            camera.rotation[0] = Math.max(-Math.PI/2 + 0.01, Math.min(Math.PI/2 - 0.01, camera.rotation[0]));
         }
         
         // Variabili per touch controls
@@ -2459,8 +2473,8 @@
                 
                 // Ruota camera
                 const sensitivity = 0.005;
-                camera.rotation[1] -= (touchX - touchStartX) * sensitivity;
-                camera.rotation[0] -= (touchY - touchStartY) * sensitivity;
+                camera.rotation[1] -= (touchX - touchStartX) * sensitivity; // Corretta
+                camera.rotation[0] += (touchY - touchStartY) * sensitivity; // OK
                 
                 // Limita pitch
                 camera.rotation[0] = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation[0]));
