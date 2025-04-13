@@ -1008,38 +1008,46 @@
                         
                         // Posiziona i modelli in base al nome
                         if (name === 'skull') {
-                            // Posiziona i teschi lungo le pareti
+                            // Posiziona i teschi lungo le pareti, con dimensioni ridotte
                             for (let i = 0; i < 5; i++) {
                                 const angle = i * Math.PI * 0.4;
                                 const distance = roomSize * 0.9;
                                 const x = Math.sin(angle) * distance;
                                 const z = Math.cos(angle) * distance;
-                                const y = Math.random() * 2 + 0.5;
+                                const y = 0; 
                                 
                                 const cloneName = `skull_${i}`;
                                 models[cloneName] = Object.assign({}, models[name]);
                                 models[cloneName].position = [x, y, z];
                                 models[cloneName].rotation = [0, -angle + Math.PI, 0];
-                                models[cloneName].scale = [0.05, 0.05, 0.05];
+                                models[cloneName].scale = [0.01, 0.01, 0.01];
                             }
                         } else if (name === 'chair') {
-                            // Posiziona sedie nella stanza
-                            models[name].position = [3, 0, -3];
+                            // Posiziona sedie nella stanza, assicurandoti che siano appoggiate al pavimento
+                            models[name].position = [3, 0, -3]; // Y a 0 per appoggiarle al pavimento
                             models[name].rotation = [0, Math.PI / 4, 0];
-                            models[name].scale = [0.02, 0.02, 0.02];
+                            
+                            // Modifica la scala se necessario
+                            if (models[name].vertices.length > 8000) {
+                                // Se è una sedia molto dettagliata, riduci la scala
+                                models[name].scale = [0.01, 0.01, 0.01];
+                            } else {
+                                models[name].scale = [0.02, 0.02, 0.02];
+                            }
                             
                             // Aggiungi una seconda sedia
                             const cloneName = `${name}_2`;
                             models[cloneName] = Object.assign({}, models[name]);
-                            models[cloneName].position = [-3, 0, 2];
+                            models[cloneName].position = [-3, 0, 2]; // Y a 0 per appoggiarla al pavimento
                             models[cloneName].rotation = [0, -Math.PI / 3, 0];
                         } else if (name === 'doll') {
-                            // Posiziona la bambola in modo casuale nella stanza
+                            // Posiziona la bambola in modo casuale nella stanza, assicurandoti che sia appoggiata al pavimento
                             const randomX = (Math.random() * 2 - 1) * (roomSize * 0.7);
                             const randomZ = (Math.random() * 2 - 1) * (roomSize * 0.7);
-                            models[name].position = [randomX, 0, randomZ];
+                            models[name].position = [randomX, 0, randomZ]; // Y a 0 per appoggiarla al pavimento
                             models[name].rotation = [0, Math.random() * Math.PI * 2, 0];
-                            models[name].scale = [0.2, 0.2, 0.2]; // Adatta la scala in base alle dimensioni della bambola
+                            // Modifica la scala della bambola in base alle dimensioni
+                            models[name].scale = [0.1, 0.1, 0.1]; // Ridotto a metà
                             
                             // Aggiorna la posizione della bambola per l'interazione
                             dollPosition = [randomX, 0, randomZ];
@@ -1480,14 +1488,14 @@
                 vertices: switchVertices,
                 normals: switchNormals,
                 texcoords: switchTexcoords,
-                position: [-roomSize + 0.1, 2, -1], // Posiziona sulla parete
+                position: [-roomSize + 0.1, 1.5, -1], // Posizione sulla parete a metà altezza (1.5)
                 rotation: [0, Math.PI/2, 0],
                 scale: [1, 1, 1],
-                texture: 'wall' // Usa la texture della parete
+                texture: 'wall'
             };
             
             // Definisci la posizione dell'interruttore per l'interazione
-            switchPosition = new Float32Array([-roomSize + 0.1, 1.5, 0]);
+            switchPosition = new Float32Array([-roomSize + 0.1, 1.5, -1]);
             
             logger.log('Interruttore creato');
         }
