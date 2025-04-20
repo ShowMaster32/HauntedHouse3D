@@ -34,6 +34,7 @@
         <button id="toggleCameraInfo">Attiva/Disattiva Info Camera</button>
         <button id="toggleSpectatorMode">Modalità Spettatore</button>
         <button id="toggleExternalLight">Luce Esterna</button>
+        <button id="toggleRoomLight">Luce Stanza</button>
         <button id="advancedRendering">Rendering Avanzato</button>
     </div>
     
@@ -436,6 +437,12 @@
         let mouseLocked = false;
         let gameStarted = false;
         let isNearSwitch = false;
+
+        let isJumping = false;
+        let jumpVelocity = 0;
+        const jumpHeight = 0.8;   // Altezza del salto
+        const jumpSpeed = 0.25;   // Velocità del salto
+        const gravity = 0.015;    // Gravità
         
         // Rendering options
         let renderOptions = {
@@ -454,6 +461,7 @@
             position: [0, 1.7, 5],
             rotation: [0, Math.PI],
             speed: 0.1,
+            defaultHeight: 1.7,
             originalPosition: [0, 1.7, 5], 
             originalRotation: [0, Math.PI]
         };
@@ -689,6 +697,17 @@
 
         document.getElementById('toggleSpectatorMode').addEventListener('click', () => {
             toggleSpectatorMode();
+        });
+
+        document.getElementById('toggleRoomLight').addEventListener('click', () => {
+            isLightOn = !isLightOn;
+            logger.log(`Luce stanza ${isLightOn ? 'accesa' : 'spenta'} dal pannello di controllo`);
+            
+            // Effetto di flickering quando la luce si accende
+            if (isLightOn) {
+                flickerLight();
+                sounds.flicker.play();
+            }
         });
 
         // Inizializzazione shaders
@@ -1008,60 +1027,58 @@
                         
                         // Posiziona i modelli in base al nome
                         if (name === 'skull') {
-                            // Posiziona i teschi lungo le pareti, con dimensioni ridotte
+                            // Nascondi l'originale
+                            models[name].position = [100, 100, 100]; // Fuori dalla scena
+                            models[name].scale = [0.05, 0.05, 0.05]; // Scala dell'originale
+                            
+                            // Posiziona i teschi lungo le pareti DENTRO la stanza
                             for (let i = 0; i < 5; i++) {
                                 const angle = i * Math.PI * 0.4;
-                                const distance = roomSize * 0.9;
+                                const distance = roomSize * 0.8;
                                 const x = Math.sin(angle) * distance;
                                 const z = Math.cos(angle) * distance;
-                                const y = 0; 
+                                
+                                // Posiziona a varie altezze DENTRO la stanza (tra 0 e -5)
+                                const y = -1 - Math.random() * 3; // Valori tra -1 e -4
                                 
                                 const cloneName = `skull_${i}`;
                                 models[cloneName] = Object.assign({}, models[name]);
                                 models[cloneName].position = [x, y, z];
                                 models[cloneName].rotation = [0, -angle + Math.PI, 0];
-                                models[cloneName].scale = [0.01, 0.01, 0.01];
+                                models[cloneName].scale = [0.05, 0.05, 0.05]; // Aumentata da 0.005 a 0.05
                             }
                         } else if (name === 'chair') {
-                            // Posiziona sedie nella stanza, assicurandoti che siano appoggiate al pavimento
-                            models[name].position = [3, 0, -3]; // Y a 0 per appoggiarle al pavimento
+                            // Posiziona sedie sul pavimento DENTRO la stanza
+                            models[name].position = [3, -0.05, -3]; // Leggermente sollevato dal pavimento
                             models[name].rotation = [0, Math.PI / 4, 0];
-                            
-                            // Modifica la scala se necessario
-                            if (models[name].vertices.length > 8000) {
-                                // Se è una sedia molto dettagliata, riduci la scala
-                                models[name].scale = [0.01, 0.01, 0.01];
-                            } else {
-                                models[name].scale = [0.02, 0.02, 0.02];
-                            }
+                            models[name].scale = [0.05, 0.05, 0.05];
                             
                             // Aggiungi una seconda sedia
                             const cloneName = `${name}_2`;
                             models[cloneName] = Object.assign({}, models[name]);
-                            models[cloneName].position = [-3, 0, 2]; // Y a 0 per appoggiarla al pavimento
+                            models[cloneName].position = [-3, -0.05, 2];
                             models[cloneName].rotation = [0, -Math.PI / 3, 0];
                         } else if (name === 'doll') {
-                            // Posiziona la bambola in modo casuale nella stanza, assicurandoti che sia appoggiata al pavimento
-                            const randomX = (Math.random() * 2 - 1) * (roomSize * 0.7);
-                            const randomZ = (Math.random() * 2 - 1) * (roomSize * 0.7);
-                            models[name].position = [randomX, 0, randomZ]; // Y a 0 per appoggiarla al pavimento
+                            // Posiziona la bambola in modo casuale sul pavimento DENTRO la stanza
+                            const randomX = (Math.random() * 2 - 1) * (roomSize * 0.6);
+                            const randomZ = (Math.random() * 2 - 1) * (roomSize * 0.6);
+                            models[name].position = [randomX, -0.05, randomZ]; // Leggermente sollevato dal pavimento
                             models[name].rotation = [0, Math.random() * Math.PI * 2, 0];
-                            // Modifica la scala della bambola in base alle dimensioni
-                            models[name].scale = [0.1, 0.1, 0.1]; // Ridotto a metà
+                            models[name].scale = [0.05, 0.05, 0.05];
                             
                             // Aggiorna la posizione della bambola per l'interazione
-                            dollPosition = [randomX, 0, randomZ];
-                            logger.log(`Bambola posizionata a: [${randomX}, 0, ${randomZ}]`);
+                            dollPosition = [randomX, -0.05, randomZ];
+                            logger.log(`Bambola posizionata a: [${randomX}, -0.05, ${randomZ}]`);
                         } else if (name === 'lamp') {
-                            // Posiziona il lampadario al centro della stanza, vicino al soffitto
-                            models[name].position = [0, -roomHeight + 0.1, 0]; 
-                            models[name].rotation = [0, 0, 0];
-                            models[name].scale = [0.5, 0.5, 0.5];
-                            models[name].isEmissive = true; // Per far brillare il lampadario
+                            // Posiziona il lampadario al centro della stanza, attaccato al soffitto
+                            models[name].position = [0, -roomHeight + 0.1, 0]; // Vicino al soffitto (-5 + 0.1 = -4.9)
+                            models[name].rotation = [0, 0, 0];     // Orientamento normale
+                            models[name].scale = [0.3, 0.3, 0.3];  // Scala ridotta appropriata
+                            models[name].isEmissive = true;        // Il lampadario stesso emette luce
                             
-                            // Posiziona la luce esattamente dove si trova il lampadario
-                            lightPosition = [0, -roomHeight + 0.5, 0];
-                            logger.log('Lampadario posizionato e luce configurata');
+                            // Posiziona la luce leggermente più in basso
+                            lightPosition = [0, -roomHeight + 1.0, 0]; // 1 metro sotto il soffitto
+                            logger.log('Lampadario posizionato al centro sul soffitto, luce configurata');
                         }
                         
                         logger.log(`Modello caricato: ${name} (${model.vertices.length / 3} vertici)`);
@@ -1181,6 +1198,175 @@
         // Funzione per caricare il lampadario
         function addCeilingLamp() {
             loadOBJModel('models/lamp.obj', 'models/lamp.mtl', 'lamp');
+            
+            // Aggiungiamo una luce di backup in caso il modello lamp.obj non si carichi correttamente
+            const lightSize = 0.3;
+            
+            // Definisci vertici della luce di backup (una semplice sfera/cubo)
+            const lightVertices = []; // Abbreviato per chiarezza
+            const lightNormals = [];  // Abbreviato per chiarezza
+            const lightTexcoords = []; // Abbreviato per chiarezza
+            
+            // Aggiungi ai modelli solo se il modello lamp.obj non è stato ancora caricato
+            if (!models['lamp']) {
+                models['backupLight'] = {
+                    vertices: createSphereVertices(lightSize, 8, 8),  // Crea una sfera semplice
+                    normals: createSphereNormals(8, 8),
+                    texcoords: createSphereTexcoords(8, 8),
+                    position: [0, -roomHeight + 0.1, 0], // Stessa posizione del lampadario
+                    rotation: [0, 0, 0],
+                    scale: [1, 1, 1],
+                    texture: 'wall',  // Usa una texture esistente
+                    isEmissive: true  // Questo oggetto emette luce
+                };
+            }
+            
+            // Imposta la posizione della luce per l'illuminazione
+            lightPosition = [0, -roomHeight + 1.0, 0];
+            
+            logger.log('Luce a soffitto aggiunta');
+        }
+
+        // Funzione di utilità per generare vertici di una sfera (se necessario)
+        function createSphereVertices(radius, latBands, longBands) {
+            const vertices = [];
+            
+            for (let latNumber = 0; latNumber <= latBands; latNumber++) {
+                const theta = latNumber * Math.PI / latBands;
+                const sinTheta = Math.sin(theta);
+                const cosTheta = Math.cos(theta);
+                
+                for (let longNumber = 0; longNumber <= longBands; longNumber++) {
+                    const phi = longNumber * 2 * Math.PI / longBands;
+                    const sinPhi = Math.sin(phi);
+                    const cosPhi = Math.cos(phi);
+                    
+                    const x = cosPhi * sinTheta;
+                    const y = cosTheta;
+                    const z = sinPhi * sinTheta;
+                    
+                    vertices.push(radius * x, radius * y, radius * z);
+                }
+            }
+            
+            // Crea le facce triangolari
+            const indices = [];
+            for (let latNumber = 0; latNumber < latBands; latNumber++) {
+                for (let longNumber = 0; longNumber < longBands; longNumber++) {
+                    const first = (latNumber * (longBands + 1)) + longNumber;
+                    const second = first + longBands + 1;
+                    
+                    indices.push(first, second, first + 1);
+                    indices.push(second, second + 1, first + 1);
+                }
+            }
+            
+            // Converte gli indici in vertici reali
+            const indexedVertices = [];
+            for (let i = 0; i < indices.length; i++) {
+                const vertexIndex = indices[i] * 3;
+                indexedVertices.push(
+                    vertices[vertexIndex],
+                    vertices[vertexIndex + 1],
+                    vertices[vertexIndex + 2]
+                );
+            }
+            
+            return indexedVertices;
+        }
+
+        // Funzione per generare le normali di una sfera
+        function createSphereNormals(latBands, longBands) {
+            const normals = [];
+            
+            for (let latNumber = 0; latNumber <= latBands; latNumber++) {
+                const theta = latNumber * Math.PI / latBands;
+                const sinTheta = Math.sin(theta);
+                const cosTheta = Math.cos(theta);
+                
+                for (let longNumber = 0; longNumber <= longBands; longNumber++) {
+                    const phi = longNumber * 2 * Math.PI / longBands;
+                    const sinPhi = Math.sin(phi);
+                    const cosPhi = Math.cos(phi);
+                    
+                    // Per una sfera, le normali sono semplicemente le coordinate normalizzate
+                    // (poiché il centro è all'origine e il raggio è 1)
+                    const x = cosPhi * sinTheta;
+                    const y = cosTheta;
+                    const z = sinPhi * sinTheta;
+                    
+                    normals.push(x, y, z);
+                }
+            }
+            
+            // Converte gli indici in normali reali
+            const indexedNormals = [];
+            // Utilizzare gli stessi indici usati per i vertici
+            for (let latNumber = 0; latNumber < latBands; latNumber++) {
+                for (let longNumber = 0; longNumber < longBands; longNumber++) {
+                    const first = (latNumber * (longBands + 1)) + longNumber;
+                    const second = first + longBands + 1;
+                    
+                    // Per ogni triangolo (first, second, first + 1)
+                    indexedNormals.push(
+                        normals[first * 3], normals[first * 3 + 1], normals[first * 3 + 2],
+                        normals[second * 3], normals[second * 3 + 1], normals[second * 3 + 2],
+                        normals[(first + 1) * 3], normals[(first + 1) * 3 + 1], normals[(first + 1) * 3 + 2]
+                    );
+                    
+                    // Per ogni triangolo (second, second + 1, first + 1)
+                    indexedNormals.push(
+                        normals[second * 3], normals[second * 3 + 1], normals[second * 3 + 2],
+                        normals[(second + 1) * 3], normals[(second + 1) * 3 + 1], normals[(second + 1) * 3 + 2],
+                        normals[(first + 1) * 3], normals[(first + 1) * 3 + 1], normals[(first + 1) * 3 + 2]
+                    );
+                }
+            }
+            
+            return indexedNormals;
+        }
+
+        // Funzione per generare le coordinate texture di una sfera
+        function createSphereTexcoords(latBands, longBands) {
+            const textureCoords = [];
+            
+            for (let latNumber = 0; latNumber <= latBands; latNumber++) {
+                // Coordinata V va da 0 a 1 (da un polo all'altro)
+                const v = latNumber / latBands;
+                
+                for (let longNumber = 0; longNumber <= longBands; longNumber++) {
+                    // Coordinata U va da 0 a 1 (circonferenza completa)
+                    const u = longNumber / longBands;
+                    
+                    textureCoords.push(u, v);
+                }
+            }
+            
+            // Converte gli indici in coordinate texture reali
+            const indexedTextureCoords = [];
+            // Utilizzare gli stessi indici usati per i vertici
+            for (let latNumber = 0; latNumber < latBands; latNumber++) {
+                for (let longNumber = 0; longNumber < longBands; longNumber++) {
+                    const first = (latNumber * (longBands + 1)) + longNumber;
+                    const second = first + longBands + 1;
+                    
+                    // Per ogni triangolo (first, second, first + 1)
+                    indexedTextureCoords.push(
+                        textureCoords[first * 2], textureCoords[first * 2 + 1],
+                        textureCoords[second * 2], textureCoords[second * 2 + 1],
+                        textureCoords[(first + 1) * 2], textureCoords[(first + 1) * 2 + 1]
+                    );
+                    
+                    // Per ogni triangolo (second, second + 1, first + 1)
+                    indexedTextureCoords.push(
+                        textureCoords[second * 2], textureCoords[second * 2 + 1],
+                        textureCoords[(second + 1) * 2], textureCoords[(second + 1) * 2 + 1],
+                        textureCoords[(first + 1) * 2], textureCoords[(first + 1) * 2 + 1]
+                    );
+                }
+            }
+            
+            return indexedTextureCoords;
         }
 
         // Funzione per il parsing dei file OBJ
@@ -1398,9 +1584,9 @@
 
         // Funzione per creare un interruttore semplice con geometria di base
         function createSwitch() {
-            const switchSize = 0.2;
+            const switchSize = 0.15;
             
-            // Definisci vertici dell'interruttore (un parallelepipedo semplice)
+            // Vertici per un semplice parallelepipedo
             const switchVertices = [
                 // Fronte
                 -switchSize, -switchSize, switchSize,
@@ -1451,7 +1637,7 @@
                 -switchSize, switchSize, -switchSize
             ];
             
-            // Definisci le normali
+            // Normali standard per un cubo
             const switchNormals = [
                 // Fronte
                 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
@@ -1467,39 +1653,110 @@
                 -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0
             ];
             
-            // Coordinate texture
-            const switchTexcoords = [
-                // Fronte
-                0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1,
-                // Retro
-                1, 0, 1, 1, 0, 1, 1, 0, 0, 1, 0, 0,
-                // Alto
-                0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 1, 1,
-                // Basso
-                1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0,
-                // Destra
-                1, 0, 1, 1, 0, 1, 1, 0, 0, 1, 0, 0,
-                // Sinistra
-                0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1
-            ];
+            // Coordinate texture di base
+            const switchTexcoords = [];
+            for (let i = 0; i < 6; i++) {
+                switchTexcoords.push(
+                    0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1
+                );
+            }
+            
+            // Crea un colore solido per l'interruttore invece di una texture
+            const switchColor = createColorTexture([0.2, 0.2, 0.2, 1.0]); // Grigio scuro
+            textures['switchColor'] = switchColor;
             
             // Aggiungi l'interruttore ai modelli
             models['switch'] = {
                 vertices: switchVertices,
                 normals: switchNormals,
                 texcoords: switchTexcoords,
-                position: [-roomSize + 0.1, 1.5, -1], // Posizione sulla parete a metà altezza (1.5)
+                position: [-roomSize + 0.1, -2.5, 0], // Spostato leggermente più vicino al centro per visibilità
                 rotation: [0, Math.PI/2, 0],
                 scale: [1, 1, 1],
-                texture: 'wall'
+                texture: 'switchColor',
+                isEmissive: false // Disabilito l'emissività per avere un colore più naturale
             };
             
-            // Definisci la posizione dell'interruttore per l'interazione
-            switchPosition = new Float32Array([-roomSize + 0.1, 1.5, -1]);
+            // Aggiorna anche la posizione per l'interazione
+            switchPosition = new Float32Array([-roomSize + 0.1, -2.5, 0]);
             
-            logger.log('Interruttore creato');
+            logger.log('Interruttore creato con colore solido');
         }
-        
+
+        // Funzione per creare una texture con un colore solido
+        function createColorTexture(color) {
+            const texture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            
+            // Crea un pixel con il colore specificato
+            const pixel = new Uint8Array([
+                Math.floor(color[0] * 255),
+                Math.floor(color[1] * 255), 
+                Math.floor(color[2] * 255), 
+                Math.floor(color[3] * 255)
+            ]);
+            
+            // Carica un pixel di colore come texture
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+            
+            // Non serve mipmap per un colore solido
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            
+            return texture;
+        }
+
+        // Funzione per creare una texture dedicata per l'interruttore
+        function createSwitchTexture() {
+            // Crea un canvas per disegnare la texture dell'interruttore
+            const canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            
+            // Disegna lo sfondo (placca dell'interruttore)
+            ctx.fillStyle = '#f0f0f0'; // Grigio chiaro per la placca
+            ctx.fillRect(0, 0, 128, 128);
+            
+            // Aggiungi bordo
+            ctx.strokeStyle = '#a0a0a0'; // Grigio medio per il bordo
+            ctx.lineWidth = 4;
+            ctx.strokeRect(4, 4, 120, 120);
+            
+            // Disegna il bottone al centro
+            ctx.fillStyle = '#303030'; // Grigio scuro per il bottone
+            ctx.fillRect(32, 32, 64, 64);
+            
+            // Aggiungi riflesso (effetto 3D)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.beginPath();
+            ctx.moveTo(32, 32);
+            ctx.lineTo(96, 32);
+            ctx.lineTo(75, 50);
+            ctx.lineTo(50, 50);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Crea texture WebGL
+            const texture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+            
+            // Imposta i parametri della texture
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.bindTexture(gl.TEXTURE_2D, null);
+            
+            // Memorizza la texture
+            textures['switch'] = texture;
+            
+            logger.log('Texture dell\'interruttore creata');
+        }
+
         // Aggiunta della luce al soffitto
         function addCeilingLight() {
             // Crea un semplice modello per la sorgente luminosa
@@ -1592,17 +1849,17 @@
                 vertices: lightVertices,
                 normals: lightNormals,
                 texcoords: lightTexcoords,
-                position: [0, roomHeight - 0.1, 0], // Posiziona vicino al soffitto
+                position: [0, -roomHeight + 0.1, 0], // Vicino al soffitto
                 rotation: [0, 0, 0],
-                scale: [1, 0.2, 1], // Appiattisci per renderlo più come un lampadario
-                texture: 'wall', // Usa una texture esistente invece di 'light'
-                isEmissive: true // Flag per renderlo luminoso
+                scale: [1, 0.2, 1],
+                texture: 'wall',
+                isEmissive: true
             };
             
-            logger.log('Luce a soffitto aggiunta');
-            
             // Aggiorna la posizione della luce per le uniform
-            lightPosition = [0, roomHeight - 0.5, 0]; // Coordinate della luce
+            lightPosition = [0, -roomHeight + 0.5, 0];
+            
+            logger.log('Luce a soffitto aggiunta');
         }
         
         // Inizializzazione del pannello GUI avanzato
@@ -1733,7 +1990,16 @@
             } else if (e.code === 'KeyF') {
                 // Verifica che siamo vicini all'interruttore prima di attivare la funzione
                 if (isNearSwitch) {
-                    toggleLight();
+                    toggleLight();l
+                }
+            } else if (e.code === 'KeyL') {
+                // Usa il tasto L per loggare le posizioni degli oggetti
+                logAllObjectPositions();
+                logger.log('Posizioni oggetti aggiornate');
+                
+                // Assicurati che i log siano visibili
+                if (!logger.enabled) {
+                    logger.toggle();
                 }
             }
         }
@@ -1796,7 +2062,7 @@
             
             // Mostra controlli
             document.getElementById('game-controls').innerHTML = 
-                'W: Avanti | S: Indietro | A: Sinistra | D: Destra | F: Luce | P: Pannello';
+                'W: Avanti | S: Indietro | A: Sinistra | D: Destra | F: Luce | P: Pannello | SPAZIO: Salto | L: Debug';
             
             // Stoppa la musica di intro e avvia quella del gioco
             sounds.intro.pause();
@@ -1812,6 +2078,9 @@
             
             gameStarted = true;
             requestAnimationFrame(gameLoop);
+    
+            // Logga le posizioni di tutti gli oggetti
+            logAllObjectPositions();
             
             logger.log('Gioco avviato');
         }
@@ -1880,21 +2149,44 @@
             
             // Controlli della modalità spettatore
             if (isSpectatorMode) {
-                // Movimenti standard
+                // Movimento standard
                 if (keys['KeyW']) moveZ -= camera.speed;
                 if (keys['KeyS']) moveZ += camera.speed;
                 if (keys['KeyA']) moveX -= camera.speed;
                 if (keys['KeyD']) moveX += camera.speed;
                 
                 // Movimenti verticali aggiuntivi
-                if (keys['KeyE'] || keys['Space']) moveCamera(0, camera.speed, 0);
-                if (keys['KeyQ'] || keys['ShiftLeft']) moveCamera(0, -camera.speed, 0);
+                if (keys['KeyE'] || keys['Space']) moveCamera(0, -camera.speed, 0); // Sali
+                if (keys['KeyQ'] || keys['ShiftLeft']) moveCamera(0, camera.speed, 0); // Scendi
             } else {
                 // Controlli normali
                 if (keys['KeyW']) moveZ -= camera.speed;
                 if (keys['KeyS']) moveZ += camera.speed;
                 if (keys['KeyA']) moveX -= camera.speed;
                 if (keys['KeyD']) moveX += camera.speed;
+                
+                // Gestione del salto (con Y invertito)
+                if (keys['Space'] && !isJumping && Math.abs(camera.position[1] - 1.7) < 0.1) {
+                    isJumping = true;
+                    jumpVelocity = -jumpSpeed; // Negativo = salto verso l'alto
+                    logger.log('Salto iniziato');
+                }
+                
+                if (isJumping) {
+                    // Applica gravità
+                    jumpVelocity += gravity;
+                    
+                    // Muovi la camera verticalmente
+                    camera.position[1] += jumpVelocity;
+                    
+                    // Se la camera è tornata alla posizione di partenza o più in basso, termina il salto
+                    if (camera.position[1] >= 1.7) {
+                        camera.position[1] = 1.7; // Ripristina la posizione esatta
+                        isJumping = false;
+                        jumpVelocity = 0;
+                        logger.log('Salto terminato');
+                    }
+                }
             }
             
             // Applica smorzamento
@@ -1933,6 +2225,23 @@
                         sounds.footsteps.playing = false;
                     };
                 }
+            }
+        }
+
+        function logAllObjectPositions() {
+            logger.log("--- Posizioni degli oggetti ---");
+            
+            // Logga la posizione della camera
+            logger.log(`Camera: posizione=${camera.position}, altezza pavimento=0, altezza soffitto=${-roomHeight}`);
+            
+            // Logga le posizioni di tutti i modelli
+            for (const modelName in models) {
+                if (modelName === 'skybox') continue;
+                
+                const model = models[modelName];
+                if (!model || !model.position) continue;
+                
+                logger.log(`${modelName}: posizione=[${model.position}], scala=[${model.scale}]`);
             }
         }
 
@@ -1984,9 +2293,9 @@
             const minZ = -roomSize + playerRadius;
             const maxZ = roomSize - playerRadius;
             
-            // Limiti verticali (pavimento e soffitto)
-            const minY = 0.5;
-            const maxY = roomHeight - 0.5;
+            // Limiti verticali (pavimento e soffitto) - sistema capovolto
+            const maxY = roomHeight - 0.5; // Pavimento
+            const minY = 0.5;              // Soffitto
             
             // Correggi le collisioni
             if (camera.position[0] < minX) camera.position[0] = minX;

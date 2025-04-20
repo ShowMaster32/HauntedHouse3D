@@ -1,0 +1,18 @@
+# Blender 3.6.7 MTL File: 'light_switch.blend'
+# www.blender.org
+
+newmtl Main
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 2
+Pm 0.000000
+Ps 0.000000
+Pc 0.000000
+Pcr 0.030000
+aniso 0.000000
+anisor 0.000000
+map_Kd D:/Freelance/CG Trader/light_switch/texture/Diffuse.png
+map_Pr D:/Freelance/CG Trader/light_switch/texture/roughness.png
+map_Bump -bm 1.000000 D:/Freelance/CG Trader/light_switch/texture/normal.png
