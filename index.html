@@ -641,7 +641,23 @@
                 
                 // Aumenta la velocità
                 camera.speed = 0.3;
-                logger.log('Modalità spettatore attivata (collisioni disabilitate)');
+                
+                // Mostra le istruzioni per la modalità spettatore
+                const spectatorInstructions = document.createElement('div');
+                spectatorInstructions.id = 'spectator-instructions';
+                spectatorInstructions.textContent = 'Modalità Spettatore: Q = Scendi, E = Sali';
+                spectatorInstructions.style.position = 'absolute';
+                spectatorInstructions.style.bottom = '50px';
+                spectatorInstructions.style.left = '50%';
+                spectatorInstructions.style.transform = 'translateX(-50%)';
+                spectatorInstructions.style.backgroundColor = 'rgba(0,0,0,0.7)';
+                spectatorInstructions.style.color = '#ff4d4d';
+                spectatorInstructions.style.padding = '10px';
+                spectatorInstructions.style.borderRadius = '5px';
+                spectatorInstructions.style.zIndex = '10';
+                document.body.appendChild(spectatorInstructions);
+                
+                logger.log('Modalità spettatore attivata (collisioni disabilitate, usa Q per scendere ed E per salire)');
             } else {
                 // Ripristina velocità normale
                 camera.speed = 0.1;
@@ -649,6 +665,12 @@
                 // Ritorna alla posizione originale
                 camera.position = [...camera.originalPosition];
                 camera.rotation = [...camera.originalRotation];
+                
+                // Rimuovi le istruzioni
+                const spectatorInstructions = document.getElementById('spectator-instructions');
+                if (spectatorInstructions) {
+                    document.body.removeChild(spectatorInstructions);
+                }
                 
                 logger.log('Modalità spettatore disattivata');
             }
@@ -712,19 +734,20 @@
 
         // Inizializzazione shaders
         function initShaders() {
-            // Shader principali per gli oggetti
-            const vertexShaderSource = document.getElementById('vertex-shader').textContent;
-            const fragmentShaderSource = document.getElementById('fragment-shader').textContent;
-            
-            // Compila vertex shader
-            const vertexShader = gl.createShader(gl.VERTEX_SHADER);
-            gl.shaderSource(vertexShader, vertexShaderSource);
-            gl.compileShader(vertexShader);
-            
-            if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
-                logger.log('Errore nel vertex shader: ' + gl.getShaderInfoLog(vertexShader));
-                return;
-            }
+            try {
+                // Shader principali per gli oggetti
+                const vertexShaderSource = document.getElementById('vertex-shader').textContent;
+                const fragmentShaderSource = document.getElementById('fragment-shader').textContent;
+                
+                // Compila vertex shader
+                const vertexShader = gl.createShader(gl.VERTEX_SHADER);
+                gl.shaderSource(vertexShader, vertexShaderSource);
+                gl.compileShader(vertexShader);
+                
+                if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+                    logger.log('Errore nel vertex shader: ' + gl.getShaderInfoLog(vertexShader));
+                    return false;
+                }
             
             // Compila fragment shader
             const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
@@ -788,9 +811,13 @@
                 
                 return false; // Indica che l'inizializzazione è fallita
             }
-            
+
             logger.log('Shader program compilato con successo');
             return true; // Indica che l'inizializzazione è riuscita
+            } catch (error) {
+                logger.log('Errore critico nella compilazione degli shader: ' + error);
+                return false;
+            }
         }
 
         // Inizializzazione suoni
@@ -821,12 +848,18 @@
             
             // Carica texture per lo skybox
             loadSkyboxTextures();
+    
+            // Carica texture dell'interruttore (PBR mapping)
+            loadTexture('textures/switch/Albedo.png', 'switch_albedo');
+            loadTexture('textures/switch/normal.png', 'switch_normal');
+            loadTexture('textures/switch/roughness.png', 'switch_roughness');
             
             // Carica modelli OBJ 
             loadOBJModel('models/12140_Skull_v3_L2.obj', 'models/12140_Skull_v3_L2.mtl', 'skull');
             loadOBJModel('models/kurumaisu.unity_1.obj', 'models/kurumaisu.unity_1.mtl', 'chair');
             loadOBJModel('models/UnsavedScene_1.obj', 'models/UnsavedScene_1.mtl', 'chair');
             loadOBJModel('models/doll.obj', 'models/doll.mtl', 'doll'); // Aggiungi la bambola
+            loadOBJModel('models/light_switch.obj', 'models/light_switch.mtl', 'switch');
             
             // Crea l'interruttore
             createSwitch();
@@ -1049,22 +1082,22 @@
                             }
                         } else if (name === 'chair') {
                             // Posiziona sedie sul pavimento DENTRO la stanza
-                            models[name].position = [3, -0.05, -3]; // Leggermente sollevato dal pavimento
+                            models[name].position = [3, -6.79, -3]; // Posiziona sul pavimento (y=0)
                             models[name].rotation = [0, Math.PI / 4, 0];
-                            models[name].scale = [0.05, 0.05, 0.05];
+                            models[name].scale = [0.15, 0.15, 0.15];
                             
                             // Aggiungi una seconda sedia
                             const cloneName = `${name}_2`;
                             models[cloneName] = Object.assign({}, models[name]);
-                            models[cloneName].position = [-3, -0.05, 2];
+                            models[cloneName].position = [-3, -6.79, 2]; // Posiziona sul pavimento (y=0)
                             models[cloneName].rotation = [0, -Math.PI / 3, 0];
                         } else if (name === 'doll') {
                             // Posiziona la bambola in modo casuale sul pavimento DENTRO la stanza
                             const randomX = (Math.random() * 2 - 1) * (roomSize * 0.6);
                             const randomZ = (Math.random() * 2 - 1) * (roomSize * 0.6);
-                            models[name].position = [randomX, -0.05, randomZ]; // Leggermente sollevato dal pavimento
+                            models[name].position = [randomX, -5, randomZ]; // Leggermente sollevato dal pavimento
                             models[name].rotation = [0, Math.random() * Math.PI * 2, 0];
-                            models[name].scale = [0.05, 0.05, 0.05];
+                            models[name].scale = [0.9, 0.9, 0.9];
                             
                             // Aggiorna la posizione della bambola per l'interazione
                             dollPosition = [randomX, -0.05, randomZ];
@@ -1079,6 +1112,19 @@
                             // Posiziona la luce leggermente più in basso
                             lightPosition = [0, -roomHeight + 1.0, 0]; // 1 metro sotto il soffitto
                             logger.log('Lampadario posizionato al centro sul soffitto, luce configurata');
+                        } else if (name === 'switch') {
+                            // Posiziona l'interruttore sulla parete sinistra
+                            const switchX = -roomSize + 0.1;  // Vicino alla parete sinistra
+                            const switchY = 1.5;              // Altezza a metà stanza
+                            const switchZ = 2.5;              // Un po' avanti lungo la parete
+                            
+                            models[name].position = [switchX, switchY, switchZ];
+                            models[name].rotation = [0, Math.PI/2, 0]; // Rivolto verso l'interno
+                            models[name].scale = [0.05, 0.05, 0.05];
+                            
+                            // Aggiorna la posizione per l'interazione
+                            switchPosition = [switchX, switchY, switchZ];
+                            logger.log(`Interruttore posizionato a: [${switchPosition}]`);
                         }
                         
                         logger.log(`Modello caricato: ${name} (${model.vertices.length / 3} vertici)`);
@@ -1092,6 +1138,20 @@
                     createFallbackModel(name);
                 }
             });
+        }
+
+        // Funzione per creare un materiale composito per l'interruttore
+        function createSwitchMaterial() {
+            // Verifica se le texture necessarie sono state caricate
+            if (!textures['switch_albedo']) {
+                logger.log('Impossibile creare materiale per l\'interruttore: texture albedo mancante');
+                return;
+            }
+            
+            // Crea una texture composita (in un'applicazione reale useresti uno shader personalizzato)
+            // Ma qui simuliamo semplicemente l'utilizzo della texture albedo
+            textures['switch_material'] = textures['switch_albedo'];
+            logger.log('Materiale per l\'interruttore creato');
         }
 
         // Funzione per creare un modello fallback
@@ -1225,6 +1285,29 @@
             lightPosition = [0, -roomHeight + 1.0, 0];
             
             logger.log('Luce a soffitto aggiunta');
+        }
+
+        function debugVisibleObjects() {
+            // Logga gli oggetti che dovrebbero essere visibili nella view attuale
+            const viewDistance = 20; // Distanza massima di visibilità
+            
+            logger.log("--- Oggetti visibili nella view attuale ---");
+            for (const modelName in models) {
+                if (modelName === 'skybox') continue;
+                
+                const model = models[modelName];
+                if (!model || !model.position) continue;
+                
+                // Calcola distanza dalla camera
+                const dx = camera.position[0] - model.position[0];
+                const dy = camera.position[1] - model.position[1];
+                const dz = camera.position[2] - model.position[2];
+                const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                
+                if (distance < viewDistance) {
+                    logger.log(`${modelName}: posizione=[${model.position}], distanza=${distance.toFixed(2)}, scala=[${model.scale}]`);
+                }
+            }
         }
 
         // Funzione di utilità per generare vertici di una sfera (se necessario)
@@ -1584,7 +1667,7 @@
 
         // Funzione per creare un interruttore semplice con geometria di base
         function createSwitch() {
-            const switchSize = 0.15;
+            const switchSize = 0.3;
             
             // Vertici per un semplice parallelepipedo
             const switchVertices = [
@@ -1664,23 +1747,46 @@
             // Crea un colore solido per l'interruttore invece di una texture
             const switchColor = createColorTexture([0.2, 0.2, 0.2, 1.0]); // Grigio scuro
             textures['switchColor'] = switchColor;
+    
+            // Posiziona l'interruttore sulla parete SINISTRA rispetto alla posizione iniziale del giocatore
+            // Il giocatore parte a [0, 1.7, 5] guardando verso [0, 0, 0]
+            // Quindi la sua sinistra è nella direzione negativa dell'asse X
+            const switchX = -roomSize + 0.1;  // Vicino alla parete sinistra
+            const switchY = 1.5;              // Altezza a livello degli occhi
+            const switchZ = 2.5;                // Centro della stanza lungo Z
             
             // Aggiungi l'interruttore ai modelli
             models['switch'] = {
                 vertices: switchVertices,
                 normals: switchNormals,
                 texcoords: switchTexcoords,
-                position: [-roomSize + 0.1, -2.5, 0], // Spostato leggermente più vicino al centro per visibilità
-                rotation: [0, Math.PI/2, 0],
-                scale: [1, 1, 1],
+                position: [switchX, switchY, switchZ],
+                rotation: [0, Math.PI/2, 0],  // Ruotato per essere rivolto verso l'interno
+                scale: [2, 2, 2],             // Aumenta la scala
                 texture: 'switchColor',
-                isEmissive: false // Disabilito l'emissività per avere un colore più naturale
+                isEmissive: true              // Rendilo luminoso
+            };
+    
+            // Crea un punto luce vicino all'interruttore per evidenziarlo
+            const indicatorLight = createColorTexture([1.0, 0.5, 0.0, 1.0]); // Arancione
+            textures['indicatorLight'] = indicatorLight;
+            
+            // Aggiungi un indicatore luminoso vicino all'interruttore
+            models['switchIndicator'] = {
+                vertices: switchVertices,  // Usa gli stessi vertici del cubo dell'interruttore
+                normals: switchNormals,
+                texcoords: switchTexcoords,
+                position: [switchX, switchY, switchZ + 0.3],  // Leggermente più distante dalla parete ma alla stessa altezza
+                rotation: [0, 0, 0],
+                scale: [1, 1, 1],  // Scala normale
+                texture: 'indicatorLight',
+                isEmissive: true
             };
             
             // Aggiorna anche la posizione per l'interazione
-            switchPosition = new Float32Array([-roomSize + 0.1, -2.5, 0]);
+            switchPosition = [switchX, switchY, switchZ];
             
-            logger.log('Interruttore creato con colore solido');
+            logger.log(`Interruttore posizionato sulla parete SINISTRA a: [${switchPosition}], con un indicatore luminoso arancione`);
         }
 
         // Funzione per creare una texture con un colore solido
@@ -1949,6 +2055,11 @@
                 isExternalLightOn = !isExternalLightOn;
                 logger.log(`Luce esterna ${isExternalLightOn ? 'accesa' : 'spenta'}`);
             });
+
+            document.getElementById('toggleLogs').addEventListener('click', () => {
+                logger.toggle();
+                logger.log(`TextArea Log ${logger.enabled ? 'attivato' : 'disattivato'}`);
+            });
             
             logger.log('Event listeners configurati');
         }
@@ -1990,7 +2101,7 @@
             } else if (e.code === 'KeyF') {
                 // Verifica che siamo vicini all'interruttore prima di attivare la funzione
                 if (isNearSwitch) {
-                    toggleLight();l
+                    toggleLight();
                 }
             } else if (e.code === 'KeyL') {
                 // Usa il tasto L per loggare le posizioni degli oggetti
@@ -1998,6 +2109,14 @@
                 logger.log('Posizioni oggetti aggiornate');
                 
                 // Assicurati che i log siano visibili
+                if (!logger.enabled) {
+                    logger.toggle();
+                }
+            } else if (e.code === 'KeyK') {
+                // Aggiungi una nuova funzione di debug
+                debugVisibleObjects();
+                logger.log('Debug degli oggetti visibili attivato');
+                
                 if (!logger.enabled) {
                     logger.toggle();
                 }
@@ -2060,9 +2179,47 @@
             document.getElementById('crosshair').style.display = 'block';
             document.getElementById('top-bar').style.display = 'flex';
             
-            // Mostra controlli
+            // Mostra controlli completi
             document.getElementById('game-controls').innerHTML = 
                 'W: Avanti | S: Indietro | A: Sinistra | D: Destra | F: Luce | P: Pannello | SPAZIO: Salto | L: Debug';
+            
+            // Aggiungi informazioni sul pannello di controllo
+            const panelInfo = document.createElement('div');
+            panelInfo.id = 'panel-info';
+            panelInfo.innerHTML = 'Nel pannello (P): Modalità Spettatore (Q: Scendi, E: Sali)';
+            panelInfo.style.position = 'absolute';
+            panelInfo.style.top = '40px';
+            panelInfo.style.left = '50%';
+            panelInfo.style.transform = 'translateX(-50%)';
+            panelInfo.style.backgroundColor = 'rgba(0,0,0,0.7)';
+            panelInfo.style.color = 'white';
+            panelInfo.style.padding = '5px';
+            panelInfo.style.fontSize = '12px';
+            panelInfo.style.borderRadius = '3px';
+            document.body.appendChild(panelInfo);
+            
+            // Mostra un suggerimento sull'interruttore
+            const switchHint = document.createElement('div');
+            switchHint.id = 'switch-hint';
+            switchHint.innerHTML = 'Cerca l\'interruttore sulla parete SINISTRA! <br>Look for the ORANGE LIGHT!';
+            switchHint.style.position = 'absolute';
+            switchHint.style.bottom = '80px';
+            switchHint.style.left = '50%';
+            switchHint.style.transform = 'translateX(-50%)';
+            switchHint.style.backgroundColor = 'rgba(0,0,0,0.7)';
+            switchHint.style.color = '#ff4d4d';
+            switchHint.style.padding = '10px';
+            switchHint.style.borderRadius = '5px';
+            switchHint.style.animation = 'pulse 2s infinite';
+            switchHint.style.fontSize = '18px';
+            switchHint.style.fontWeight = 'bold';
+            switchHint.style.textAlign = 'center';
+            document.body.appendChild(switchHint);
+            
+            // Nascondi il suggerimento dopo 15 secondi
+            setTimeout(() => {
+                switchHint.style.display = 'none';
+            }, 15000);
             
             // Stoppa la musica di intro e avvia quella del gioco
             sounds.intro.pause();
@@ -2078,9 +2235,12 @@
             
             gameStarted = true;
             requestAnimationFrame(gameLoop);
-    
+
             // Logga le posizioni di tutti gli oggetti
             logAllObjectPositions();
+
+            // Debug degli oggetti visibili
+            debugVisibleObjects();
             
             logger.log('Gioco avviato');
         }
@@ -2155,9 +2315,11 @@
                 if (keys['KeyA']) moveX -= camera.speed;
                 if (keys['KeyD']) moveX += camera.speed;
                 
-                // Movimenti verticali aggiuntivi
-                if (keys['KeyE'] || keys['Space']) moveCamera(0, -camera.speed, 0); // Sali
-                if (keys['KeyQ'] || keys['ShiftLeft']) moveCamera(0, camera.speed, 0); // Scendi
+                // Movimenti verticali solo con Q ed E
+                if (keys['KeyE']) camera.position[1] -= camera.speed; // Sali (Y invertito)
+                if (keys['KeyQ']) camera.position[1] += camera.speed; // Scendi (Y invertito)
+                
+                // Ignora lo spazio in modalità spettatore
             } else {
                 // Controlli normali
                 if (keys['KeyW']) moveZ -= camera.speed;
@@ -2166,9 +2328,9 @@
                 if (keys['KeyD']) moveX += camera.speed;
                 
                 // Gestione del salto (con Y invertito)
-                if (keys['Space'] && !isJumping && Math.abs(camera.position[1] - 1.7) < 0.1) {
+                if (keys['Space'] && !isJumping && Math.abs(camera.position[1] - camera.defaultHeight) < 0.1) {
                     isJumping = true;
-                    jumpVelocity = -jumpSpeed; // Negativo = salto verso l'alto
+                    jumpVelocity = -jumpSpeed; // Negativo = salto verso l'alto (Y invertito)
                     logger.log('Salto iniziato');
                 }
                 
@@ -2180,8 +2342,8 @@
                     camera.position[1] += jumpVelocity;
                     
                     // Se la camera è tornata alla posizione di partenza o più in basso, termina il salto
-                    if (camera.position[1] >= 1.7) {
-                        camera.position[1] = 1.7; // Ripristina la posizione esatta
+                    if (camera.position[1] >= camera.defaultHeight) {
+                        camera.position[1] = camera.defaultHeight; // Ripristina la posizione esatta
                         isJumping = false;
                         jumpVelocity = 0;
                         logger.log('Salto terminato');
@@ -2311,7 +2473,7 @@
         function updateCrosshair() {
             const interactableObjects = [
                 // Definisci oggetti interattivi con posizione e raggio
-                { position: switchPosition, radius: 3, name: 'switch' }
+                { position: switchPosition, radius: 5, name: 'switch' }  // Raggio aumentato per facilitare l'interazione
             ];
             
             // Reset dello stato di vicinanza all'interruttore
@@ -2326,6 +2488,11 @@
                 const dz = camera.position[2] - obj.position[2];
                 const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
                 
+                // Debug: logga la distanza se siamo relativamente vicini all'interruttore
+                if (obj.name === 'switch' && distance < 8) {
+                    logger.log(`Distanza dall'interruttore: ${distance.toFixed(2)}`);
+                }
+                
                 if (distance < obj.radius) {
                     nearInteractable = true;
                     
@@ -2333,9 +2500,13 @@
                     if (obj.name === 'switch') {
                         document.getElementById('instructions').style.visibility = 'visible';
                         isNearSwitch = true;
+                        logger.log('Vicino all\'interruttore! Premi F per interagire');
                     }
                     
                     break;
+                } else {
+                    // Assicurati che le istruzioni siano nascoste se non siamo vicini
+                    document.getElementById('instructions').style.visibility = 'hidden';
                 }
             }
             
@@ -2344,7 +2515,6 @@
                 document.getElementById('crosshair').style.backgroundImage = "url('images/crosshair-selection.png')";
             } else {
                 document.getElementById('crosshair').style.backgroundImage = "url('images/crosshair.png')";
-                document.getElementById('instructions').style.visibility = 'hidden';
             }
         }
         

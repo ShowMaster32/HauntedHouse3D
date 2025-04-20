@@ -158,19 +158,20 @@ body {
     transform: scale(1.02);
 }
 
-#log-container { 
-    position: absolute; 
-    top: 50px; 
-    left: 10px; 
-    width: 300px; 
-    height: 150px; 
-    background-color: rgba(0, 0, 0, 0.7); 
-    padding: 10px; 
-    font-family: monospace; 
-    overflow-y: auto; 
-    border: 1px solid #666;
-    border-radius: 5px;
-    z-index: 6; 
+#log-container {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    width: 400px;
+    height: 150px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: #00ff00;
+    font-family: monospace;
+    font-size: 12px;
+    padding: 5px;
+    overflow-y: auto;
+    z-index: 100;
+    border: 1px solid #00ff00;
 }
 
 #camera-coords {
@@ -246,7 +247,7 @@ body {
 
 /* Stile per la modalità spettatore */
 .spectator-mode-active #crosshair {
-    border: 2px solid #ff4d4d;
+    border: 2px solid #ff4d4d;f#log-container {
     border-radius: 50%;
 }
 
