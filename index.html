@@ -544,6 +544,16 @@
             
             // Carica risorse (texture e modelli)
             loadResources();
+
+            // Assicurati che la lampada venga creata (come fallback se necessario)
+            setTimeout(function() {
+                if (!models['lamp']) {
+                    logger.log('Lampada OBJ non caricata, creazione fallback...');
+                    createFallbackLamp();
+                }
+                
+                debugLampState(); // Verifica lo stato della lampada
+            }, 3000); // Attendi 3 secondi per dare tempo al caricamento dell'OBJ
             
             // Configura gli event listener
             setupEvents();
@@ -1125,7 +1135,7 @@
                             }
                         } else if (name === 'chair') {
                             // Posiziona sedie sul pavimento DENTRO la stanza
-                            models[name].position = [3, -6.79, -3]; // Posiziona sul pavimento (y=0)
+                            models[name].position = [3, -6.79, -3]; // Y=0 è il pavimento
                             models[name].rotation = [0, Math.PI / 4, 0];
                             models[name].scale = [0.15, 0.15, 0.15];
                             models[name].texture = 'wood_texture';
@@ -1133,21 +1143,21 @@
                             // Aggiungi una seconda sedia
                             const cloneName = `${name}_2`;
                             models[cloneName] = Object.assign({}, models[name]);
-                            models[cloneName].position = [-3, -6.79, 2]; // Posiziona sul pavimento (y=0)
+                            models[cloneName].position = [-3, -6.79, 2]; // Y=0 è il pavimento
                             models[cloneName].rotation = [0, -Math.PI / 3, 0];
-                            models[name].texture = 'wood_texture';
-                        } else if (name === 'doll') {
+                        }
+                        else if (name === 'doll') {
                             // Posiziona la bambola in modo casuale sul pavimento DENTRO la stanza
                             const randomX = (Math.random() * 2 - 1) * (roomSize * 0.6);
                             const randomZ = (Math.random() * 2 - 1) * (roomSize * 0.6);
-                            models[name].position = [randomX, -5, randomZ]; // Leggermente sollevato dal pavimento
+                            models[name].position = [randomX, -5, randomZ]; // Y=0 è il pavimento
                             models[name].rotation = [0, Math.random() * Math.PI * 2, 0];
                             models[name].scale = [0.9, 0.9, 0.9];
                             models[name].texture = 'doll_base_texture';
                             
                             // Aggiorna la posizione della bambola per l'interazione
-                            dollPosition = [randomX, -0.05, randomZ];
-                            logger.log(`Bambola posizionata a: [${randomX}, -0.05, ${randomZ}]`);
+                            dollPosition = [randomX, 0, randomZ];
+                            logger.log(`Bambola posizionata a: [${randomX}, 0, ${randomZ}]`);
                         } else if (name === 'lamp') {
                             // Posiziona il lampadario al centro della stanza, attaccato al soffitto
                             // Nota: in un sistema con Y invertito, -roomHeight è il soffitto
@@ -1155,12 +1165,19 @@
                             models[name].rotation = [0, 0, 0];  // Orientamento normale
                             models[name].scale = [0.3, 0.3, 0.3];  // Dimensione appropriata
                             models[name].isEmissive = true;  // Il lampadario emette luce
+                            models[name].texture = 'lampLight'; // Assegna una texture luminosa
                             
-                            // Posiziona la sorgente luminosa leggermente più in basso
-                            lightPosition = [0, -roomHeight + 1.0, 0]; // 1 metro sotto il soffitto
-                            
-                            logger.log('Lampadario posizionato al centro sul soffitto, luce configurata');
-                        } else if (name === 'switch') {
+                            // Crea una texture luminosa se non esiste già
+                                if (!textures['lampLight']) {
+                                    const lampLightColor = createColorTexture([1.0, 0.95, 0.8, 1.0]); // Bianco caldo
+                                    textures['lampLight'] = lampLightColor;
+                                }
+                                
+                                // Non cambiare la posizione della luce se è già configurata correttamente
+                                // lightPosition = [0, -roomHeight + 1.0, 0]; // Lascia la luce dove è ora
+                                
+                                logger.log(`Lampadario posizionato al soffitto a [${models[name].position}], luce mantenuta a [${lightPosition}]`);
+                            } else if (name === 'switch') {
                             // Posiziona l'interruttore sulla parete sinistra
                             const switchX = -roomSize + 0.1;  // Vicino alla parete sinistra
                             const switchY = 1.5;              // Altezza a metà stanza
@@ -1175,9 +1192,9 @@
                             logger.log(`Interruttore posizionato a: [${switchPosition}]`);
                         } else if (name === 'wheelie') {
                             // Posiziona la sedia a rotelle in un angolo
-                            models[name].position = [5, -0.05, 4]; // Sul pavimento, angolo destro
+                            models[name].position = [5, -6, 4]; // Sul pavimento, angolo destro
                             models[name].rotation = [0, Math.PI / 6, 0];
-                            models[name].scale = [1, 1, 1];
+                            models[name].scale = [0.15, 0.15, 0.15];
                             models[name].texture = 'wood_texture'; // Assegna texture in legno
                         } else if (name === 'clock') {
                             // Posiziona l'orologio sulla parete
@@ -1227,6 +1244,131 @@
                     createFallbackModel(name);
                 }
             });
+        }
+
+        function debugLampState() {
+            logger.log("--- Debug dello stato della lampada ---");
+            
+            // Verifica se la lampada OBJ è stata caricata
+            if (models['lamp']) {
+                logger.log(`Lampada OBJ: posizione=[${models['lamp'].position}], scala=[${models['lamp'].scale}], texture=${models['lamp'].texture || 'nessuna'}`);
+            } else {
+                logger.log("Lampada OBJ non caricata");
+            }
+            
+            // Verifica se è stata creata una lampada fallback
+            if (models['lampFallback']) {
+                logger.log(`Lampada fallback: posizione=[${models['lampFallback'].position}], scala=[${models['lampFallback'].scale}], texture=${models['lampFallback'].texture || 'nessuna'}`);
+            }
+            
+            // Verifica la posizione della luce
+            logger.log(`Posizione luce: [${lightPosition}]`);
+            logger.log(`Luce accesa: ${isLightOn ? 'SÌ' : 'NO'}`);
+            
+            // Verifica i riferimenti nel sistema di coordinate
+            logger.log(`Soffitto a Y=${-roomHeight}, Pavimento a Y=0`);
+        }
+
+        // Funzione per creare una lampada fallback se lamp.obj non si carica
+        function createFallbackLamp() {
+            // Verifica se la lampada è già stata caricata
+            if (models['lamp']) {
+                return;
+            }
+            
+            logger.log("Creazione lampada fallback...");
+            
+            // Crea una texture luminosa per la lampada
+            const lampLightColor = createColorTexture([1.0, 0.95, 0.8, 1.0]); // Bianco caldo
+            textures['lampLight'] = lampLightColor;
+            
+            // Crea un modello semplice di lampada (semisfera)
+            const segments = 16;
+            const rings = 8;
+            const radius = 0.5;
+            
+            const vertices = [];
+            const normals = [];
+            const texcoords = [];
+            
+            // Crea una semisfera rivolta verso il basso
+            for (let ring = 0; ring <= rings; ring++) {
+                const phi = (ring / rings) * Math.PI / 2; // Solo metà sfera (0 a PI/2)
+                const cosPhi = Math.cos(phi);
+                const sinPhi = Math.sin(phi);
+                
+                for (let segment = 0; segment <= segments; segment++) {
+                    const theta = (segment / segments) * 2 * Math.PI;
+                    const cosTheta = Math.cos(theta);
+                    const sinTheta = Math.sin(theta);
+                    
+                    // Vertice sulla semisfera
+                    const x = cosTheta * sinPhi * radius;
+                    const y = cosPhi * radius;  // Y verso l'alto
+                    const z = sinTheta * sinPhi * radius;
+                    
+                    vertices.push(x, -y, z);  // Nota: negativo Y per puntare verso il basso
+                    
+                    // Normale (verso l'esterno)
+                    normals.push(x / radius, -y / radius, z / radius);
+                    
+                    // Coordinate texture
+                    texcoords.push(segment / segments, ring / rings);
+                }
+            }
+            
+            // Crea indici per i triangoli
+            const indices = [];
+            for (let ring = 0; ring < rings; ring++) {
+                for (let segment = 0; segment < segments; segment++) {
+                    // Indici dei 4 vertici del quad
+                    const a = ring * (segments + 1) + segment;
+                    const b = ring * (segments + 1) + segment + 1;
+                    const c = (ring + 1) * (segments + 1) + segment;
+                    const d = (ring + 1) * (segments + 1) + segment + 1;
+                    
+                    // Due triangoli per formare un quad
+                    indices.push(a, c, b);
+                    indices.push(b, c, d);
+                }
+            }
+            
+            // Converti indici in vertici, normali e texture coords
+            const indexedVertices = [];
+            const indexedNormals = [];
+            const indexedTexcoords = [];
+            
+            for (let i = 0; i < indices.length; i++) {
+                const index = indices[i];
+                indexedVertices.push(
+                    vertices[index * 3],
+                    vertices[index * 3 + 1],
+                    vertices[index * 3 + 2]
+                );
+                indexedNormals.push(
+                    normals[index * 3],
+                    normals[index * 3 + 1],
+                    normals[index * 3 + 2]
+                );
+                indexedTexcoords.push(
+                    texcoords[index * 2],
+                    texcoords[index * 2 + 1]
+                );
+            }
+            
+            // Aggiungi la lampada ai modelli
+            models['lampFallback'] = {
+                vertices: indexedVertices,
+                normals: indexedNormals,
+                texcoords: indexedTexcoords,
+                position: [0, -roomHeight + 0.1, 0], // Attaccata al soffitto
+                rotation: [0, 0, 0],
+                scale: [1, 1, 1],
+                texture: 'lampLight',
+                isEmissive: true // Questo oggetto emette luce
+            };
+            
+            logger.log(`Lampada fallback creata e posizionata sul soffitto a [0, ${-roomHeight + 0.1}, 0]`);
         }
 
         // Funzione per creare un materiale composito per l'interruttore
@@ -2782,6 +2924,7 @@
             const u_isEmissiveLoc = gl.getUniformLocation(program, 'u_isEmissive');
             const u_externalLightColorLoc = gl.getUniformLocation(program, 'u_externalLightColor');
             const u_externalLightIntensityLoc = gl.getUniformLocation(program, 'u_externalLightIntensity');
+            const u_normalMatrixLoc = gl.getUniformLocation(program, 'u_normalMatrix');
             
             // Passa le opzioni di rendering
             gl.uniform1i(gl.getUniformLocation(program, 'u_shadows'), renderOptions.shadows);
@@ -2797,11 +2940,6 @@
             // Imposta la posizione della luce e della camera
             gl.uniform3fv(u_lightPosLoc, lightPosition);
             gl.uniform3fv(u_viewPosLoc, camera.position);
-
-            // Debuggare la posizione della luce
-            if (renderOptions.showLogs && frameCount % 60 === 0) { // Ogni 60 frame
-                logger.log(`Posizione luce: [${lightPosition}], Luce accesa: ${isLightOn}`);
-            }
             
             // Passa matrici view e projection agli shader
             gl.uniformMatrix4fv(u_viewLoc, false, viewMatrix);
@@ -2849,7 +2987,6 @@
 
                 // Calcola la matrice normale (inversa trasposta della matrice modello)
                 const normalMatrix = m4.transpose(m4.inverse(modelMatrix));
-                const u_normalMatrixLoc = gl.getUniformLocation(program, 'u_normalMatrix');
                 gl.uniformMatrix4fv(u_normalMatrixLoc, false, normalMatrix);
                 
                 // Flag per oggetti emissivi
@@ -2914,6 +3051,10 @@
                 
                 // Passa la matrice modello allo shader
                 gl.uniformMatrix4fv(u_modelLoc, false, modelMatrix);
+                
+                // Calcola la matrice normale (inversa trasposta della matrice modello)
+                const normalMatrix = m4.transpose(m4.inverse(modelMatrix));
+                gl.uniformMatrix4fv(u_normalMatrixLoc, false, normalMatrix);  // ← AGGIUNTA QUESTA RIGA
                 
                 // Flag per oggetti emissivi
                 gl.uniform1i(u_isEmissiveLoc, model.isEmissive || false);
