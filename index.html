@@ -463,12 +463,6 @@
         let mouseLocked = false;
         let gameStarted = false;
         let isNearSwitch = false;
-
-        let isJumping = false;
-        let jumpVelocity = 0;
-        const jumpHeight = 0.8;   // Altezza del salto
-        const jumpSpeed = 0.25;   // Velocità del salto
-        const gravity = 0.015;    // Gravità
         
         // Rendering options
         let renderOptions = {
@@ -506,6 +500,23 @@
         // Aggiungi modalità spettatore
         let isSpectatorMode = false;
         let showCameraCoordinates = false;
+
+        // Variabili per il movimento semplice stile Quake
+        let playerSpeed = 0.15;        // Velocità di movimento 
+        let playerVelocity = [0, 0, 0]; // Velocità corrente
+        let playerDirection = [0, 0, 0]; // Direzione di movimento
+        let playerOnFloor = true;      // Flag a terra
+        let gravity = 0.015;           // Gravità
+        let jumpSpeed = 0.3;          // Velocità di salto
+        let jumpHeight = 0.001;         // Altezza massima del salto
+        let jumpCooldown = 0.5;       // Tempo di attesa tra i salti
+        let jumpTimer = 0;         // Timer per il salto
+        let isJumping = false;      // Flag per il salto
+        let isFalling = false;      // Flag per la caduta
+        let isGrounded = false;    // Flag per il contatto con il suolo
+        let isMoving = false;     // Flag per il movimento
+        let isMovingForward = false; // Flag per il movimento in avanti
+        let jumpVelocity = 0.15; // Fattore di velocità del salto
         
         // Suoni
         const sounds = {
@@ -567,6 +578,41 @@
             
             logger.log('Inizializzazione completata');
         };
+
+// Funzione aggiornata per ottenere il vettore "avanti" dalla rotazione della camera
+function getForwardVector() {
+    const direction = [0, 0, 0];
+    
+    // Calcola la direzione avanti usando solo la rotazione orizzontale (yaw)
+    // Questo garantisce che il movimento avanti/indietro sia sempre sul piano orizzontale
+    // indipendentemente da dove stiamo guardando verticalmente
+    direction[0] = Math.sin(camera.rotation[1]);
+    direction[1] = 0; // Componente Y sempre 0 per il movimento orizzontale
+    direction[2] = Math.cos(camera.rotation[1]);
+    
+    // Normalizza il vettore (anche se in questo caso non è strettamente necessario)
+    const length = Math.sqrt(direction[0] * direction[0] + direction[2] * direction[2]);
+    if (length > 0) {
+        direction[0] /= length;
+        direction[2] /= length;
+    }
+    
+    return direction;
+}
+
+// Funzione aggiornata per ottenere il vettore "laterale" dalla rotazione della camera
+function getSideVector() {
+    // Il vettore laterale è perpendicolare al vettore avanti sul piano orizzontale
+    // È essenzialmente una rotazione di 90 gradi del vettore avanti
+    const direction = [0, 0, 0];
+    
+    // Ruota il vettore avanti di 90 gradi attorno all'asse Y (in senso antiorario)
+    direction[0] = Math.cos(camera.rotation[1]);
+    direction[1] = 0;
+    direction[2] = -Math.sin(camera.rotation[1]);
+    
+    return direction;
+}
         
         // Funzione per ridimensionare il canvas
         function resizeCanvas() {
@@ -1056,7 +1102,7 @@
             models['skybox'] = {
                 vertices: skyboxVertices,
                 position: [0, 0, 0],
-                scale: [100, 100, 100]  // Scala grande per avvolgere la scena
+                scale: [200, 200, 200]  // Scala grande per avvolgere la scena
             };
 
             logger.log('Skybox creato');
@@ -1162,22 +1208,22 @@
                             // Posiziona il lampadario al centro della stanza, attaccato al soffitto
                             // Nota: in un sistema con Y invertito, -roomHeight è il soffitto
                             models[name].position = [0, -roomHeight + 0.1, 0]; // Attaccato al soffitto
-                            models[name].rotation = [0, 0, 0];  // Orientamento normale
-                            models[name].scale = [0.3, 0.3, 0.3];  // Dimensione appropriata
-                            models[name].isEmissive = true;  // Il lampadario emette luce
-                            models[name].texture = 'lampLight'; // Assegna una texture luminosa
+                            models[name].rotation = [Math.PI, 0, 0];  // Ruota di 180° attorno all'asse X per orientarlo verso il basso
+                            models[name].scale = [0.3, 0.3, 0.3];     // Dimensione appropriata
+                            models[name].isEmissive = true;           // Il lampadario emette luce
+                            models[name].texture = 'lampLight';       // Assegna una texture luminosa
                             
                             // Crea una texture luminosa se non esiste già
-                                if (!textures['lampLight']) {
-                                    const lampLightColor = createColorTexture([1.0, 0.95, 0.8, 1.0]); // Bianco caldo
-                                    textures['lampLight'] = lampLightColor;
-                                }
-                                
-                                // Non cambiare la posizione della luce se è già configurata correttamente
-                                // lightPosition = [0, -roomHeight + 1.0, 0]; // Lascia la luce dove è ora
-                                
-                                logger.log(`Lampadario posizionato al soffitto a [${models[name].position}], luce mantenuta a [${lightPosition}]`);
-                            } else if (name === 'switch') {
+                            if (!textures['lampLight']) {
+                                const lampLightColor = createColorTexture([1.0, 0.95, 0.8, 1.0]); // Bianco caldo
+                                textures['lampLight'] = lampLightColor;
+                            }
+                            
+                            // Aggiorna anche la posizione della luce
+                            lightPosition = [0, -roomHeight + 1.0, 0]; // 1 metro sotto il soffitto
+                            
+                            logger.log(`Lampadario posizionato al soffitto a [${models[name].position}], luce a [${lightPosition}]`);
+                        } else if (name === 'switch') {
                             // Posiziona l'interruttore sulla parete sinistra
                             const switchX = -roomSize + 0.1;  // Vicino alla parete sinistra
                             const switchY = 1.5;              // Altezza a metà stanza
@@ -1358,15 +1404,15 @@
             
             // Aggiungi la lampada ai modelli
             models['lampFallback'] = {
-                vertices: indexedVertices,
-                normals: indexedNormals,
-                texcoords: indexedTexcoords,
-                position: [0, -roomHeight + 0.1, 0], // Attaccata al soffitto
-                rotation: [0, 0, 0],
-                scale: [1, 1, 1],
-                texture: 'lampLight',
-                isEmissive: true // Questo oggetto emette luce
-            };
+            vertices: indexedVertices,
+            normals: indexedNormals,
+            texcoords: indexedTexcoords,
+            position: [0, -roomHeight + 0.1, 0], // Attaccata al soffitto
+            rotation: [Math.PI, 0, 0],           // Ruota di 180° attorno all'asse X
+            scale: [1, 1, 1],
+            texture: 'lampLight',
+            isEmissive: true
+        };
             
             logger.log(`Lampada fallback creata e posizionata sul soffitto a [0, ${-roomHeight + 0.1}, 0]`);
         }
@@ -2631,92 +2677,429 @@
             checkDollProximity();
         }
         
-        // Update camera position and rotation
-        function updateCamera(dt) {
-            let moveX = 0, moveZ = 0;
-            
-            // Controlli della modalità spettatore
-            if (isSpectatorMode) {
-                // Movimento standard
-                if (keys['KeyW']) moveZ -= camera.speed;
-                if (keys['KeyS']) moveZ += camera.speed;
-                if (keys['KeyA']) moveX -= camera.speed;
-                if (keys['KeyD']) moveX += camera.speed;
-                
-                // Movimenti verticali solo con Q ed E
-                if (keys['KeyE']) camera.position[1] -= camera.speed; // Sali (Y invertito)
-                if (keys['KeyQ']) camera.position[1] += camera.speed; // Scendi (Y invertito)
-                
-                // Ignora lo spazio in modalità spettatore
-            } else {
-                // Controlli normali
-                if (keys['KeyW']) moveZ -= camera.speed;
-                if (keys['KeyS']) moveZ += camera.speed;
-                if (keys['KeyA']) moveX -= camera.speed;
-                if (keys['KeyD']) moveX += camera.speed;
-                
-                // Gestione del salto (con Y invertito)
-                if (keys['Space'] && !isJumping && Math.abs(camera.position[1] - camera.defaultHeight) < 0.1) {
-                    isJumping = true;
-                    jumpVelocity = -jumpSpeed; // Negativo = salto verso l'alto (Y invertito)
-                    logger.log('Salto iniziato');
-                }
-                
-                if (isJumping) {
-                    // Applica gravità
-                    jumpVelocity += gravity;
-                    
-                    // Muovi la camera verticalmente
-                    camera.position[1] += jumpVelocity;
-                    
-                    // Se la camera è tornata alla posizione di partenza o più in basso, termina il salto
-                    if (camera.position[1] >= camera.defaultHeight) {
-                        camera.position[1] = camera.defaultHeight; // Ripristina la posizione esatta
-                        isJumping = false;
-                        jumpVelocity = 0;
-                        logger.log('Salto terminato');
-                    }
-                }
-            }
-            
-            // Applica smorzamento
-            if (moveX !== 0 || moveZ !== 0) {
-                // Normalizza la direzione per evitare velocità maggiore in diagonale
-                const length = Math.sqrt(moveX * moveX + moveZ * moveZ);
-                if (length > 0) {
-                    moveX /= length;
-                    moveZ /= length;
-                }
-                
-                // Applica velocità
-                moveCamera(moveX * camera.speed, 0, moveZ * camera.speed);
-            }
-            
-            // Controlla collisioni con le pareti
-            if (!isSpectatorMode) {
-                checkWallCollisions();
-            }
-            
-            // Aggiorna il crosshair
-            updateCrosshair();
-            
-            // Mostra le coordinate della camera
-            updateCameraCoordinates();
-            
-            // Controlla la vicinanza alla bambola
-            checkDollProximity();
-            
-            // Suono passi
-            if (!isSpectatorMode && (keys['KeyW'] || keys['KeyS'] || keys['KeyA'] || keys['KeyD'])) {
-                if (!sounds.footsteps.playing) {
-                    sounds.footsteps.play();
-                    sounds.footsteps.playing = true;
-                    sounds.footsteps.onended = () => {
-                        sounds.footsteps.playing = false;
-                    };
-                }
-            }
+// Funzione aggiornata per gestire i controlli del movimento con W/S invertiti
+function updateCamera(dt) {
+    // Skip update if panel is open
+    if (isPanelOpen || !gameStarted) return;
+    
+    // Velocità base
+    const speed = playerSpeed * (dt || 0.016) * 60;
+    
+    // Reset velocità orizzontale
+    playerVelocity[0] = 0;
+    playerVelocity[2] = 0;
+    
+    // Ottieni i vettori di direzione
+    const forward = getForwardVector();
+    const right = getSideVector();
+    
+    // INVERTITO: Movimento avanti/indietro
+    if (keys['KeyW']) {
+        // W ora va indietro
+        playerVelocity[0] -= forward[0] * speed;
+        playerVelocity[2] -= forward[2] * speed;
+    }
+    if (keys['KeyS']) {
+        // S ora va avanti
+        playerVelocity[0] += forward[0] * speed;
+        playerVelocity[2] += forward[2] * speed;
+    }
+    
+    // Movimento laterale rimane invariato
+    if (keys['KeyA']) {
+        playerVelocity[0] -= right[0] * speed;
+        playerVelocity[2] -= right[2] * speed;
+    }
+    if (keys['KeyD']) {
+        playerVelocity[0] += right[0] * speed;
+        playerVelocity[2] += right[2] * speed;
+    }
+    
+    // Aggiorna la posizione della camera usando direttamente la velocità
+    camera.position[0] += playerVelocity[0];
+    camera.position[1] += playerVelocity[1];
+    camera.position[2] += playerVelocity[2];
+    
+    // Collisioni con le pareti
+    checkSimpleWallCollisions();
+}
+
+function checkSimpleWallCollisions() {
+    if (isSpectatorMode) return; // No collisioni in modalità spettatore
+    
+    const playerRadius = 0.5;
+    
+    // Limiti della stanza
+    const minX = -roomSize + playerRadius;
+    const maxX = roomSize - playerRadius;
+    const minZ = -roomSize + playerRadius;
+    const maxZ = roomSize - playerRadius;
+    
+    // Limiti verticali
+    const maxY = camera.defaultHeight; // Pavimento
+    const minY = -roomHeight + 0.5;    // Soffitto
+    
+    // Collisioni X
+    if (camera.position[0] < minX) {
+        camera.position[0] = minX;
+        playerVelocity[0] = 0;
+    } else if (camera.position[0] > maxX) {
+        camera.position[0] = maxX;
+        playerVelocity[0] = 0;
+    }
+    
+    // Collisioni Z
+    if (camera.position[2] < minZ) {
+        camera.position[2] = minZ;
+        playerVelocity[2] = 0;
+    } else if (camera.position[2] > maxZ) {
+        camera.position[2] = maxZ;
+        playerVelocity[2] = 0;
+    }
+    
+    // Collisioni Y (soffitto e pavimento)
+    if (camera.position[1] < minY) {
+        camera.position[1] = minY;
+        playerVelocity[1] = 0;
+    }
+    
+    if (camera.position[1] > maxY) {
+        camera.position[1] = maxY;
+        playerVelocity[1] = 0;
+        playerOnFloor = true;
+        isJumping = false;
+    }
+}
+
+// Metodo completo per gestire le collisioni con le pareti e gli oggetti
+function applyCollisionsAndUpdatePosition(newPos) {
+    // Se in modalità spettatore, ignora le collisioni
+    if (isSpectatorMode) {
+        camera.position[0] = newPos[0];
+        camera.position[1] = newPos[1];
+        camera.position[2] = newPos[2];
+        return;
+    }
+    
+    const playerRadius = 0.5;
+    const playerHeight = camera.defaultHeight;  // Usa l'altezza predefinita della camera
+    
+    // Limiti della stanza
+    const minX = -roomSize + playerRadius;
+    const maxX = roomSize - playerRadius;
+    const minZ = -roomSize + playerRadius;
+    const maxZ = roomSize - playerRadius;
+    
+    // Limiti verticali (pavimento e soffitto)
+    const floorY = playerHeight;
+    const ceilingY = -roomHeight + 0.2;  // Un po' di spazio sopra la testa
+    
+    // Controlla collisione con il pavimento
+    if (newPos[1] > floorY) {
+        newPos[1] = floorY;
+        isGrounded = true;
+        currentVelocity[1] = 0;
+        
+        // Se stiamo atterrando da un'altezza significativa, riproduci un suono
+        if (currentVelocity[1] > 10 && sounds.land && !sounds.land.playing) {
+            sounds.land.play();
+            sounds.land.playing = true;
+            sounds.land.onended = () => {
+                sounds.land.playing = false;
+            };
         }
+    }
+    
+    // Controlla collisione con il soffitto
+    if (newPos[1] < ceilingY) {
+        newPos[1] = ceilingY;
+        currentVelocity[1] = 0;
+    }
+    
+    // Variabili per la collisione a scorrimento (sliding)
+    let canMoveX = true;
+    let canMoveZ = true;
+    
+    // Controlla collisioni X
+    if (newPos[0] < minX) {
+        newPos[0] = minX;
+        currentVelocity[0] = 0;
+        canMoveX = false;
+    } else if (newPos[0] > maxX) {
+        newPos[0] = maxX;
+        currentVelocity[0] = 0;
+        canMoveX = false;
+    }
+    
+    // Controlla collisioni Z
+    if (newPos[2] < minZ) {
+        newPos[2] = minZ;
+        currentVelocity[2] = 0;
+        canMoveZ = false;
+    } else if (newPos[2] > maxZ) {
+        newPos[2] = maxZ;
+        currentVelocity[2] = 0;
+        canMoveZ = false;
+    }
+    
+    // Controlla collisioni con oggetti della stanza
+    const objectCollisions = checkObjectCollisions(
+        camera.position[0], camera.position[1], camera.position[2],
+        newPos[0], newPos[1], newPos[2],
+        playerRadius
+    );
+    
+    // Applica il risultato delle collisioni con gli oggetti
+    if (objectCollisions.hit) {
+        if (!objectCollisions.canMoveX) {
+            newPos[0] = objectCollisions.resolvedX;
+            currentVelocity[0] = 0;
+            canMoveX = false;
+        }
+        
+        if (!objectCollisions.canMoveZ) {
+            newPos[2] = objectCollisions.resolvedZ;
+            currentVelocity[2] = 0;
+            canMoveZ = false;
+        }
+    }
+    
+    // Movimento a scorrimento lungo le pareti (wall sliding)
+    // Se non possiamo muoverci in X ma possiamo in Z, preserva la componente Z
+    if (!canMoveX && canMoveZ) {
+        // La velocità Z rimane, possiamo scorrere lungo la parete
+    }
+    
+    // Se non possiamo muoverci in Z ma possiamo in X, preserva la componente X
+    if (!canMoveZ && canMoveX) {
+        // La velocità X rimane, possiamo scorrere lungo la parete
+    }
+    
+    // Aggiorna la posizione finale
+    camera.position[0] = newPos[0];
+    camera.position[1] = newPos[1];
+    camera.position[2] = newPos[2];
+    
+    // Aggiorna lo stato "a terra"
+    isGrounded = (newPos[1] >= floorY - 0.01);
+}
+
+// Funzione per controllare collisioni con oggetti specifici
+// Ritorna un oggetto con informazioni sulle collisioni
+function checkObjectCollisions(oldX, oldY, oldZ, newX, newY, newZ, radius) {
+    // Risultato predefinito: nessuna collisione
+    const result = {
+        hit: false,
+        canMoveX: true,
+        canMoveZ: true,
+        resolvedX: newX,
+        resolvedZ: newZ
+    };
+    
+    // Lista di oggetti con cui controllare le collisioni
+    // Aggiungi qui gli oggetti che vuoi siano collidibili
+    const collidableObjects = [
+        // Esempio (dovrai personalizzarlo in base ai tuoi modelli):
+        // { name: "switch", position: switchPosition, collisionRadius: 0.7 },
+        // { name: "chair", position: models['chair'].position, collisionRadius: 1.0 }
+    ];
+    
+    // Controlla ogni oggetto
+    for (const obj of collidableObjects) {
+        if (!obj.position) continue;
+        
+        // Calcola distanza tra il giocatore e l'oggetto sul piano XZ
+        const dx = newX - obj.position[0];
+        const dz = newZ - obj.position[2];
+        const distanceXZ = Math.sqrt(dx*dx + dz*dz);
+        
+        // Se c'è una collisione
+        const minDistance = radius + (obj.collisionRadius || 0.5);
+        if (distanceXZ < minDistance) {
+            result.hit = true;
+            
+            // Calcola la direzione della collisione
+            const overlapDistance = minDistance - distanceXZ;
+            
+            // Se la distanza è 0, evita divisione per zero
+            if (distanceXZ < 0.001) {
+                // Spingi in una direzione arbitraria
+                result.resolvedX = oldX;
+                result.resolvedZ = oldZ;
+                result.canMoveX = false;
+                result.canMoveZ = false;
+                continue;
+            }
+            
+            // Calcola vettore di risoluzione normalizzato
+            const normalX = dx / distanceXZ;
+            const normalZ = dz / distanceXZ;
+            
+            // Risolvi la posizione per eliminare la sovrapposizione
+            // Determina se la collisione è prevalentemente lungo X o Z
+            const absNormalX = Math.abs(normalX);
+            const absNormalZ = Math.abs(normalZ);
+            
+            if (absNormalX > absNormalZ) {
+                // Collisione principalmente lungo l'asse X
+                result.canMoveX = false;
+                result.resolvedX = oldX;
+            } else {
+                // Collisione principalmente lungo l'asse Z
+                result.canMoveZ = false;
+                result.resolvedZ = oldZ;
+            }
+            
+            // Se vogliamo gestire un solo oggetto alla volta, possiamo uscire dal ciclo
+            // break;
+        }
+    }
+    
+    return result;
+}
+
+// Funzione aggiornata per gestire il movimento del mouse con asse verticale invertito
+function handleMouseMove(e) {
+    if (!mouseLocked || isPanelOpen) return;
+    
+    // Sensibilità costante
+    const sensitivity = 0.002;
+    
+    // La rotazione orizzontale (intorno all'asse Y) rimane invariata
+    camera.rotation[1] += e.movementX * sensitivity;
+    
+    // INVERTITO: Quando muoviamo il mouse in su, la camera deve guardare in giù
+    camera.rotation[0] -= e.movementY * sensitivity;  // Segno cambiato per invertire
+    
+    // Limita la rotazione verticale per evitare capovolgimenti
+    camera.rotation[0] = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, camera.rotation[0]));
+}
+
+// Funzione aggiuntiva per attivare/disattivare lo sprint
+function toggleSprint(sprint) {
+    isSprinting = sprint;
+}
+
+// Aggiungi questi gestori di eventi al tuo setupEvents() per supportare lo sprint
+function setupSprintEvents() {
+    document.addEventListener('keydown', (e) => {
+        // Attiva sprint con shift
+        if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+            toggleSprint(true);
+        }
+    });
+    
+    document.addEventListener('keyup', (e) => {
+        // Disattiva sprint quando si rilascia shift
+        if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+            toggleSprint(false);
+        }
+    });
+}
+
+// Configura gli event listener con supporto per sprint e movimento FPS migliorato
+function setupEvents() {
+    // Start button
+    document.getElementById('start-button').addEventListener('click', startGame);
+    
+    // Keyboard events con supporto sprint
+    document.addEventListener('keydown', (e) => { 
+        keys[e.code] = true;
+        handleSpecialKeys(e);
+        
+        // Attiva sprint con shift
+        if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+            toggleSprint(true);
+        }
+    });
+    
+    document.addEventListener('keyup', (e) => { 
+        keys[e.code] = false;
+        
+        // Disattiva sprint quando si rilascia shift
+        if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+            toggleSprint(false);
+        }
+    });
+    
+    // Mouse events
+    canvas.addEventListener('click', requestPointerLock);
+    document.addEventListener('pointerlockchange', handlePointerLockChange);
+    document.addEventListener('mousemove', handleMouseMove);
+    
+    // Touch events
+    setupTouchControls();
+    
+    // Panel buttons
+    document.getElementById('toggleShadows').addEventListener('click', () => {
+        renderOptions.shadows = !renderOptions.shadows;
+        logger.log(`Ombre ${renderOptions.shadows ? 'attivate' : 'disattivate'}`);
+    });
+    
+    document.getElementById('toggleReflections').addEventListener('click', () => {
+        renderOptions.reflections = !renderOptions.reflections;
+        logger.log(`Riflessioni ${renderOptions.reflections ? 'attivate' : 'disattivate'}`);
+    });
+    
+    document.getElementById('toggleFPS').addEventListener('click', () => {
+        renderOptions.showFPS = !renderOptions.showFPS;
+        logger.log(`FPS counter ${renderOptions.showFPS ? 'attivato' : 'disattivato'}`);
+    });
+    
+    document.getElementById('toggleLogs').addEventListener('click', () => {
+        renderOptions.showLogs = !renderOptions.showLogs;
+        logger.log(`TextArea Log ${renderOptions.showLogs ? 'attivato' : 'disattivato'}`);
+        logger.toggle();
+    });
+    
+    document.getElementById('advancedRendering').addEventListener('click', () => {
+        renderOptions.advancedRendering = !renderOptions.advancedRendering;
+        logger.log(`Rendering avanzato ${renderOptions.advancedRendering ? 'attivato' : 'disattivato'}`);
+    });
+
+    document.getElementById('toggleExternalLight').addEventListener('click', () => {
+        isExternalLightOn = !isExternalLightOn;
+        logger.log(`Luce esterna ${isExternalLightOn ? 'accesa' : 'spenta'}`);
+    });
+    
+    document.getElementById('toggleCameraInfo').addEventListener('click', () => {
+        showCameraCoordinates = !showCameraCoordinates;
+        const coordElement = document.getElementById('camera-coords');
+        if (coordElement) {
+            coordElement.style.display = showCameraCoordinates ? 'block' : 'none';
+        }
+        logger.log(`Info camera ${showCameraCoordinates ? 'attivate' : 'disattivate'}`);
+    });
+    
+    document.getElementById('toggleSpectatorMode').addEventListener('click', () => {
+        toggleSpectatorMode();
+    });
+    
+    document.getElementById('toggleRoomLight').addEventListener('click', () => {
+        isLightOn = !isLightOn;
+        logger.log(`Luce stanza ${isLightOn ? 'accesa' : 'spenta'} dal pannello di controllo`);
+        
+        // Effetto di flickering quando la luce si accende
+        if (isLightOn) {
+            flickerLight();
+            sounds.flicker.play();
+        }
+    });
+    
+    // Aggiungi pulsante per attivare/disattivare headbob
+    const headbobButton = document.createElement('button');
+    headbobButton.id = 'toggleHeadbob';
+    headbobButton.textContent = 'Attiva/Disattiva Headbob';
+    headbobButton.addEventListener('click', () => {
+        headBobActive = !headBobActive;
+        logger.log(`Effetto headbob ${headBobActive ? 'attivato' : 'disattivato'}`);
+    });
+    
+    // Aggiungi il pulsante al pannello
+    document.getElementById('side-panel').appendChild(headbobButton);
+    
+    logger.log('Event listeners configurati');
+}
 
         function logAllObjectPositions() {
             logger.log("--- Posizioni degli oggetti ---");
@@ -2761,14 +3144,39 @@
         
         // Move camera in local space
         function moveCamera(dx, dy, dz) {
-            // Apply rotation to movement
-            const cosY = Math.cos(camera.rotation[1]);
-            const sinY = Math.sin(camera.rotation[1]);
-            
-            camera.position[0] += dx * cosY - dz * sinY;
-            camera.position[1] += dy;
-            camera.position[2] += dz * cosY + dx * sinY;
-        }
+    // Calcola la nuova posizione in base alla rotazione
+    const cosY = Math.cos(camera.rotation[1]);
+    const sinY = Math.sin(camera.rotation[1]);
+    
+    // Calcola la nuova posizione
+    const newX = camera.position[0] + dx * cosY - dz * sinY;
+    const newY = camera.position[1] + dy;
+    const newZ = camera.position[2] + dz * cosY + dx * sinY;
+    
+    // Prima controlliamo le collisioni X e Z separatamente per migliorare lo scivolamento contro i muri
+    const oldX = camera.position[0];
+    const oldZ = camera.position[2];
+    
+    // Prova a muoversi solo lungo X
+    camera.position[0] = newX;
+    checkSimpleWallCollisions();
+    
+    // Prova a muoversi solo lungo Z
+    camera.position[0] = oldX;
+    camera.position[2] = newZ;
+    checkSimpleWallCollisions();
+    
+    // Ripristina camera.position[0] che è stata modificata
+    camera.position[0] = oldX;
+    
+    // Ora applica il movimento completo
+    camera.position[0] = newX;
+    camera.position[1] = newY;
+    camera.position[2] = newZ;
+    
+    // Controlla le collisioni finali
+    checkSimpleWallCollisions();
+}
         
         // Verifica collisioni con i muri
         function checkWallCollisions() {
@@ -2876,42 +3284,35 @@
         
         // Render scene
         function render() {
-            // Clear canvas
-            gl.clearColor(0.1, 0.1, 0.1, 1.0);
-            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-            
-            // Skip rendering if game not started
-            if (!gameStarted) return;
-            
-            // Enable depth testing
-            gl.enable(gl.DEPTH_TEST);
-            
-            // Crea matrice vista
-            const viewMatrix = m4.lookAt(
-                camera.position,
-                [
-                    camera.position[0] + Math.sin(camera.rotation[1]),
-                    camera.position[1] + Math.sin(camera.rotation[0]),
-                    camera.position[2] + Math.cos(camera.rotation[1])
-                ],
-                [0, 1, 0]  // Questo vettore "up" garantisce che l'asse Y rimanga perpendicolare al pavimento
-            );
-            
-            // Crea matrice proiezione
-            const aspect = canvas.width / canvas.height;
-            const projectionMatrix = m4.perspective(Math.PI / 4, aspect, 0.1, 100);
-            
-            // Renderizza skybox
-            renderSkybox(viewMatrix, projectionMatrix);
-            
-            // Usa il programma principale per il resto della scena
-            gl.useProgram(program);
-            
-            // IMPORTANTE: Verifica che program sia valido prima di ottenere uniform locations
-            if (!program) {
-                logger.log("ERRORE: Programma shader non valido");
-                return;
-            }
+    // Clear canvas
+    gl.clearColor(0.1, 0.1, 0.1, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    
+    // Skip rendering if game not started
+    if (!gameStarted) return;
+    
+    // Enable depth testing
+    gl.enable(gl.DEPTH_TEST);
+    
+    // Crea matrice vista
+    const viewMatrix = createViewMatrix();
+    
+    // Calcola matrice di proiezione
+    const aspect = canvas.width / canvas.height;
+    const fov = Math.PI / 4; // 45 gradi, un valore standard
+    const projectionMatrix = m4.perspective(fov, aspect, 0.1, 100);
+    
+    // Renderizza skybox
+    renderSkybox(viewMatrix, projectionMatrix);
+    
+    // Usa il programma principale per il resto della scena
+    gl.useProgram(program);
+    
+    // IMPORTANTE: Verifica che program sia valido prima di ottenere uniform locations
+    if (!program) {
+        logger.log("ERRORE: Programma shader non valido");
+        return;
+    }
             
             // Ottieni tutte le locazioni uniform per gli shader
             const u_modelLoc = gl.getUniformLocation(program, 'u_model');
@@ -3081,57 +3482,57 @@
         }
         
         // Funzione per renderizzare lo skybox
-        function renderSkybox(viewMatrix, projectionMatrix) {
-            // Verifica che il programma e texture dello skybox esistano
-            if (!skyboxProgram || !textures['skybox'] || !models['skybox']) return;
-            
-            // Usa il programma shader per lo skybox
-            gl.useProgram(skyboxProgram);
-            
-            // IMPORTANTE: Verifica che skyboxProgram sia valido
-            if (!skyboxProgram) {
-                logger.log("ERRORE: Programma shader skybox non valido");
-                return;
-            }
-            
-            // Disabilita depth write (per disegnare lo skybox dietro tutto)
-            gl.depthFunc(gl.LEQUAL);
-            
-            // Crea una versione della view matrix senza traslazione (solo rotazione)
-            const skyboxViewMatrix = m4.copy(viewMatrix);
-            skyboxViewMatrix[12] = 0;
-            skyboxViewMatrix[13] = 0;
-            skyboxViewMatrix[14] = 0;
-            
-            // Imposta le uniform per gli shader dello skybox
-            const skyboxViewLoc = gl.getUniformLocation(skyboxProgram, 'u_view');
-            const skyboxProjLoc = gl.getUniformLocation(skyboxProgram, 'u_projection');
-            const skyboxTexLoc = gl.getUniformLocation(skyboxProgram, 'u_skybox');
-            const skyboxLightOnLoc = gl.getUniformLocation(skyboxProgram, 'u_externalLightOn');
-            
-            gl.uniformMatrix4fv(skyboxViewLoc, false, skyboxViewMatrix);
-            gl.uniformMatrix4fv(skyboxProjLoc, false, projectionMatrix);
-            gl.uniform1i(skyboxTexLoc, 0);
-            gl.uniform1i(skyboxLightOnLoc, isExternalLightOn);
-            
-            // Attiva la cubemap texture dello skybox
-            gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_CUBE_MAP, textures['skybox']);
-            
-            // Configura i buffer dei vertici dello skybox
-            const skyboxPositionLoc = gl.getAttribLocation(skyboxProgram, 'a_position');
-            const skyboxVertexBuffer = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, skyboxVertexBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(models['skybox'].vertices), gl.STATIC_DRAW);
-            gl.enableVertexAttribArray(skyboxPositionLoc);
-            gl.vertexAttribPointer(skyboxPositionLoc, 3, gl.FLOAT, false, 0, 0);
-            
-            // Disegna lo skybox
-            gl.drawArrays(gl.TRIANGLES, 0, 36);
-            
-            // Ripristina il depth test normale
-            gl.depthFunc(gl.LESS);
-        }
+function renderSkybox(viewMatrix, projectionMatrix) {
+    // Verifica che il programma e texture dello skybox esistano
+    if (!skyboxProgram || !textures['skybox'] || !models['skybox']) return;
+    
+    // Usa il programma shader per lo skybox
+    gl.useProgram(skyboxProgram);
+    
+    // IMPORTANTE: Verifica che skyboxProgram sia valido
+    if (!skyboxProgram) {
+        logger.log("ERRORE: Programma shader skybox non valido");
+        return;
+    }
+    
+    // Disabilita depth write (per disegnare lo skybox dietro tutto)
+    gl.depthFunc(gl.LEQUAL);
+    
+    // Crea una versione della view matrix senza traslazione (solo rotazione)
+    const skyboxViewMatrix = m4.copy(viewMatrix);
+    skyboxViewMatrix[12] = 0;
+    skyboxViewMatrix[13] = 0;
+    skyboxViewMatrix[14] = 0;
+    
+    // Imposta le uniform per gli shader dello skybox
+    const skyboxViewLoc = gl.getUniformLocation(skyboxProgram, 'u_view');
+    const skyboxProjLoc = gl.getUniformLocation(skyboxProgram, 'u_projection');
+    const skyboxTexLoc = gl.getUniformLocation(skyboxProgram, 'u_skybox');
+    const skyboxLightOnLoc = gl.getUniformLocation(skyboxProgram, 'u_externalLightOn');
+    
+    gl.uniformMatrix4fv(skyboxViewLoc, false, skyboxViewMatrix);
+    gl.uniformMatrix4fv(skyboxProjLoc, false, projectionMatrix);
+    gl.uniform1i(skyboxTexLoc, 0);
+    gl.uniform1i(skyboxLightOnLoc, isExternalLightOn);
+    
+    // Attiva la cubemap texture dello skybox
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, textures['skybox']);
+    
+    // Configura i buffer dei vertici dello skybox
+    const skyboxPositionLoc = gl.getAttribLocation(skyboxProgram, 'a_position');
+    const skyboxVertexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, skyboxVertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(models['skybox'].vertices), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(skyboxPositionLoc);
+    gl.vertexAttribPointer(skyboxPositionLoc, 3, gl.FLOAT, false, 0, 0);
+    
+    // Disegna lo skybox
+    gl.drawArrays(gl.TRIANGLES, 0, 36);
+    
+    // Ripristina il depth test normale
+    gl.depthFunc(gl.LESS);
+}
         
         // Configura i buffer per un modello specifico
         function setBuffersForModel(model) {
@@ -3558,21 +3959,50 @@
                           document.webkitPointerLockElement === canvas;
         }
         
-        // Gestisci movimento mouse
-        function handleMouseMove(e) {
-            if (!mouseLocked || isPanelOpen) return;
-            
-            const sensitivity = 0.002;
-            
-            // Invertire il segno per il movimento orizzontale (cambia da - a +)
-            camera.rotation[1] += e.movementX * sensitivity;
-            
-            // Mantieni lo stesso comportamento per il movimento verticale
-            camera.rotation[0] += e.movementY * sensitivity;
-            
-            // Limita il pitch per evitare capovolgimenti
-            camera.rotation[0] = Math.max(-Math.PI/2 + 0.01, Math.min(Math.PI/2 - 0.01, camera.rotation[0]));
-        }
+// Funzione corretta per gestire il movimento del mouse
+function handleMouseMove(e) {
+    if (!mouseLocked || isPanelOpen) return;
+    
+    // Sensibilità costante
+    const sensitivity = 0.002;
+    
+    // La rotazione orizzontale (intorno all'asse Y) rimane invariata
+    camera.rotation[1] += e.movementX * sensitivity;
+    
+    // CORREZIONE: Qui è il punto cruciale
+    // Il movimento su/giù del mouse deve essere INVERTITO rispetto all'attuale
+    // Se prima il mouse su guardava in su, ora deve guardare in giù
+    camera.rotation[0] += e.movementY * sensitivity;  // Questo è il segno INVERTITO
+    
+    // Limita la rotazione verticale per evitare capovolgimenti
+    camera.rotation[0] = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, camera.rotation[0]));
+}
+
+// Funzione aggiornata per creare la matrice di vista con inversione verticale corretta
+function createViewMatrix() {
+    // La direzione di vista deve essere coerente con le rotazioni
+    // Yaw (rotazione orizzontale) e Pitch (rotazione verticale)
+    const yaw = camera.rotation[1];
+    const pitch = camera.rotation[0];
+    
+    // Calcola il punto di destinazione
+    // Nota: se incrementiamo pitch, la camera deve guardare verso il basso
+    const dirX = Math.sin(yaw) * Math.cos(pitch);
+    const dirY = Math.sin(pitch);  // Se pitch è positivo, la camera guarda verso il basso
+    const dirZ = Math.cos(yaw) * Math.cos(pitch);
+    
+    // Punto verso cui la camera sta guardando
+    const lookX = camera.position[0] + dirX;
+    const lookY = camera.position[1] + dirY;
+    const lookZ = camera.position[2] + dirZ;
+    
+    // Crea la matrice vista
+    return m4.lookAt(
+        camera.position,          // Posizione della camera
+        [lookX, lookY, lookZ],    // Punto verso cui guarda
+        [0, 1, 0]                 // "Up" vector (sempre verticale)
+    );
+}
         
         // Variabili per touch controls
         let touchStartX = 0;
