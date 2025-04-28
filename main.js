@@ -16,12 +16,12 @@ function updateCamera(dt) {
 
     // Movimento avanti/indietro
     if (keys['KeyW']) {
-        playerVelocity[0] += forward[0] * speed;
-        playerVelocity[2] += forward[2] * speed;
-    }
-    if (keys['KeyS']) {
         playerVelocity[0] -= forward[0] * speed;
         playerVelocity[2] -= forward[2] * speed;
+    }
+    if (keys['KeyS']) {
+        playerVelocity[0] += forward[0] * speed;
+        playerVelocity[2] += forward[2] * speed;
     }
 
     // Movimento laterale
