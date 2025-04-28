@@ -247,7 +247,7 @@ body {
 
 /* Stile per la modalità spettatore */
 .spectator-mode-active #crosshair {
-    border: 2px solid #ff4d4d;f#log-container {
+    border: 2px solid #ff4d4d;
     border-radius: 50%;
 }
 
