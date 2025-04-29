@@ -150,9 +150,9 @@ function updateCrosshair() {
         // Definisci oggetti interattivi con posizione e raggio
         {
             position: switchPosition,
-            radius: 2.5,
+            radius: 3.0, // Aumentato da 2.5 per facilitare l'interazione
             name: 'switch'
-        } // Raggio aumentato per facilitare l'interazione
+        }
     ];
 
     // Reset dello stato di vicinanza all'interruttore
@@ -174,12 +174,24 @@ function updateCrosshair() {
             if (obj.name === 'switch') {
                 document.getElementById('instructions').style.visibility = 'visible';
                 isNearSwitch = true;
+
+                // Aggiungiamo un'animazione pulsante per l'interruttore quando vicini
+                if (models['fallbackSwitch']) {
+                    // Pulsazione leggera dell'interruttore
+                    const pulseScale = 1.0 + Math.sin(Date.now() * 0.005) * 0.1;
+                    models['fallbackSwitch'].scale = [pulseScale, pulseScale, pulseScale];
+                }
             }
 
             break;
         } else {
             // Assicurati che le istruzioni siano nascoste se non siamo vicini
             document.getElementById('instructions').style.visibility = 'hidden';
+            
+            // Ripristina la scala normale dell'interruttore
+            if (models['fallbackSwitch']) {
+                models['fallbackSwitch'].scale = [1, 1, 1];
+            }
         }
     }
 
@@ -838,7 +850,8 @@ function checkDollProximity() {
 }
 
 function createSwitch() {
-    const switchSize = 0.3;
+    // Aumentiamo le dimensioni dell'interruttore per renderlo più visibile
+    const switchSize = 0.4; // Aumentato da 0.3
 
     // Vertici per un semplice parallelepipedo
     const switchVertices = [
@@ -916,12 +929,12 @@ function createSwitch() {
     }
 
     // Crea un colore rosso brillante per l'interruttore
-    const switchColor = createColorTexture([0.8, 0.2, 0.2, 1.0]); // Rosso
+    const switchColor = createColorTexture([1.0, 0.2, 0.2, 1.0]); // Rosso più brillante
     textures['switchColor'] = switchColor;
 
-    // Posiziona l'interruttore sulla parete sinistra
+    // Posiziona l'interruttore sulla parete sinistra a un'altezza visibile
     const switchX = -roomSize + 0.1; // Vicino alla parete sinistra
-    const switchY = 1.5; // Altezza a livello degli occhi
+    const switchY = 1.7; // Altezza a livello degli occhi (aggiustata per corrispondenza con la camera)
     const switchZ = 2.5; // Centro della stanza lungo Z
 
     // Aggiungi l'interruttore ai modelli
@@ -936,18 +949,19 @@ function createSwitch() {
         isEmissive: true
     };
 
-    // Crea un indicatore arancione molto visibile
+    // Crea l'indicatore arancione accanto all'interruttore principale (non sotto)
+    // Lo posizioneremo leggermente a destra invece che sotto
     const indicatorLight = createColorTexture([1.0, 0.5, 0.0, 1.0]); // Arancione
     textures['indicatorLight'] = indicatorLight;
 
-    // Aggiungi l'indicatore sopra l'interruttore
+    // Aggiungi l'indicatore ACCANTO all'interruttore (non sotto)
     models['switchIndicator'] = {
         vertices: switchVertices,
         normals: switchNormals,
         texcoords: switchTexcoords,
-        position: [switchX, switchY - 0.6, switchZ], // Sotto l'interruttore
+        position: [switchX, switchY, switchZ + 0.8], // Accanto all'interruttore
         rotation: [0, 0, 0],
-        scale: [1, 1, 1],
+        scale: [0.7, 0.7, 0.7], // Più piccolo dell'interruttore principale
         texture: 'indicatorLight',
         isEmissive: true
     };
@@ -956,6 +970,7 @@ function createSwitch() {
     switchPosition = [switchX, switchY, switchZ];
 
     logger.log(`Interruttore fallback posizionato a: [${switchPosition}]`);
+    logger.log(`Indicatore arancione posizionato a: [${switchX}, ${switchY}, ${switchZ + 0.8}]`);
 }
 
 // Funzione per creare una lampada fallback se lamp.obj non si carica
@@ -1597,6 +1612,30 @@ const sounds = {
     demonLaugh: new Audio('sounds/demon-laugh.mp3')
 };
 
+(function() {
+    // Verifica se siamo su un dispositivo mobile
+    const isMobile = 'ontouchstart' in window || 
+                    navigator.maxTouchPoints > 0 || 
+                    /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    if (isMobile) {
+        // Imposta meta viewport per dispositivi mobili
+        const viewportMeta = document.querySelector('meta[name="viewport"]');
+        if (viewportMeta) {
+            viewportMeta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+        }
+        
+        // Previeni comportamenti indesiderati su touch
+        window.addEventListener('DOMContentLoaded', function() {
+            document.body.addEventListener('touchmove', function(e) {
+                if (e.target.tagName !== 'CANVAS') {
+                    e.preventDefault();
+                }
+            }, { passive: false });
+        });
+    }
+})();
+
 // Inizializzazione dell'app
 window.onload = function() {
     // Inizializza WebGL
@@ -1746,6 +1785,9 @@ function gameLoop(time) {
 
     // Aggiorna
     update(deltaTime);
+    
+    // Anima l'interruttore
+    animateSwitchButton();
 
     // Renderizza
     render();
@@ -1828,6 +1870,31 @@ function toggleLight() {
         if (isLightOn) {
             flickerLight();
             sounds.flicker.play();
+            
+            // Animazione dell'interruttore quando viene attivato
+            if (models['fallbackSwitch']) {
+                // Rotazione dell'interruttore
+                models['fallbackSwitch'].rotation[2] = Math.PI / 6; // Inclina leggermente
+                
+                // Ripristina la rotazione dopo 300ms
+                setTimeout(() => {
+                    if (models['fallbackSwitch']) {
+                        models['fallbackSwitch'].rotation[2] = 0;
+                    }
+                }, 300);
+            }
+            
+            // Aggiorna anche l'indicatore
+            if (models['switchIndicator']) {
+                models['switchIndicator'].texture = 'lampLight'; // Cambia colore a bianco acceso
+                
+                // Ripristina il colore dopo 1 secondo
+                setTimeout(() => {
+                    if (models['switchIndicator']) {
+                        models['switchIndicator'].texture = 'indicatorLight';
+                    }
+                }, 1000);
+            }
         }
 
         logger.log(`Luce ${isLightOn ? 'accesa' : 'spenta'}`);
@@ -1929,86 +1996,617 @@ function startGame() {
 }
 
 // Inizializzazione del pannello GUI avanzato
+// Inizializzazione del pannello di controllo semplificata e funzionante
 function initGUI() {
-    const gui = new dat.GUI({
-        autoPlace: false
-    });
-
-    // Posiziona manualmente il pannello GUI
-    const guiContainer = document.createElement('div');
-    guiContainer.id = 'gui-container';
-    guiContainer.style.position = 'absolute';
-    guiContainer.style.top = '10px';
-    guiContainer.style.right = '10px';
-    guiContainer.style.zIndex = '5';
-    guiContainer.style.display = 'none'; // Nascondi all'inizio
-    guiContainer.appendChild(gui.domElement);
-    document.body.appendChild(guiContainer);
-
-    // Aggiungi controlli per la luce
-    const lightFolder = gui.addFolder('Illuminazione');
-    lightFolder.add({
-        intensity: 1.0
-    }, 'intensity', 0.1, 2.0).name('Intensità').onChange(value => {
-        // Logica per cambiare l'intensità della luce
-        logger.log(`Intensità luce modificata: ${value}`);
-    });
-
-    // Aggiungi controlli per la camera
-    const cameraFolder = gui.addFolder('Camera');
-    cameraFolder.add(camera, 'speed', 0.05, 0.3).name('Velocità');
-    cameraFolder.add({
-        fov: 70
-    }, 'fov', 60, 100).name('Campo visivo').onChange(value => {
-        // Logica per cambiare il FOV
-        logger.log(`FOV modificato: ${value}`);
-    });
-
-    // Aggiungi controlli per gli effetti di rendering avanzati
-    const renderingFolder = gui.addFolder('Rendering');
-    renderingFolder.add(renderOptions, 'advancedRendering').name('Rendering Avanzato');
-    renderingFolder.add(renderOptions, 'shadows').name('Ombre');
-    renderingFolder.add(renderOptions, 'reflections').name('Riflessioni');
-
-    // Aggiungi controlli per il debugging
-    const debugFolder = gui.addFolder('Debug');
-    debugFolder.add(renderOptions, 'showFPS').name('Mostra FPS').onChange(value => {
-        const fpsElement = document.getElementById('fps-counter');
-        if (fpsElement) {
-            fpsElement.style.display = value ? 'block' : 'none';
+    // Aggiorniamo l'aspetto del pannello laterale
+    const sidePanel = document.getElementById('side-panel');
+    sidePanel.innerHTML = ''; // Rimuoviamo il contenuto esistente
+    
+    // Stile migliorato
+    sidePanel.style.width = '320px';
+    sidePanel.style.backgroundColor = 'rgba(20, 20, 20, 0.9)';
+    sidePanel.style.borderLeft = '2px solid #ff4d4d';
+    sidePanel.style.boxShadow = '-5px 0 20px rgba(255, 77, 77, 0.3)';
+    
+    // Titolo del pannello
+    const header = document.createElement('div');
+    header.innerHTML = `
+        <h2 style="font-family: 'Creepster', cursive; color: #ff4d4d; margin: 0; font-size: 28px; 
+                    text-shadow: 0 0 10px rgba(255, 77, 77, 0.5); text-align: center; padding: 15px 0;">
+            Pannello di Controllo
+        </h2>
+        <p style="color: #aaa; text-align: center; margin-bottom: 25px; padding: 0 20px;">
+            Gestisci le impostazioni della casa infestata
+        </p>
+    `;
+    sidePanel.appendChild(header);
+    
+    // SEZIONE: ILLUMINAZIONE
+    addSection(sidePanel, 'Illuminazione');
+    
+    // Toggle per la luce della stanza
+    addBasicToggle(sidePanel, 'Luce Stanza', isLightOn, function() {
+        isLightOn = !isLightOn;
+        if (isLightOn) {
+            flickerLight();
+            sounds.flicker.play();
         }
+        logger.log(`Luce stanza ${isLightOn ? 'accesa' : 'spenta'} dal pannello`);
     });
-    debugFolder.add({
-        camera: showCameraCoordinates
-    }, 'camera').name('Mostra Coordinate').onChange(value => {
-        showCameraCoordinates = value;
+    
+    // Toggle per la luce esterna
+    addBasicToggle(sidePanel, 'Luce Esterna', isExternalLightOn, function() {
+        isExternalLightOn = !isExternalLightOn;
+        logger.log(`Luce esterna ${isExternalLightOn ? 'accesa' : 'spenta'}`);
+    });
+    
+    // SEZIONE: RENDERING
+    addSection(sidePanel, 'Rendering');
+    
+    // Toggle per le ombre
+    addBasicToggle(sidePanel, 'Ombre', renderOptions.shadows, function() {
+        renderOptions.shadows = !renderOptions.shadows;
+        logger.log(`Ombre ${renderOptions.shadows ? 'attivate' : 'disattivate'}`);
+    });
+    
+    // Toggle per le riflessioni
+    addBasicToggle(sidePanel, 'Riflessioni', renderOptions.reflections, function() {
+        renderOptions.reflections = !renderOptions.reflections;
+        logger.log(`Riflessioni ${renderOptions.reflections ? 'attivate' : 'disattivate'}`);
+    });
+    
+    // Toggle per il rendering avanzato
+    addBasicToggle(sidePanel, 'Rendering Avanzato', renderOptions.advancedRendering, function() {
+        renderOptions.advancedRendering = !renderOptions.advancedRendering;
+        logger.log(`Rendering avanzato ${renderOptions.advancedRendering ? 'attivato' : 'disattivato'}`);
+    });
+    
+    // SEZIONE: CAMERA
+    addSection(sidePanel, 'Fotocamera');
+    
+    // Toggle per la modalità spettatore
+    addBasicToggle(sidePanel, 'Modalità Spettatore', isSpectatorMode, function() {
+        toggleSpectatorMode();
+    });
+    
+    // Toggle per le coordinate della camera
+    addBasicToggle(sidePanel, 'Mostra Coordinate', showCameraCoordinates, function() {
+        showCameraCoordinates = !showCameraCoordinates;
         const coordElement = document.getElementById('camera-coords');
         if (coordElement) {
-            coordElement.style.display = value ? 'block' : 'none';
+            coordElement.style.display = showCameraCoordinates ? 'block' : 'none';
         }
+        logger.log(`Coordinate camera ${showCameraCoordinates ? 'visibili' : 'nascoste'}`);
     });
-
-    // Aggiungi controlli per audio
-    const audioFolder = gui.addFolder('Audio');
-    audioFolder.add({
-        volume: 0.5
-    }, 'volume', 0, 1).name('Volume Ambientale').onChange(value => {
-        if (sounds.ambient) {
-            sounds.ambient.volume = value;
-            logger.log(`Volume ambientale modificato: ${value}`);
+    
+    // SEZIONE: DEBUG
+    addSection(sidePanel, 'Debug');
+    
+    // Toggle per i log
+    addBasicToggle(sidePanel, 'Mostra Log', logger.enabled, function() {
+        logger.toggle();
+    });
+    
+    // Toggle per FPS
+    addBasicToggle(sidePanel, 'Mostra FPS', renderOptions.showFPS, function() {
+        renderOptions.showFPS = !renderOptions.showFPS;
+        const fpsElement = document.getElementById('fps-counter');
+        if (fpsElement) {
+            fpsElement.style.display = renderOptions.showFPS ? 'block' : 'none';
         }
+        logger.log(`FPS counter ${renderOptions.showFPS ? 'attivato' : 'disattivato'}`);
     });
+    
+    // Bottone per resettare la posizione
+    const resetButton = document.createElement('button');
+    resetButton.textContent = 'Ripristina Posizione';
+    resetButton.style.width = 'calc(100% - 40px)';
+    resetButton.style.margin = '10px 20px';
+    resetButton.style.padding = '10px';
+    resetButton.style.backgroundColor = '#333';
+    resetButton.style.color = '#fff';
+    resetButton.style.border = '1px solid #666';
+    resetButton.style.borderRadius = '5px';
+    resetButton.style.cursor = 'pointer';
+    resetButton.onclick = function() {
+        // Ripristina la posizione originale
+        camera.position = [...camera.originalPosition];
+        camera.rotation = [...camera.originalRotation];
+        logger.log('Posizione camera ripristinata');
+    };
+    sidePanel.appendChild(resetButton);
+    
+    // Bottone di chiusura
+    const closeButton = document.createElement('button');
+    closeButton.textContent = 'Chiudi Pannello';
+    closeButton.style.width = 'calc(100% - 40px)';
+    closeButton.style.margin = '20px';
+    closeButton.style.padding = '15px';
+    closeButton.style.backgroundColor = '#ff4d4d';
+    closeButton.style.color = '#fff';
+    closeButton.style.border = 'none';
+    closeButton.style.borderRadius = '5px';
+    closeButton.style.cursor = 'pointer';
+    closeButton.style.fontWeight = 'bold';
+    closeButton.style.fontSize = '16px';
+    closeButton.style.fontFamily = "'Creepster', cursive";
+    closeButton.onclick = togglePanel;
+    sidePanel.appendChild(closeButton);
+    
+    logger.log('Pannello di controllo semplificato inizializzato');
+}
 
-    logger.log('GUI inizializzata');
+// Funzione semplificata per aggiungere una sezione
+function addSection(parent, title) {
+    const section = document.createElement('div');
+    section.innerHTML = `
+        <h3 style="margin: 20px 0 10px 20px; color: #ddd; font-size: 18px; 
+                   border-bottom: 1px solid #444; padding-bottom: 5px;">
+            ${title}
+        </h3>
+    `;
+    parent.appendChild(section);
+}
+
+// Funzione semplificata per aggiungere un toggle switch funzionante
+function addBasicToggle(parent, label, initialState, onChange) {
+    const toggleContainer = document.createElement('div');
+    toggleContainer.style.display = 'flex';
+    toggleContainer.style.justifyContent = 'space-between';
+    toggleContainer.style.alignItems = 'center';
+    toggleContainer.style.padding = '5px 20px';
+    toggleContainer.style.margin = '10px 0';
+    
+    // Etichetta
+    const labelElement = document.createElement('span');
+    labelElement.textContent = label;
+    labelElement.style.color = '#ccc';
+    
+    // Bottone semplice che funziona sicuramente
+    const button = document.createElement('button');
+    button.textContent = initialState ? 'ON' : 'OFF';
+    button.style.backgroundColor = initialState ? '#ff4d4d' : '#555';
+    button.style.color = '#fff';
+    button.style.border = 'none';
+    button.style.borderRadius = '15px';
+    button.style.padding = '5px 15px';
+    button.style.cursor = 'pointer';
+    button.style.minWidth = '60px';
+    button.style.transition = 'background-color 0.3s';
+    
+    button.onclick = function() {
+        if (onChange) onChange();
+        button.textContent = button.textContent === 'ON' ? 'OFF' : 'ON';
+        button.style.backgroundColor = button.textContent === 'ON' ? '#ff4d4d' : '#555';
+    };
+    
+    toggleContainer.appendChild(labelElement);
+    toggleContainer.appendChild(button);
+    parent.appendChild(toggleContainer);
+}
+
+// Funzione per creare una sezione del pannello
+function createSection(title, iconName) {
+    const section = document.createElement('div');
+    section.className = 'panel-section';
+    section.style.marginBottom = '25px';
+    section.style.borderBottom = '1px solid #444';
+    section.style.paddingBottom = '15px';
+    
+    const header = document.createElement('div');
+    header.style.display = 'flex';
+    header.style.alignItems = 'center';
+    header.style.marginBottom = '15px';
+    
+    const icon = document.createElement('div');
+    icon.style.width = '24px';
+    icon.style.height = '24px';
+    icon.style.marginRight = '10px';
+    icon.style.backgroundImage = `url('images/icons/${iconName}')`;
+    icon.style.backgroundSize = 'contain';
+    icon.style.backgroundRepeat = 'no-repeat';
+    
+    const sectionTitle = document.createElement('h3');
+    sectionTitle.textContent = title;
+    sectionTitle.style.margin = '0';
+    sectionTitle.style.color = '#ddd';
+    sectionTitle.style.fontSize = '18px';
+    
+    header.appendChild(icon);
+    header.appendChild(sectionTitle);
+    section.appendChild(header);
+    
+    return section;
+}
+
+// Funzione per aggiungere un toggle switch
+function addToggle(parent, label, initialState, onChange) {
+    const container = document.createElement('div');
+    container.style.display = 'flex';
+    container.style.justifyContent = 'space-between';
+    container.style.alignItems = 'center';
+    container.style.margin = '10px 0';
+    
+    const labelElem = document.createElement('label');
+    labelElem.textContent = label;
+    labelElem.style.color = '#ccc';
+    
+    const toggleWrapper = document.createElement('div');
+    toggleWrapper.style.position = 'relative';
+    toggleWrapper.style.width = '50px';
+    toggleWrapper.style.height = '24px';
+    
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = initialState;
+    checkbox.style.opacity = '0';
+    checkbox.style.width = '0';
+    checkbox.style.height = '0';
+    
+    const slider = document.createElement('span');
+    slider.style.position = 'absolute';
+    slider.style.cursor = 'pointer';
+    slider.style.top = '0';
+    slider.style.left = '0';
+    slider.style.right = '0';
+    slider.style.bottom = '0';
+    slider.style.backgroundColor = initialState ? '#ff4d4d' : '#555';
+    slider.style.transition = '0.4s';
+    slider.style.borderRadius = '24px';
+    
+    const knob = document.createElement('span');
+    knob.style.position = 'absolute';
+    knob.style.content = '""';
+    knob.style.height = '16px';
+    knob.style.width = '16px';
+    knob.style.left = initialState ? '30px' : '4px';
+    knob.style.bottom = '4px';
+    knob.style.backgroundColor = 'white';
+    knob.style.transition = '0.4s';
+    knob.style.borderRadius = '50%';
+    
+    checkbox.addEventListener('change', function() {
+        slider.style.backgroundColor = this.checked ? '#ff4d4d' : '#555';
+        knob.style.left = this.checked ? '30px' : '4px';
+        if (onChange) onChange(this.checked);
+    });
+    
+    slider.appendChild(knob);
+    toggleWrapper.appendChild(checkbox);
+    toggleWrapper.appendChild(slider);
+    
+    container.appendChild(labelElem);
+    container.appendChild(toggleWrapper);
+    
+    parent.appendChild(container);
+}
+
+// Funzione per aggiungere uno slider
+function addSlider(parent, label, initialValue, min, max, step, onChange) {
+    const container = document.createElement('div');
+    container.style.margin = '15px 0';
+    
+    const labelContainer = document.createElement('div');
+    labelContainer.style.display = 'flex';
+    labelContainer.style.justifyContent = 'space-between';
+    labelContainer.style.marginBottom = '5px';
+    
+    const labelElem = document.createElement('label');
+    labelElem.textContent = label;
+    labelElem.style.color = '#ccc';
+    
+    const valueDisplay = document.createElement('span');
+    valueDisplay.textContent = initialValue.toFixed(1);
+    valueDisplay.style.color = '#ff4d4d';
+    
+    labelContainer.appendChild(labelElem);
+    labelContainer.appendChild(valueDisplay);
+    
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = min;
+    slider.max = max;
+    slider.step = step;
+    slider.value = initialValue;
+    slider.style.width = '100%';
+    slider.style.height = '8px';
+    slider.style.borderRadius = '4px';
+    slider.style.appearance = 'none';
+    slider.style.backgroundColor = '#333';
+    slider.style.outline = 'none';
+    
+    // Styling personalizzato per lo slider
+    const style = document.createElement('style');
+    style.textContent = `
+        input[type=range]::-webkit-slider-thumb {
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #ff4d4d;
+            cursor: pointer;
+        }
+        input[type=range]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #ff4d4d;
+            cursor: pointer;
+        }
+    `;
+    document.head.appendChild(style);
+    
+    slider.addEventListener('input', function() {
+        valueDisplay.textContent = parseFloat(this.value).toFixed(1);
+        if (onChange) onChange(parseFloat(this.value));
+    });
+    
+    container.appendChild(labelContainer);
+    container.appendChild(slider);
+    
+    parent.appendChild(container);
+}
+
+// Funzione migliorata per l'animazione dell'interruttore
+function animateSwitchButton() {
+    // Questa funzione verrà chiamata nel gameLoop per animare costantemente l'interruttore
+    
+    // Verifica che l'interruttore esista
+    if (!models['fallbackSwitch'] && !models['switch']) {
+        return;
+    }
+    
+    // Determina quale modello usare (fallback o caricato da OBJ)
+    const switchModel = models['switch'] || models['fallbackSwitch'];
+    const indicatorModel = models['switchIndicator'];
+    
+    // Tempo attuale per l'animazione
+    const time = Date.now() * 0.001; // Converte in secondi
+    
+    // Animazione per quando il giocatore è vicino all'interruttore
+    if (isNearSwitch) {
+        // Pulsazione dell'interruttore (scaling)
+        const pulseScale = 1.0 + Math.sin(time * 4) * 0.1;
+        
+        // Applica la scala mantenendo le proporzioni originali
+        if (switchModel.originalScale) {
+            switchModel.scale = [
+                switchModel.originalScale[0] * pulseScale,
+                switchModel.originalScale[1] * pulseScale,
+                switchModel.originalScale[2] * pulseScale
+            ];
+        } else {
+            // Se non abbiamo la scala originale, memorizzala
+            switchModel.originalScale = [...switchModel.scale];
+            switchModel.scale = [
+                switchModel.scale[0] * pulseScale,
+                switchModel.scale[1] * pulseScale,
+                switchModel.scale[2] * pulseScale
+            ];
+        }
+        
+        // Animazione dell'indicatore (se esiste)
+        if (indicatorModel) {
+            // Fai lampeggiare l'indicatore
+            const blinkIntensity = (Math.sin(time * 8) * 0.5 + 0.5);
+            
+            // Crea un colore che lampeggia tra arancione e rosso
+            const indicatorColor = createColorTexture([
+                1.0,                           // R - Rosso sempre al massimo
+                0.5 * blinkIntensity,          // G - Verde varia per ottenere tonalità arancione/rosse
+                0.0,                           // B - Blu sempre a 0
+                1.0                            // A - Alpha sempre al massimo
+            ]);
+            
+            // Aggiorna la texture solo se siamo vicini all'interruttore
+            textures['indicatorLight'] = indicatorColor;
+            indicatorModel.texture = 'indicatorLight';
+        }
+        
+        // Aggiunta di un effetto visivo che indica che l'interruttore può essere usato
+        if (!document.getElementById('switch-glow')) {
+            const switchGlow = document.createElement('div');
+            switchGlow.id = 'switch-glow';
+            switchGlow.style.position = 'fixed';
+            switchGlow.style.top = '50%';
+            switchGlow.style.left = '50%';
+            switchGlow.style.transform = 'translate(-50%, -50%)';
+            switchGlow.style.width = '50px';
+            switchGlow.style.height = '50px';
+            switchGlow.style.borderRadius = '50%';
+            switchGlow.style.backgroundColor = 'rgba(255, 77, 77, 0.3)';
+            switchGlow.style.boxShadow = '0 0 20px rgba(255, 77, 77, 0.7)';
+            switchGlow.style.animation = 'pulse 1s infinite alternate';
+            switchGlow.style.pointerEvents = 'none';
+            switchGlow.style.zIndex = '1';
+            document.body.appendChild(switchGlow);
+            
+            // Aggiungi l'animazione se non esiste
+            if (!document.getElementById('pulse-animation')) {
+                const style = document.createElement('style');
+                style.id = 'pulse-animation';
+                style.textContent = `
+                    @keyframes pulse {
+                        0% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
+                        100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0.1; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+        }
+    } else {
+        // Se il giocatore non è vicino, ripristina la scala originale
+        if (switchModel.originalScale) {
+            switchModel.scale = [...switchModel.originalScale];
+        }
+        
+        // Rimuovi l'effetto visivo se esiste
+        const switchGlow = document.getElementById('switch-glow');
+        if (switchGlow) {
+            document.body.removeChild(switchGlow);
+        }
+        
+        // Animazione leggera anche quando non siamo vicini
+        if (indicatorModel) {
+            // Leggera pulsazione dell'indicatore
+            const gentlePulse = (Math.sin(time * 2) * 0.2 + 0.8);
+            indicatorModel.scale = [gentlePulse * 0.7, gentlePulse * 0.7, gentlePulse * 0.7];
+        }
+    }
+    
+    // Animazione speciale quando la luce è accesa/spenta
+    if (isLightOn) {
+        // Quando la luce è accesa, l'interruttore è in posizione "on"
+        if (switchModel.switchAnimation !== 'on') {
+            // Rotazione dell'interruttore (se non è già animato)
+            switchModel.rotation[2] = Math.PI / 8; // Inclina leggermente
+            switchModel.switchAnimation = 'on';
+        }
+    } else {
+        // Quando la luce è spenta, l'interruttore è in posizione "off"
+        if (switchModel.switchAnimation !== 'off') {
+            switchModel.rotation[2] = -Math.PI / 8; // Inclina nell'altra direzione
+            switchModel.switchAnimation = 'off';
+        }
+    }
+}
+
+// Aggiornata la funzione toggleLight per migliorare il feedback visivo
+function toggleLight() {
+    // Verifica se il giocatore è vicino all'interruttore
+    if (isNearSwitch) {
+        isLightOn = !isLightOn;
+        document.getElementById('instructions').style.visibility = isLightOn ? 'hidden' : 'visible';
+
+        // Effetto di flickering quando la luce si accende
+        if (isLightOn) {
+            flickerLight();
+            sounds.flicker.play();
+            
+            // Animazione più elaborata dell'interruttore quando viene attivato
+            if (models['fallbackSwitch'] || models['switch']) {
+                const switchModel = models['switch'] || models['fallbackSwitch'];
+                
+                // Sequenza di animazione
+                let animationStep = 0;
+                const animationInterval = setInterval(() => {
+                    animationStep++;
+                    
+                    // Movimenti rapidi dell'interruttore
+                    switch(animationStep) {
+                        case 1:
+                            switchModel.rotation[2] = Math.PI / 4; // Inclina molto
+                            break;
+                        case 2:
+                            switchModel.rotation[2] = -Math.PI / 6; // Inclina nell'altra direzione
+                            break;
+                        case 3:
+                            switchModel.rotation[2] = Math.PI / 8; // Posizione finale
+                            clearInterval(animationInterval);
+                            break;
+                    }
+                }, 80);
+            }
+            
+            // Aggiorna anche l'indicatore
+            if (models['switchIndicator']) {
+                // Effetto flash
+                const originalTexture = models['switchIndicator'].texture;
+                models['switchIndicator'].texture = 'lampLight'; // Cambia colore a bianco acceso
+                
+                // Sequenza di lampeggiamento
+                setTimeout(() => {
+                    if (models['switchIndicator']) models['switchIndicator'].texture = originalTexture;
+                    setTimeout(() => {
+                        if (models['switchIndicator']) models['switchIndicator'].texture = 'lampLight';
+                        setTimeout(() => {
+                            if (models['switchIndicator']) models['switchIndicator'].texture = originalTexture;
+                        }, 100);
+                    }, 100);
+                }, 100);
+            }
+            
+            // Aggiungiamo un effetto visivo a tutto schermo
+            const flashEffect = document.createElement('div');
+            flashEffect.style.position = 'fixed';
+            flashEffect.style.top = '0';
+            flashEffect.style.left = '0';
+            flashEffect.style.width = '100%';
+            flashEffect.style.height = '100%';
+            flashEffect.style.backgroundColor = 'rgba(255, 255, 255, 0.3)';
+            flashEffect.style.zIndex = '999';
+            flashEffect.style.pointerEvents = 'none';
+            document.body.appendChild(flashEffect);
+            
+            // Rimuovi l'effetto flash dopo un breve periodo
+            setTimeout(() => {
+                document.body.removeChild(flashEffect);
+            }, 100);
+        } else {
+            // Animazione per lo spegnimento della luce
+            if (models['fallbackSwitch'] || models['switch']) {
+                const switchModel = models['switch'] || models['fallbackSwitch'];
+                switchModel.rotation[2] = -Math.PI / 8; // Inclina in posizione "off"
+            }
+            
+            // Flash breve di buio totale
+            const darkFlash = document.createElement('div');
+            darkFlash.style.position = 'fixed';
+            darkFlash.style.top = '0';
+            darkFlash.style.left = '0';
+            darkFlash.style.width = '100%';
+            darkFlash.style.height = '100%';
+            darkFlash.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+            darkFlash.style.zIndex = '999';
+            darkFlash.style.pointerEvents = 'none';
+            document.body.appendChild(darkFlash);
+            
+            // Rimuovi l'effetto gradualmente
+            setTimeout(() => {
+                darkFlash.style.transition = 'opacity 0.5s';
+                darkFlash.style.opacity = '0';
+                setTimeout(() => {
+                    if (document.body.contains(darkFlash)) {
+                        document.body.removeChild(darkFlash);
+                    }
+                }, 500);
+            }, 100);
+        }
+
+        logger.log(`Luce ${isLightOn ? 'accesa' : 'spenta'}`);
+    } else {
+        logger.log("Devi essere vicino all'interruttore per accendere/spegnere la luce");
+    }
 }
 
 // Configurazione controlli touch
 function setupTouchControls() {
     // Mostra controlli touch su dispositivi mobili
-    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
-        document.querySelector('.touch-controls').style.display = 'flex';
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+        const touchControls = document.querySelector('.touch-controls');
+        touchControls.style.display = 'flex';
+        
+        // Aggiungiamo un pulsante dedicato per il pannello di controllo
+        const panelButton = document.createElement('div');
+        panelButton.id = 'touch-panel';
+        panelButton.className = 'touch-button';
+        panelButton.textContent = 'P';
+        panelButton.style.position = 'absolute';
+        panelButton.style.top = '20px';
+        panelButton.style.right = '20px';
+        document.body.appendChild(panelButton);
 
-        // Aggiungi event listeners per i pulsanti touch
+        // Aggiungiamo un pulsante per la vista a 360°
+        const lookButton = document.createElement('div');
+        lookButton.id = 'touch-look';
+        lookButton.className = 'touch-button';
+        lookButton.textContent = '👁️';
+        lookButton.style.position = 'absolute';
+        lookButton.style.top = '20px';
+        lookButton.style.left = '20px';
+        document.body.appendChild(lookButton);
+
+        // WASD - movimento
         document.getElementById('touch-forward').addEventListener('touchstart', () => {
             keys['KeyW'] = true;
         });
@@ -2037,14 +2635,116 @@ function setupTouchControls() {
             keys['KeyD'] = false;
         });
 
+        // Interazione luce
         document.getElementById('touch-light').addEventListener('touchstart', toggleLight);
+        
+        // Pannello di controllo
+        panelButton.addEventListener('touchstart', togglePanel);
+        
+        // Modalità look around
+        let lookMode = false;
+        lookButton.addEventListener('touchstart', () => {
+            lookMode = !lookMode;
+            lookButton.style.backgroundColor = lookMode ? 'rgba(255, 77, 77, 0.7)' : 'rgba(30, 30, 30, 0.7)';
+            
+            // Mostra messaggio di aiuto
+            const lookModeMsg = document.getElementById('look-mode-msg') || document.createElement('div');
+            lookModeMsg.id = 'look-mode-msg';
+            lookModeMsg.style.position = 'absolute';
+            lookModeMsg.style.top = '80px';
+            lookModeMsg.style.left = '50%';
+            lookModeMsg.style.transform = 'translateX(-50%)';
+            lookModeMsg.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+            lookModeMsg.style.color = '#fff';
+            lookModeMsg.style.padding = '10px';
+            lookModeMsg.style.borderRadius = '5px';
+            lookModeMsg.style.textAlign = 'center';
+            lookModeMsg.style.zIndex = '100';
+            
+            if (lookMode) {
+                lookModeMsg.textContent = 'Modalità Vista: Tocca e trascina per guardare intorno';
+                document.body.appendChild(lookModeMsg);
+            } else {
+                lookModeMsg.textContent = '';
+                if (document.body.contains(lookModeMsg)) {
+                    document.body.removeChild(lookModeMsg);
+                }
+            }
+        });
 
-        // Touch per spostare la camera
-        canvas.addEventListener('touchstart', handleTouchStart);
-        canvas.addEventListener('touchmove', handleTouchMove);
-        canvas.addEventListener('touchend', handleTouchEnd);
+        // Gestione touch per la rotazione della camera
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let isMoving = false;
 
-        logger.log('Controlli touch configurati');
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            
+            if (lookMode && e.touches.length === 1) {
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+                isMoving = true;
+            }
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            
+            if (lookMode && isMoving && e.touches.length === 1) {
+                const touchX = e.touches[0].clientX;
+                const touchY = e.touches[0].clientY;
+                
+                // Aumentata sensibilità per migliorare l'esperienza su mobile
+                const sensitivity = 0.008;
+                
+                // Calcola il movimento e aggiorna la rotazione della camera
+                camera.rotation[1] -= (touchX - touchStartX) * sensitivity;
+                camera.rotation[0] += (touchY - touchStartY) * sensitivity;
+                
+                // Limita la rotazione verticale per evitare capovolgimenti
+                camera.rotation[0] = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, camera.rotation[0]));
+                
+                // Aggiorna le posizioni di partenza per il prossimo movimento
+                touchStartX = touchX;
+                touchStartY = touchY;
+            }
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            isMoving = false;
+        });
+
+        // Aggiungiamo indicatori di interazione
+        const touchInteractionIndicator = document.createElement('div');
+        touchInteractionIndicator.id = 'touch-interaction';
+        touchInteractionIndicator.style.position = 'absolute';
+        touchInteractionIndicator.style.bottom = '40%';
+        touchInteractionIndicator.style.left = '50%';
+        touchInteractionIndicator.style.transform = 'translateX(-50%)';
+        touchInteractionIndicator.style.color = '#ff4d4d';
+        touchInteractionIndicator.style.textShadow = '0 0 5px black';
+        touchInteractionIndicator.style.fontWeight = 'bold';
+        touchInteractionIndicator.style.fontSize = '24px';
+        touchInteractionIndicator.style.display = 'none';
+        touchInteractionIndicator.style.zIndex = '100';
+        document.body.appendChild(touchInteractionIndicator);
+
+        // Modifichiamo la funzione updateCrosshair per mostrare indicazioni su mobile
+        const originalUpdateCrosshair = updateCrosshair;
+        updateCrosshair = function() {
+            originalUpdateCrosshair();
+            
+            // Mostra indicatore di interazione su mobile
+            if (isNearSwitch) {
+                touchInteractionIndicator.textContent = 'Premi F per l\'interruttore';
+                touchInteractionIndicator.style.display = 'block';
+            } else {
+                touchInteractionIndicator.style.display = 'none';
+            }
+        };
+
+        logger.log('Controlli touch migliorati configurati per dispositivi mobili');
     }
 }
 
@@ -2503,15 +3203,17 @@ function positionModel(name) {
     } else if (name === 'switch' || name === 'lightSwitch') {
         // Posiziona l'interruttore sulla parete sinistra
         const switchX = -roomSize + 0.1; // Vicino alla parete sinistra
-        const switchY = 1.5; // Altezza a metà stanza
+        const switchY = 1.7; // Altezza a livello degli occhi (aggiustata)
         const switchZ = 2.5; // Un po' avanti lungo la parete
 
         models[name].position = [switchX, switchY, switchZ];
         models[name].rotation = [0, Math.PI / 2, 0]; // Rivolto verso l'interno
-        models[name].scale = [0.05, 0.05, 0.05];
+        models[name].scale = [0.1, 0.1, 0.1]; // Aumentato la scala per renderlo più visibile
+        models[name].isEmissive = true; // Lo rendiamo emissivo per maggiore visibilità
 
         // Aggiorna la posizione per l'interazione
         switchPosition = [switchX, switchY, switchZ];
+        logger.log(`Modello interruttore OBJ posizionato a: [${switchPosition}]`);
     } else if (name === 'wheelie') {
         // Posiziona la sedia a rotelle in un angolo
         models[name].position = [5, -6, 4]; // Sul pavimento, angolo destro
@@ -2845,6 +3547,52 @@ function createFallbackModel(name) {
     };
 
     logger.log(`Creato modello fallback per ${name}`);
+}
+
+// Funzione per attivare/disattivare la modalità spettatore
+function toggleSpectatorMode() {
+    isSpectatorMode = !isSpectatorMode;
+    
+    if (isSpectatorMode) {
+        // Salva la posizione originale
+        camera.originalPosition = [...camera.position];
+        camera.originalRotation = [...camera.rotation];
+        
+        // Aumenta la velocità
+        camera.speed = 0.3;
+        
+        // Mostra le istruzioni per la modalità spettatore
+        const spectatorInstructions = document.createElement('div');
+        spectatorInstructions.id = 'spectator-instructions';
+        spectatorInstructions.textContent = 'Modalità Spettatore: Q = Scendi, E = Sali';
+        spectatorInstructions.style.position = 'absolute';
+        spectatorInstructions.style.bottom = '50px';
+        spectatorInstructions.style.left = '50%';
+        spectatorInstructions.style.transform = 'translateX(-50%)';
+        spectatorInstructions.style.backgroundColor = 'rgba(0,0,0,0.7)';
+        spectatorInstructions.style.color = '#ff4d4d';
+        spectatorInstructions.style.padding = '10px';
+        spectatorInstructions.style.borderRadius = '5px';
+        spectatorInstructions.style.zIndex = '10';
+        document.body.appendChild(spectatorInstructions);
+        
+        logger.log('Modalità spettatore attivata (collisioni disabilitate, usa Q per scendere ed E per salire)');
+    } else {
+        // Ripristina velocità normale
+        camera.speed = 0.1;
+        
+        // Ritorna alla posizione originale
+        camera.position = [...camera.originalPosition];
+        camera.rotation = [...camera.originalRotation];
+        
+        // Rimuovi le istruzioni
+        const spectatorInstructions = document.getElementById('spectator-instructions');
+        if (spectatorInstructions) {
+            document.body.removeChild(spectatorInstructions);
+        }
+        
+        logger.log('Modalità spettatore disattivata');
+    }
 }
 
 // Funzione per creare una texture di colore solido
