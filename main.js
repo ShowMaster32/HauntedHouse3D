@@ -362,12 +362,33 @@ function render() {
     gl.uniformMatrix4fv(u_viewLoc, false, viewMatrix);
     gl.uniformMatrix4fv(u_projectionLoc, false, projectionMatrix);
 
+    // Array per raccogliere oggetti trasparenti
+    const transparentObjects = [];
+
     // Renderizza prima tutti gli oggetti non trasparenti
     for (const modelName in models) {
         if (modelName === 'skybox') continue; // Skybox già renderizzato
 
         const model = models[modelName];
-        if (!model || model.isTransparent || !model.vertices || model.vertices.length === 0) continue;
+        if (!model || !model.vertices || model.vertices.length === 0) continue;
+
+        // Salta oggetti trasparenti e raccoglili per il rendering successivo
+        if (model.isTransparent) {
+            // Calcola distanza dalla camera per ordinare gli oggetti trasparenti
+            let modelX = model.position[0];
+            let modelY = model.position[1];
+            let modelZ = model.position[2];
+            const dx = camera.position[0] - modelX;
+            const dy = camera.position[1] - modelY;
+            const dz = camera.position[2] - modelZ;
+            
+            transparentObjects.push({
+                name: modelName,
+                distanceToCamera: dx*dx + dy*dy + dz*dz
+            });
+            
+            continue;
+        }
 
         // Crea matrice modello
         let modelMatrix = m4.identity();
@@ -425,76 +446,135 @@ function render() {
         // Disegna il modello
         gl.drawArrays(gl.TRIANGLES, 0, model.vertices.length / 3);
     }
+
+    // Ordina gli oggetti trasparenti dal più lontano al più vicino
+    transparentObjects.sort((a, b) => {
+        return b.distanceToCamera - a.distanceToCamera;
+    });
 
     // Poi renderizza gli oggetti trasparenti
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    if (transparentObjects.length > 0) {
+        // Abilita il blending per la trasparenza
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); // Questa è la chiave per la trasparenza corretta
+        gl.depthMask(false); // Disattiva scrittura sul depth buffer per oggetti trasparenti
 
-    for (const modelName in models) {
-        if (modelName === 'skybox') continue;
+        // Itera sugli oggetti trasparenti in ordine di distanza
+        for (const obj of transparentObjects) {
+            const model = models[obj.name];
 
-        const model = models[modelName];
-        if (!model || !model.isTransparent || !model.vertices || model.vertices.length === 0) continue;
+            // Crea matrice modello
+            let modelMatrix = m4.identity();
 
-        // Crea matrice modello
-        let modelMatrix = m4.identity();
+            // Applica traslazione se specificata
+            if (model.position) {
+                modelMatrix = m4.translate(
+                    modelMatrix,
+                    model.position[0],
+                    model.position[1],
+                    model.position[2]
+                );
+            }
 
-        // Applica traslazione se specificata
-        if (model.position) {
-            modelMatrix = m4.translate(
-                modelMatrix,
-                model.position[0],
-                model.position[1],
-                model.position[2]
-            );
+            // Applica rotazione se specificata
+            if (model.rotation) {
+                modelMatrix = m4.xRotate(modelMatrix, model.rotation[0]);
+                modelMatrix = m4.yRotate(modelMatrix, model.rotation[1]);
+                modelMatrix = m4.zRotate(modelMatrix, model.rotation[2]);
+            }
+
+            // Applica scala se specificata
+            if (model.scale) {
+                modelMatrix = m4.scale(
+                    modelMatrix,
+                    model.scale[0],
+                    model.scale[1],
+                    model.scale[2]
+                );
+            }
+
+            // Passa la matrice modello allo shader
+            gl.uniformMatrix4fv(u_modelLoc, false, modelMatrix);
+
+            // Calcola la matrice normale (inversa trasposta della matrice modello)
+            const normalMatrix = m4.transpose(m4.inverse(modelMatrix));
+            gl.uniformMatrix4fv(u_normalMatrixLoc, false, normalMatrix);
+
+            // Flag per oggetti emissivi
+            gl.uniform1i(u_isEmissiveLoc, model.isEmissive || false);
+
+            // Configura texture se specificata
+            if (model.texture && textures[model.texture]) {
+                gl.uniform1i(u_useTextureLoc, 1);
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, textures[model.texture]);
+                gl.uniform1i(u_textureLoc, 0);
+            } else {
+                gl.uniform1i(u_useTextureLoc, 0);
+            }
+
+            // Configura i buffer per questo modello
+            setBuffersForModel(model);
+
+            // Disegna il modello
+            gl.drawArrays(gl.TRIANGLES, 0, model.vertices.length / 3);
         }
 
-        // Applica rotazione se specificata
-        if (model.rotation) {
-            modelMatrix = m4.xRotate(modelMatrix, model.rotation[0]);
-            modelMatrix = m4.yRotate(modelMatrix, model.rotation[1]);
-            modelMatrix = m4.zRotate(modelMatrix, model.rotation[2]);
-        }
-
-        // Applica scala se specificata
-        if (model.scale) {
-            modelMatrix = m4.scale(
-                modelMatrix,
-                model.scale[0],
-                model.scale[1],
-                model.scale[2]
-            );
-        }
-
-        // Passa la matrice modello allo shader
-        gl.uniformMatrix4fv(u_modelLoc, false, modelMatrix);
-
-        // Calcola la matrice normale (inversa trasposta della matrice modello)
-        const normalMatrix = m4.transpose(m4.inverse(modelMatrix));
-        gl.uniformMatrix4fv(u_normalMatrixLoc, false, normalMatrix);
-
-        // Flag per oggetti emissivi
-        gl.uniform1i(u_isEmissiveLoc, model.isEmissive || false);
-
-        // Configura texture se specificata
-        if (model.texture && textures[model.texture]) {
-            gl.uniform1i(u_useTextureLoc, 1);
-            gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, textures[model.texture]);
-            gl.uniform1i(u_textureLoc, 0);
-        } else {
-            gl.uniform1i(u_useTextureLoc, 0);
-        }
-
-        // Configura i buffer per questo modello
-        setBuffersForModel(model);
-
-        // Disegna il modello
-        gl.drawArrays(gl.TRIANGLES, 0, model.vertices.length / 3);
+        // Ripristina le impostazioni del rendering
+        gl.depthMask(true);  // Riabilita scrittura nel depth buffer
+        gl.disable(gl.BLEND);
     }
+}
 
-    // Disabilita il blending dopo aver renderizzato gli oggetti trasparenti
-    gl.disable(gl.BLEND);
+// Funzione per creare un materiale vetro reale (senza usare wall texture)
+function createGlassMaterial() {
+    // Elimina la texture esistente se presente
+    if (textures['glassMaterial']) {
+        gl.deleteTexture(textures['glassMaterial']);
+    }
+    
+    // Crea un canvas per la texture
+    const glassCanvas = document.createElement('canvas');
+    glassCanvas.width = 128;
+    glassCanvas.height = 128;
+    const ctx = glassCanvas.getContext('2d');
+    
+    // Crea un canvas vuoto (completamente trasparente)
+    ctx.clearRect(0, 0, 128, 128);
+    
+    // Aggiungi un colore azzurro MOLTO leggero e trasparente
+    ctx.fillStyle = 'rgba(170, 200, 255, 0.15)';
+    ctx.fillRect(0, 0, 128, 128);
+    
+    // Aggiungi alcune variazioni per dare un'impressione di vetro
+    for (let i = 0; i < 20; i++) {
+        // Riflessi casuali
+        const x = Math.random() * 128;
+        const y = Math.random() * 128;
+        const size = Math.random() * 5 + 1;
+        const alpha = Math.random() * 0.03 + 0.02; // Molto trasparente
+        
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    // Crea la texture WebGL
+    const glassTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, glassTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, glassCanvas);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    
+    textures['glassMaterial'] = glassTexture;
+    
+    logger.log('Nuovo materiale vetro creato con trasparenza reale');
+    
+    return glassTexture;
 }
 
 // Funzione per renderizzare lo skybox
@@ -1224,8 +1304,15 @@ function addCeilingLight() {
     logger.log('Lampada di backup creata e posizionata sul soffitto');
 }
 
-// Crea una stanza semplice
+// Crea una stanza semplice con aperture per le finestre
 function createSimpleRoom() {
+    logger.log("Creazione stanza con aperture per finestre...");
+    
+    // Definisci le dimensioni delle finestre
+    const windowWidth = 4;
+    const windowHeight = 2.5;
+    const frameWidth = 0.2;
+    
     // Pavimento (a Y=0)
     models['floor'] = {
         vertices: [
@@ -1288,227 +1375,1227 @@ function createSimpleRoom() {
         texture: 'ceiling'
     };
 
+    // Definisci posizioni finestre
+    const windowPositions = [
+        { x: 0, y: -1.3, wall: 'front' }, 
+        { x: 0, y: -1.3, wall: 'back' },  
+        { x: 4, y: -1.3, wall: 'right' }, 
+        { x: -4, y: -1.3, wall: 'left' }  
+    ];
+
+    // Crea pareti con aperture per le finestre
     // Parete frontale
-    models['frontWall'] = {
-        vertices: [
+    createWallWithHoles('frontWall', 'front', windowPositions);
+    
+    // Parete posteriore
+    createWallWithHoles('backWall', 'back', windowPositions);
+    
+    // Parete sinistra
+    createWallWithHoles('leftWall', 'left', windowPositions);
+    
+    // Parete destra
+    createWallWithHoles('rightWall', 'right', windowPositions);
+    
+    // Aggiungi le cornici delle finestre
+    addWindowOpenings();
+
+    logger.log('Stanza con finestre creata');
+}
+
+// Funzione per creare una parete con aperture per finestre
+function createWallWithHoles(wallName, wallType, windows) {
+    logger.log(`Creazione parete ${wallName} con aperture...`);
+    
+    // Filtro solo le finestre per questa parete
+    const windowsForThisWall = windows.filter(window => window.wall === wallType);
+    
+    // Se non ci sono finestre per questa parete, crea una parete normale
+    if (windowsForThisWall.length === 0) {
+        createSimpleWall(wallName, wallType);
+        return;
+    }
+    
+    // Altrimenti, crea una parete con aperture
+    const windowWidth = 4;
+    const windowHeight = 2.5;
+    
+    // Prepara gli array per vertici, normali e coordinate texture
+    let vertices = [];
+    let normals = [];
+    let texcoords = [];
+    
+    // Determina la normale in base al tipo di parete
+    let normalX = 0, normalY = 0, normalZ = 0;
+    if (wallType === 'front') normalZ = 1;
+    else if (wallType === 'back') normalZ = -1;
+    else if (wallType === 'left') normalX = 1;
+    else if (wallType === 'right') normalX = -1;
+    
+    // Per ogni finestra su questa parete
+    for (const window of windowsForThisWall) {
+        // Posizione Y della finestra
+        const windowY = window.y;
+        const windowX = window.x;
+        
+        // Calcola i limiti della finestra
+        let minX, maxX, minZ, maxZ;
+        
+        if (wallType === 'front' || wallType === 'back') {
+            minX = windowX - windowWidth/2;
+            maxX = windowX + windowWidth/2;
+            minZ = wallType === 'front' ? -roomSize : roomSize;
+            maxZ = minZ;
+        } else {
+            minZ = windowX - windowWidth/2;
+            maxZ = windowX + windowWidth/2;
+            minX = wallType === 'left' ? -roomSize : roomSize;
+            maxX = minX;
+        }
+        
+        // Crea la parte superiore (sopra la finestra)
+        if (wallType === 'front' || wallType === 'back') {
+            // Parte superiore
+            vertices.push(
+                -roomSize, 0, minZ,
+                roomSize, 0, minZ,
+                roomSize, windowY, minZ,
+                -roomSize, 0, minZ,
+                roomSize, windowY, minZ,
+                -roomSize, windowY, minZ
+            );
+            
+            // Parte sinistra (a sinistra della finestra)
+            vertices.push(
+                -roomSize, windowY, minZ,
+                minX, windowY, minZ,
+                minX, windowY - windowHeight, minZ,
+                -roomSize, windowY, minZ,
+                minX, windowY - windowHeight, minZ,
+                -roomSize, windowY - windowHeight, minZ
+            );
+            
+            // Parte destra (a destra della finestra)
+            vertices.push(
+                maxX, windowY, minZ,
+                roomSize, windowY, minZ,
+                roomSize, windowY - windowHeight, minZ,
+                maxX, windowY, minZ,
+                roomSize, windowY - windowHeight, minZ,
+                maxX, windowY - windowHeight, minZ
+            );
+            
+            // Parte inferiore (sotto la finestra)
+            vertices.push(
+                -roomSize, windowY - windowHeight, minZ,
+                minX, windowY - windowHeight, minZ,
+                maxX, windowY - windowHeight, minZ,
+                -roomSize, windowY - windowHeight, minZ,
+                maxX, windowY - windowHeight, minZ,
+                roomSize, windowY - windowHeight, minZ,
+                maxX, windowY - windowHeight, minZ,
+                roomSize, windowY - windowHeight, minZ,
+                roomSize, -roomHeight, minZ,
+                -roomSize, windowY - windowHeight, minZ,
+                maxX, windowY - windowHeight, minZ,
+                -roomSize, -roomHeight, minZ,
+                -roomSize, -roomHeight, minZ,
+                maxX, windowY - windowHeight, minZ,
+                roomSize, -roomHeight, minZ
+            );
+        } else {
+            // Parete laterale (sinistra o destra)
+            // Parte superiore
+            vertices.push(
+                minX, 0, -roomSize,
+                minX, 0, roomSize,
+                minX, windowY, roomSize,
+                minX, 0, -roomSize,
+                minX, windowY, roomSize,
+                minX, windowY, -roomSize
+            );
+            
+            // Parte frontale (davanti alla finestra)
+            vertices.push(
+                minX, windowY, -roomSize,
+                minX, windowY, minZ,
+                minX, windowY - windowHeight, minZ,
+                minX, windowY, -roomSize,
+                minX, windowY - windowHeight, minZ,
+                minX, windowY - windowHeight, -roomSize
+            );
+            
+            // Parte posteriore (dietro alla finestra)
+            vertices.push(
+                minX, windowY, maxZ,
+                minX, windowY, roomSize,
+                minX, windowY - windowHeight, roomSize,
+                minX, windowY, maxZ,
+                minX, windowY - windowHeight, roomSize,
+                minX, windowY - windowHeight, maxZ
+            );
+            
+            // Parte inferiore (sotto la finestra)
+            vertices.push(
+                minX, windowY - windowHeight, -roomSize,
+                minX, windowY - windowHeight, minZ,
+                minX, windowY - windowHeight, maxZ,
+                minX, windowY - windowHeight, -roomSize,
+                minX, windowY - windowHeight, maxZ,
+                minX, windowY - windowHeight, roomSize,
+                minX, windowY - windowHeight, roomSize,
+                minX, windowY - windowHeight, maxZ,
+                minX, -roomHeight, roomSize,
+                minX, windowY - windowHeight, -roomSize,
+                minX, windowY - windowHeight, roomSize,
+                minX, -roomHeight, -roomSize,
+                minX, -roomHeight, -roomSize,
+                minX, -roomHeight, roomSize,
+                minX, windowY - windowHeight, roomSize
+            );
+        }
+        
+        // Aggiungi le normali per tutti i vertici
+        for (let i = 0; i < vertices.length / 3; i++) {
+            normals.push(normalX, normalY, normalZ);
+        }
+        
+        // Aggiungi coordinate texture approssimative
+        // (questa è una versione semplificata, potresti voler calcolare coordinate più precise)
+        for (let i = 0; i < vertices.length; i += 9) {
+            // Calcola coordinate texture basate sulla posizione dei vertici
+            for (let j = 0; j < 3; j++) {
+                const vIdx = i + j*3;
+                let u, v;
+                
+                if (wallType === 'front' || wallType === 'back') {
+                    // Per le pareti frontali/posteriori, usa X e Y
+                    u = (vertices[vIdx] + roomSize) / (2 * roomSize); // Normalizza X da -roomSize a roomSize
+                    v = -vertices[vIdx+1] / roomHeight;  // Normalizza Y (invertito perché Y è negativo)
+                } else {
+                    // Per le pareti laterali, usa Z e Y
+                    u = (vertices[vIdx+2] + roomSize) / (2 * roomSize); // Normalizza Z da -roomSize a roomSize
+                    v = -vertices[vIdx+1] / roomHeight;  // Normalizza Y (invertito)
+                }
+                
+                texcoords.push(u, v);
+            }
+        }
+    }
+    
+    // Crea il modello della parete
+    models[wallName] = {
+        vertices: vertices,
+        normals: normals,
+        texcoords: texcoords,
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+        texture: 'wall',
+        isTransparent: false
+    };
+    
+    logger.log(`Parete ${wallName} creata con aperture per finestre`);
+}
+
+// Funzione per creare una parete semplice senza aperture
+function createSimpleWall(wallName, wallType) {
+    let vertices, normals, texcoords;
+    
+    if (wallType === 'front') {
+        vertices = [
             -roomSize, 0, -roomSize,
             roomSize, 0, -roomSize,
             roomSize, -roomHeight, -roomSize,
             -roomSize, 0, -roomSize,
             roomSize, -roomHeight, -roomSize,
             -roomSize, -roomHeight, -roomSize
-        ],
-        normals: [
+        ];
+        normals = [
             0, 0, 1,
             0, 0, 1,
             0, 0, 1,
             0, 0, 1,
             0, 0, 1,
             0, 0, 1
-        ],
-        texcoords: [
-            0, 0,
-            1, 0,
-            1, 1,
-            0, 0,
-            1, 1,
-            0, 1
-        ],
-        position: [0, 0, 0],
-        scale: [1, 1, 1],
-        texture: 'wall'
-    };
-
-    // Parete posteriore
-    models['backWall'] = {
-        vertices: [
+        ];
+    } else if (wallType === 'back') {
+        vertices = [
             -roomSize, 0, roomSize,
             roomSize, -roomHeight, roomSize,
             roomSize, 0, roomSize,
             -roomSize, 0, roomSize,
             -roomSize, -roomHeight, roomSize,
             roomSize, -roomHeight, roomSize
-        ],
-        normals: [
+        ];
+        normals = [
             0, 0, -1,
             0, 0, -1,
             0, 0, -1,
             0, 0, -1,
             0, 0, -1,
             0, 0, -1
-        ],
-        texcoords: [
-            0, 0,
-            1, 1,
-            1, 0,
-            0, 0,
-            0, 1,
-            1, 1
-        ],
-        position: [0, 0, 0],
-        scale: [1, 1, 1],
-        texture: 'wall'
-    };
-
-    // Parete sinistra
-    models['leftWall'] = {
-        vertices: [
+        ];
+    } else if (wallType === 'left') {
+        vertices = [
             -roomSize, 0, -roomSize,
             -roomSize, -roomHeight, -roomSize,
             -roomSize, -roomHeight, roomSize,
             -roomSize, 0, -roomSize,
             -roomSize, -roomHeight, roomSize,
             -roomSize, 0, roomSize
-        ],
-        normals: [
+        ];
+        normals = [
             1, 0, 0,
             1, 0, 0,
             1, 0, 0,
             1, 0, 0,
             1, 0, 0,
             1, 0, 0
-        ],
-        texcoords: [
-            0, 0,
-            0, 1,
-            1, 1,
-            0, 0,
-            1, 1,
-            1, 0
-        ],
-        position: [0, 0, 0],
-        scale: [1, 1, 1],
-        texture: 'wall'
-    };
-
-    // Parete destra
-    models['rightWall'] = {
-        vertices: [
+        ];
+    } else if (wallType === 'right') {
+        vertices = [
             roomSize, 0, -roomSize,
             roomSize, 0, roomSize,
             roomSize, -roomHeight, roomSize,
             roomSize, 0, -roomSize,
             roomSize, -roomHeight, roomSize,
             roomSize, -roomHeight, -roomSize
-        ],
-        normals: [
+        ];
+        normals = [
             -1, 0, 0,
             -1, 0, 0,
             -1, 0, 0,
             -1, 0, 0,
             -1, 0, 0,
             -1, 0, 0
-        ],
-        texcoords: [
-            1, 0,
-            0, 0,
-            0, 1,
-            1, 0,
-            0, 1,
-            1, 1
-        ],
+        ];
+    }
+    
+    texcoords = [
+        0, 0,
+        1, 0,
+        1, 1,
+        0, 0,
+        1, 1,
+        0, 1
+    ];
+    
+    models[wallName] = {
+        vertices: vertices,
+        normals: normals,
+        texcoords: texcoords,
         position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+        texture: 'wall',
+        isTransparent: false
+    };
+    
+    logger.log(`Parete ${wallName} creata (semplice, senza aperture)`);
+}
+
+// Funzione per creare una parete con apertura per finestra
+function createWallWithWindow(name, wallType, windowY, windowWidth, windowHeight) {
+    const halfWidth = windowWidth / 2;
+    
+    let vertices = [];
+    let normals = [];
+    let texcoords = [];
+    let normalVector = [0, 0, 0];
+    
+    // Determina il vettore normale in base al tipo di parete
+    switch(wallType) {
+        case 'front':
+            normalVector = [0, 0, 1]; // +Z
+            break;
+        case 'back':
+            normalVector = [0, 0, -1]; // -Z
+            break;
+        case 'left':
+            normalVector = [1, 0, 0]; // +X
+            break;
+        case 'right':
+            normalVector = [-1, 0, 0]; // -X
+            break;
+    }
+    
+    // Determina le coordinate dei vertici in base al tipo di parete
+    if (wallType === 'front' || wallType === 'back') {
+        const z = wallType === 'front' ? -roomSize : roomSize;
+        
+        // Parte superiore (sopra la finestra)
+        vertices.push(
+            // Triangolo 1
+            -roomSize, 0, z,
+            roomSize, 0, z,
+            roomSize, windowY, z,
+            // Triangolo 2
+            -roomSize, 0, z,
+            roomSize, windowY, z,
+            -roomSize, windowY, z
+        );
+        
+        // Parte sinistra (a sinistra della finestra)
+        vertices.push(
+            // Triangolo 1
+            -roomSize, windowY, z,
+            -halfWidth, windowY, z,
+            -halfWidth, windowY - windowHeight, z,
+            // Triangolo 2
+            -roomSize, windowY, z,
+            -halfWidth, windowY - windowHeight, z,
+            -roomSize, windowY - windowHeight, z
+        );
+        
+        // Parte destra (a destra della finestra)
+        vertices.push(
+            // Triangolo 1
+            halfWidth, windowY, z,
+            roomSize, windowY, z,
+            roomSize, windowY - windowHeight, z,
+            // Triangolo 2
+            halfWidth, windowY, z,
+            roomSize, windowY - windowHeight, z,
+            halfWidth, windowY - windowHeight, z
+        );
+        
+        // Parte inferiore (sotto la finestra)
+        vertices.push(
+            // Triangolo 1
+            -roomSize, windowY - windowHeight, z,
+            halfWidth, windowY - windowHeight, z,
+            roomSize, windowY - windowHeight, z,
+            // Triangolo 2
+            -roomSize, windowY - windowHeight, z,
+            roomSize, windowY - windowHeight, z,
+            -roomSize, -roomHeight, z,
+            // Triangolo 3
+            roomSize, windowY - windowHeight, z,
+            roomSize, -roomHeight, z,
+            -roomSize, -roomHeight, z
+        );
+    } else {
+        // Per le pareti laterali (sinistra e destra)
+        const x = wallType === 'left' ? -roomSize : roomSize;
+        
+        // Parte superiore (sopra la finestra)
+        vertices.push(
+            // Triangolo 1
+            x, 0, -roomSize,
+            x, 0, roomSize,
+            x, windowY, roomSize,
+            // Triangolo 2
+            x, 0, -roomSize,
+            x, windowY, roomSize,
+            x, windowY, -roomSize
+        );
+        
+        // Parte frontale (davanti alla finestra)
+        vertices.push(
+            // Triangolo 1
+            x, windowY, -roomSize,
+            x, windowY, -halfWidth,
+            x, windowY - windowHeight, -halfWidth,
+            // Triangolo 2
+            x, windowY, -roomSize,
+            x, windowY - windowHeight, -halfWidth,
+            x, windowY - windowHeight, -roomSize
+        );
+        
+        // Parte posteriore (dietro la finestra)
+        vertices.push(
+            // Triangolo 1
+            x, windowY, halfWidth,
+            x, windowY, roomSize,
+            x, windowY - windowHeight, roomSize,
+            // Triangolo 2
+            x, windowY, halfWidth,
+            x, windowY - windowHeight, roomSize,
+            x, windowY - windowHeight, halfWidth
+        );
+        
+        // Parte inferiore (sotto la finestra)
+        vertices.push(
+            // Triangolo 1
+            x, windowY - windowHeight, -roomSize,
+            x, windowY - windowHeight, halfWidth,
+            x, windowY - windowHeight, roomSize,
+            // Triangolo 2
+            x, windowY - windowHeight, -roomSize,
+            x, windowY - windowHeight, roomSize,
+            x, -roomHeight, -roomSize,
+            // Triangolo 3
+            x, windowY - windowHeight, roomSize,
+            x, -roomHeight, roomSize,
+            x, -roomHeight, -roomSize
+        );
+    }
+    
+    // Appiattisci i vertici
+    const flatVertices = [];
+    for (let i = 0; i < vertices.length; i += 3) {
+        flatVertices.push(vertices[i][0], vertices[i][1], vertices[i][2]);
+        flatVertices.push(vertices[i+1][0], vertices[i+1][1], vertices[i+1][2]);
+        flatVertices.push(vertices[i+2][0], vertices[i+2][1], vertices[i+2][2]);
+    }
+    
+    // Crea normali e coordinate texture
+    for (let i = 0; i < vertices.length; i += 3) {
+        // Aggiungi normali per i tre vertici del triangolo
+        for (let j = 0; j < 3; j++) {
+            normals.push(normalVector[0], normalVector[1], normalVector[2]);
+        }
+        
+        // Calcola coordinate texture approssimative
+        const triVerts = [vertices[i], vertices[i+1], vertices[i+2]];
+        
+        // Normalizza le coordinate in funzione delle dimensioni della stanza
+        let u1, v1, u2, v2, u3, v3;
+        
+        if (wallType === 'front' || wallType === 'back') {
+            u1 = (triVerts[0][0] + roomSize) / (2 * roomSize);
+            v1 = (-triVerts[0][1]) / roomHeight;
+            u2 = (triVerts[1][0] + roomSize) / (2 * roomSize);
+            v2 = (-triVerts[1][1]) / roomHeight;
+            u3 = (triVerts[2][0] + roomSize) / (2 * roomSize);
+            v3 = (-triVerts[2][1]) / roomHeight;
+        } else {
+            u1 = (triVerts[0][2] + roomSize) / (2 * roomSize);
+            v1 = (-triVerts[0][1]) / roomHeight;
+            u2 = (triVerts[1][2] + roomSize) / (2 * roomSize);
+            v2 = (-triVerts[1][1]) / roomHeight;
+            u3 = (triVerts[2][2] + roomSize) / (2 * roomSize);
+            v3 = (-triVerts[2][1]) / roomHeight;
+        }
+        
+        texcoords.push(u1, v1, u2, v2, u3, v3);
+    }
+    
+    // Crea il modello della parete
+    models[name] = {
+        vertices: flatVertices,
+        normals: normals,
+        texcoords: texcoords,
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
         scale: [1, 1, 1],
         texture: 'wall'
     };
-
-    // Aggiungi finestre
-    addWindows();
-
-    logger.log('Stanza semplice creata');
 }
 
-// Funzione per aggiungere finestre alla stanza
+// Funzione migliorata per aggiungere finestre alla stanza
 function addWindows() {
-    // Texture per il vetro
-    if (!textures['glass']) {
-        // Crea una texture semplice se non è stata caricata
-        const glassCanvas = document.createElement('canvas');
-        glassCanvas.width = 2;
-        glassCanvas.height = 2;
-        const ctx = glassCanvas.getContext('2d');
-        ctx.fillStyle = 'rgba(180, 200, 255, 0.3)'; // Azzurro semitrasparente
-        ctx.fillRect(0, 0, 2, 2);
-
-        const glassTexture = gl.createTexture();
-        gl.bindTexture(gl.TEXTURE_2D, glassTexture);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, glassCanvas);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    // Crea texture per vetro e cornici
+    const glassTexture = createGlassMaterial();
+    
+    // Crea texture per la cornice
+    if (!textures['windowFrame']) {
+        const frameCanvas = document.createElement('canvas');
+        frameCanvas.width = 64;
+        frameCanvas.height = 64;
+        const frameCtx = frameCanvas.getContext('2d');
+        
+        // Colore base legno scuro
+        frameCtx.fillStyle = '#3A2A1A';
+        frameCtx.fillRect(0, 0, 64, 64);
+        
+        // Venature del legno
+        for (let i = 0; i < 8; i++) {
+            const y = i * 8;
+            frameCtx.fillStyle = `rgba(80, 60, 30, 0.4)`;
+            frameCtx.fillRect(0, y, 64, 3);
+        }
+        
+        const frameTexture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, frameTexture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frameCanvas);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.bindTexture(gl.TEXTURE_2D, null);
-
-        textures['glass'] = glassTexture;
-        logger.log('Texture vetro creata');
+        textures['windowFrame'] = frameTexture;
+        
+        logger.log('Texture cornice finestra creata');
     }
 
-    // Aggiungi finestra sulla parete frontale (a filo con la superficie esterna)
-    models['frontWindow'] = {
-        vertices: [
-            -2, -1, -roomSize + 0.01, // Leggermente spostata verso l'interno per evitare z-fighting
-            2, -1, -roomSize + 0.01,
-            2, -4, -roomSize + 0.01,
-            -2, -1, -roomSize + 0.01,
-            2, -4, -roomSize + 0.01,
-            -2, -4, -roomSize + 0.01
-        ],
-        normals: [
-            0, 0, 1, // Normali verso l'interno della stanza
-            0, 0, 1,
-            0, 0, 1,
-            0, 0, 1,
-            0, 0, 1,
-            0, 0, 1
-        ],
-        texcoords: [
-            0, 0, // In alto a sinistra
-            1, 0, // In alto a destra
-            1, 1, // In basso a destra
-            0, 0, // In alto a sinistra
-            1, 1, // In basso a destra
-            0, 1 // In basso a sinistra
-        ],
-        position: [0, 0, 0],
-        scale: [1, 1, 1],
-        texture: 'glass',
-        isTransparent: true // Flag per il rendering con blending
-    };
-
-    // Aggiungi finestra sulla parete posteriore (a filo con la superficie esterna)
-    models['backWindow'] = {
-        vertices: [
-            -2, -1, roomSize - 0.01, // Leggermente spostata verso l'interno per evitare z-fighting
-            2, -4, roomSize - 0.01,
-            2, -1, roomSize - 0.01,
-            -2, -1, roomSize - 0.01,
-            -2, -4, roomSize - 0.01,
-            2, -4, roomSize - 0.01
-        ],
-        normals: [
-            0, 0, -1, // Normali verso l'interno della stanza
-            0, 0, -1,
-            0, 0, -1,
-            0, 0, -1,
-            0, 0, -1,
-            0, 0, -1
-        ],
-        texcoords: [
-            0, 0, // In alto a sinistra
-            1, 1, // In basso a destra
-            1, 0, // In alto a destra
-            0, 0, // In alto a sinistra
-            0, 1, // In basso a sinistra
-            1, 1 // In basso a destra
-        ],
-        position: [0, 0, 0],
-        scale: [1, 1, 1],
-        texture: 'glass',
-        isTransparent: true // Flag per il rendering con blending
-    };
-
-    logger.log('Finestre create');
+    // Definisci le dimensioni delle finestre
+    const windowWidth = 4;
+    const windowHeight = 2.5;
+    const frameWidth = 0.2;
+    
+    // Offset Z per evitare z-fighting
+    const glassOffset = 0.01;   // Offset per il vetro
+    const frameOffset = 0.02;   // Offset maggiore per le cornici (più avanti)
+    
+    // Definisci le posizioni delle finestre
+    const windows = [
+        { x: 0, y: 3.0, wall: 'front' },  // Finestra sulla parete frontale
+        { x: 0, y: 3.0, wall: 'back' },   // Finestra sulla parete posteriore
+        { x: 4, y: 3.0, wall: 'right' },  // Finestra sulla parete destra
+        { x: -4, y: 3.0, wall: 'left' }   // Finestra sulla parete sinistra
+    ];
+    
+    logger.log(`Creazione finestre: ${windows.length}`);
+    
+    // Rimuovi vecchi modelli di finestre se esistono
+    for (const key in models) {
+        if (key.startsWith('window')) {
+            delete models[key];
+        }
+    }
+    
+    // Crea le finestre
+    windows.forEach((window, index) => {
+        // Determina i valori di posizione basati sulla parete
+        let x = window.x;
+        let y = window.y;
+        let z = 0;
+        let rotationY = 0;
+        let wallOffset = 0.05; // Offset dalla parete per evitare z-fighting
+        
+        switch(window.wall) {
+            case 'front':
+                z = -roomSize + wallOffset;
+                logger.log(`Finestra frontale: [${x}, ${y}, ${z}]`);
+                break;
+            case 'back':
+                z = roomSize - wallOffset;
+                rotationY = Math.PI;
+                logger.log(`Finestra posteriore: [${x}, ${y}, ${z}]`);
+                break;
+            case 'left':
+                x = -roomSize + wallOffset;
+                z = window.x;
+                rotationY = Math.PI / 2;
+                logger.log(`Finestra sinistra: [${x}, ${y}, ${z}]`);
+                break;
+            case 'right':
+                x = roomSize - wallOffset;
+                z = -window.x;
+                rotationY = -Math.PI / 2;
+                logger.log(`Finestra destra: [${x}, ${y}, ${z}]`);
+                break;
+        }
+        
+        // Vetro centrale - semplicemente un rettangolo trasparente
+        models[`windowGlass_${index}`] = {
+            vertices: [
+                -windowWidth/2, y, glassOffset,
+                windowWidth/2, y, glassOffset,
+                windowWidth/2, y - windowHeight, glassOffset,
+                -windowWidth/2, y, glassOffset,
+                windowWidth/2, y - windowHeight, glassOffset,
+                -windowWidth/2, y - windowHeight, glassOffset
+            ],
+            normals: new Array(18).fill(0), // Da impostare dopo
+            texcoords: [
+                0, 0,
+                1, 0,
+                1, 1,
+                0, 0,
+                1, 1,
+                0, 1
+            ],
+            position: [x, 0, z],
+            rotation: [0, rotationY, 0],
+            scale: [1, 1, 1],
+            texture: 'glassMaterial',
+            isTransparent: true
+        };
+        
+        // Impostiamo le normali in base alla direzione della parete
+        for (let i = 0; i < 6; i++) {
+            if (window.wall === 'front') {
+                models[`windowGlass_${index}`].normals[i*3+2] = 1; // Normale in direzione +Z
+            } else if (window.wall === 'back') {
+                models[`windowGlass_${index}`].normals[i*3+2] = -1; // Normale in direzione -Z
+            } else if (window.wall === 'left') {
+                models[`windowGlass_${index}`].normals[i*3] = 1; // Normale in direzione +X
+            } else if (window.wall === 'right') {
+                models[`windowGlass_${index}`].normals[i*3] = -1; // Normale in direzione -X
+            }
+        }
+        
+        // Ora aggiungiamo le cornici
+        
+        // Cornice superiore
+        models[`windowFrameTop_${index}`] = {
+            vertices: [
+                -windowWidth/2 - frameWidth, y + frameWidth, frameOffset,
+                windowWidth/2 + frameWidth, y + frameWidth, frameOffset,
+                windowWidth/2 + frameWidth, y, frameOffset,
+                -windowWidth/2 - frameWidth, y + frameWidth, frameOffset,
+                windowWidth/2 + frameWidth, y, frameOffset,
+                -windowWidth/2 - frameWidth, y, frameOffset
+            ],
+            normals: [...models[`windowGlass_${index}`].normals], // Copiamo le normali dal vetro
+            texcoords: [
+                0, 0,
+                1, 0,
+                1, 1,
+                0, 0,
+                1, 1,
+                0, 1
+            ],
+            position: [x, 0, z],
+            rotation: [0, rotationY, 0],
+            scale: [1, 1, 1],
+            texture: 'windowFrame'
+        };
+        
+        // Cornice inferiore
+        models[`windowFrameBottom_${index}`] = {
+            vertices: [
+                -windowWidth/2 - frameWidth, y - windowHeight, frameOffset,
+                windowWidth/2 + frameWidth, y - windowHeight, frameOffset,
+                windowWidth/2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
+                -windowWidth/2 - frameWidth, y - windowHeight, frameOffset,
+                windowWidth/2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
+                -windowWidth/2 - frameWidth, y - windowHeight - frameWidth, frameOffset
+            ],
+            normals: [...models[`windowGlass_${index}`].normals],
+            texcoords: [
+                0, 0,
+                1, 0,
+                1, 1,
+                0, 0,
+                1, 1,
+                0, 1
+            ],
+            position: [x, 0, z],
+            rotation: [0, rotationY, 0],
+            scale: [1, 1, 1],
+            texture: 'windowFrame'
+        };
+        
+        // Cornice sinistra
+        models[`windowFrameLeft_${index}`] = {
+            vertices: [
+                -windowWidth/2 - frameWidth, y + frameWidth, frameOffset,
+                -windowWidth/2, y + frameWidth, frameOffset,
+                -windowWidth/2, y - windowHeight - frameWidth, frameOffset,
+                -windowWidth/2 - frameWidth, y + frameWidth, frameOffset,
+                -windowWidth/2, y - windowHeight - frameWidth, frameOffset,
+                -windowWidth/2 - frameWidth, y - windowHeight - frameWidth, frameOffset
+            ],
+            normals: [...models[`windowGlass_${index}`].normals],
+            texcoords: [
+                0, 0,
+                1, 0,
+                1, 1,
+                0, 0,
+                1, 1,
+                0, 1
+            ],
+            position: [x, 0, z],
+            rotation: [0, rotationY, 0],
+            scale: [1, 1, 1],
+            texture: 'windowFrame'
+        };
+        
+        // Cornice destra
+        models[`windowFrameRight_${index}`] = {
+            vertices: [
+                windowWidth/2, y + frameWidth, frameOffset,
+                windowWidth/2 + frameWidth, y + frameWidth, frameOffset,
+                windowWidth/2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
+                windowWidth/2, y + frameWidth, frameOffset,
+                windowWidth/2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
+                windowWidth/2, y - windowHeight - frameWidth, frameOffset
+            ],
+            normals: [...models[`windowGlass_${index}`].normals],
+            texcoords: [
+                0, 0,
+                1, 0,
+                1, 1,
+                0, 0,
+                1, 1,
+                0, 1
+            ],
+            position: [x, 0, z],
+            rotation: [0, rotationY, 0],
+            scale: [1, 1, 1],
+            texture: 'windowFrame'
+        };
+        
+        // Traversa centrale orizzontale (opzionale)
+        models[`windowFrameMiddle_${index}`] = {
+            vertices: [
+                -windowWidth/2, y - windowHeight/2 + frameWidth/2, frameOffset,
+                windowWidth/2, y - windowHeight/2 + frameWidth/2, frameOffset,
+                windowWidth/2, y - windowHeight/2 - frameWidth/2, frameOffset,
+                -windowWidth/2, y - windowHeight/2 + frameWidth/2, frameOffset,
+                windowWidth/2, y - windowHeight/2 - frameWidth/2, frameOffset,
+                -windowWidth/2, y - windowHeight/2 - frameWidth/2, frameOffset
+            ],
+            normals: [...models[`windowGlass_${index}`].normals],
+            texcoords: [
+                0, 0,
+                1, 0,
+                1, 1,
+                0, 0,
+                1, 1,
+                0, 1
+            ],
+            position: [x, 0, z],
+            rotation: [0, rotationY, 0],
+            scale: [1, 1, 1],
+            texture: 'windowFrame'
+        };
+    });
+    
+    logger.log('Finestre create con materiale vetro personalizzato');
+    
+    // Rimuovi eventuali texture precedenti
+    if (textures['glass']) {
+        gl.deleteTexture(textures['glass']);
+        delete textures['glass'];
+        logger.log('Texture glass.png eliminata');
+    }
+    
+    // Rimuovi modelli precedenti delle vecchie finestre
+    if (models['frontWindow']) {
+        delete models['frontWindow'];
+        logger.log('Modello frontWindow rimosso');
+    }
+    
+    if (models['backWindow']) {
+        delete models['backWindow'];
+        logger.log('Modello backWindow rimosso');
+    }
 }
+
+// Funzione alternativa: crea finestre come aperture senza vetro
+function addWindowOpenings() {
+    // Crea texture per la cornice
+    if (!textures['windowFrame']) {
+        const frameCanvas = document.createElement('canvas');
+        frameCanvas.width = 64;
+        frameCanvas.height = 64;
+        const frameCtx = frameCanvas.getContext('2d');
+        
+        // Colore base legno scuro
+        frameCtx.fillStyle = '#3A2A1A';
+        frameCtx.fillRect(0, 0, 64, 64);
+        
+        // Venature del legno
+        for (let i = 0; i < 8; i++) {
+            const y = i * 8;
+            frameCtx.fillStyle = `rgba(80, 60, 30, 0.4)`;
+            frameCtx.fillRect(0, y, 64, 3);
+        }
+        
+        const frameTexture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, frameTexture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frameCanvas);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        textures['windowFrame'] = frameTexture;
+        
+        logger.log('Texture cornice finestra creata');
+    }
+
+    // Definisci le dimensioni delle finestre
+    const windowWidth = 4;
+    const windowHeight = 2.5;
+    const frameWidth = 0.2;
+    
+    // Offset Z per evitare z-fighting
+    const frameOffset = 0.02;
+    
+    // Definisci le posizioni delle finestre
+    const windows = [
+        { x: 0, y: -1.3, wall: 'front' },
+        { x: 0, y: -1.3, wall: 'back' },
+        { x: 4, y: -1.3, wall: 'right' },
+        { x: -4, y: -1.3, wall: 'left' }
+    ];
+    
+    logger.log(`Creazione aperture finestre: ${windows.length}`);
+    
+    // Rimuovi vecchi modelli di finestre se esistono
+    for (const key in models) {
+        if (key.startsWith('window')) {
+            delete models[key];
+        }
+    }
+    
+    // Crea le finestre (solo le cornici)
+    windows.forEach((window, index) => {
+        // Determina i valori di posizione basati sulla parete
+        let x = window.x;
+        let y = window.y;
+        let z = 0;
+        let rotationY = 0;
+        let wallOffset = 0.05; // Offset dalla parete
+        
+        switch(window.wall) {
+            case 'front':
+                z = -roomSize + wallOffset;
+                logger.log(`Finestra frontale: [${x}, ${y}, ${z}]`);
+                break;
+            case 'back':
+                z = roomSize - wallOffset;
+                rotationY = Math.PI;
+                logger.log(`Finestra posteriore: [${x}, ${y}, ${z}]`);
+                break;
+            case 'left':
+                x = -roomSize + wallOffset;
+                z = window.x;
+                rotationY = Math.PI / 2;
+                logger.log(`Finestra sinistra: [${x}, ${y}, ${z}]`);
+                break;
+            case 'right':
+                x = roomSize - wallOffset;
+                z = -window.x;
+                rotationY = -Math.PI / 2;
+                logger.log(`Finestra destra: [${x}, ${y}, ${z}]`);
+                break;
+        }
+        
+        // Crea un array di normali in base alla direzione della parete
+        const normals = new Array(18).fill(0);
+        for (let i = 0; i < 6; i++) {
+            if (window.wall === 'front') {
+                normals[i*3+2] = 1; // Normale in direzione +Z
+            } else if (window.wall === 'back') {
+                normals[i*3+2] = -1; // Normale in direzione -Z
+            } else if (window.wall === 'left') {
+                normals[i*3] = 1; // Normale in direzione +X
+            } else if (window.wall === 'right') {
+                normals[i*3] = -1; // Normale in direzione -X
+            }
+        }
+        
+        // Cornice superiore
+        models[`windowFrameTop_${index}`] = {
+            vertices: [
+                -windowWidth/2 - frameWidth, y + frameWidth, frameOffset,
+                windowWidth/2 + frameWidth, y + frameWidth, frameOffset,
+                windowWidth/2 + frameWidth, y, frameOffset,
+                -windowWidth/2 - frameWidth, y + frameWidth, frameOffset,
+                windowWidth/2 + frameWidth, y, frameOffset,
+                -windowWidth/2 - frameWidth, y, frameOffset
+            ],
+            normals: normals,
+            texcoords: [
+                0, 0,
+                1, 0,
+                1, 1,
+                0, 0,
+                1, 1,
+                0, 1
+            ],
+            position: [x, 0, z],
+            rotation: [0, rotationY, 0],
+            scale: [1, 1, 1],
+            texture: 'windowFrame'
+        };
+        
+        // Cornice inferiore
+        models[`windowFrameBottom_${index}`] = {
+            vertices: [
+                -windowWidth/2 - frameWidth, y - windowHeight, frameOffset,
+                windowWidth/2 + frameWidth, y - windowHeight, frameOffset,
+                windowWidth/2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
+                -windowWidth/2 - frameWidth, y - windowHeight, frameOffset,
+                windowWidth/2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
+                -windowWidth/2 - frameWidth, y - windowHeight - frameWidth, frameOffset
+            ],
+            normals: normals,
+            texcoords: [
+                0, 0,
+                1, 0,
+                1, 1,
+                0, 0,
+                1, 1,
+                0, 1
+            ],
+            position: [x, 0, z],
+            rotation: [0, rotationY, 0],
+            scale: [1, 1, 1],
+            texture: 'windowFrame'
+        };
+        
+        // Cornice sinistra
+        models[`windowFrameLeft_${index}`] = {
+            vertices: [
+                -windowWidth/2 - frameWidth, y + frameWidth, frameOffset,
+                -windowWidth/2, y + frameWidth, frameOffset,
+                -windowWidth/2, y - windowHeight - frameWidth, frameOffset,
+                -windowWidth/2 - frameWidth, y + frameWidth, frameOffset,
+                -windowWidth/2, y - windowHeight - frameWidth, frameOffset,
+                -windowWidth/2 - frameWidth, y - windowHeight - frameWidth, frameOffset
+            ],
+            normals: normals,
+            texcoords: [
+                0, 0,
+                1, 0,
+                1, 1,
+                0, 0,
+                1, 1,
+                0, 1
+            ],
+            position: [x, 0, z],
+            rotation: [0, rotationY, 0],
+            scale: [1, 1, 1],
+            texture: 'windowFrame'
+        };
+        
+        // Cornice destra
+        models[`windowFrameRight_${index}`] = {
+            vertices: [
+                windowWidth/2, y + frameWidth, frameOffset,
+                windowWidth/2 + frameWidth, y + frameWidth, frameOffset,
+                windowWidth/2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
+                windowWidth/2, y + frameWidth, frameOffset,
+                windowWidth/2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
+                windowWidth/2, y - windowHeight - frameWidth, frameOffset
+            ],
+            normals: normals,
+            texcoords: [
+                0, 0,
+                1, 0,
+                1, 1,
+                0, 0,
+                1, 1,
+                0, 1
+            ],
+            position: [x, 0, z],
+            rotation: [0, rotationY, 0],
+            scale: [1, 1, 1],
+            texture: 'windowFrame'
+        };
+        
+        // Traversa centrale orizzontale
+        models[`windowFrameMiddle_${index}`] = {
+            vertices: [
+                -windowWidth/2, y - windowHeight/2 + frameWidth/2, frameOffset,
+                windowWidth/2, y - windowHeight/2 + frameWidth/2, frameOffset,
+                windowWidth/2, y - windowHeight/2 - frameWidth/2, frameOffset,
+                -windowWidth/2, y - windowHeight/2 + frameWidth/2, frameOffset,
+                windowWidth/2, y - windowHeight/2 - frameWidth/2, frameOffset,
+                -windowWidth/2, y - windowHeight/2 - frameWidth/2, frameOffset
+            ],
+            normals: normals,
+            texcoords: [
+                0, 0,
+                1, 0,
+                1, 1,
+                0, 0,
+                1, 1,
+                0, 1
+            ],
+            position: [x, 0, z],
+            rotation: [0, rotationY, 0],
+            scale: [1, 1, 1],
+            texture: 'windowFrame'
+        };
+        
+        // Traversa centrale verticale
+        models[`windowFrameVertical_${index}`] = {
+            vertices: [
+                -frameWidth/2, y + frameWidth, frameOffset,
+                frameWidth/2, y + frameWidth, frameOffset,
+                frameWidth/2, y - windowHeight - frameWidth, frameOffset,
+                -frameWidth/2, y + frameWidth, frameOffset,
+                frameWidth/2, y - windowHeight - frameWidth, frameOffset,
+                -frameWidth/2, y - windowHeight - frameWidth, frameOffset
+            ],
+            normals: normals,
+            texcoords: [
+                0, 0,
+                1, 0,
+                1, 1,
+                0, 0,
+                1, 1,
+                0, 1
+            ],
+            position: [x, 0, z],
+            rotation: [0, rotationY, 0],
+            scale: [1, 1, 1],
+            texture: 'windowFrame'
+        };
+    });
+    
+    logger.log('Aperture finestre create (solo cornici, senza vetro)');
+    
+    // Rimuovi eventuali texture e modelli precedenti
+    if (textures['glass']) {
+        gl.deleteTexture(textures['glass']);
+        delete textures['glass'];
+        logger.log('Texture glass.png eliminata');
+    }
+    
+    if (textures['glassMaterial']) {
+        gl.deleteTexture(textures['glassMaterial']);
+        delete textures['glassMaterial'];
+        logger.log('Texture glassMaterial eliminata');
+    }
+    
+    // Rimuovi modelli precedenti
+    if (models['frontWindow']) {
+        delete models['frontWindow'];
+        logger.log('Modello frontWindow rimosso');
+    }
+    
+    if (models['backWindow']) {
+        delete models['backWindow'];
+        logger.log('Modello backWindow rimosso');
+    }
+}
+
+// Assicurati che i muri siano presenti e visibili
+function ensureWallsExist() {
+    logger.log("Verifica pareti...");
+    
+    // Parete frontale
+    if (!models['frontWall']) {
+        logger.log("Creazione parete frontale");
+        models['frontWall'] = {
+            vertices: [
+                -roomSize, 0, -roomSize,
+                roomSize, 0, -roomSize,
+                roomSize, -roomHeight, -roomSize,
+                -roomSize, 0, -roomSize,
+                roomSize, -roomHeight, -roomSize,
+                -roomSize, -roomHeight, -roomSize
+            ],
+            normals: [
+                0, 0, 1,
+                0, 0, 1,
+                0, 0, 1,
+                0, 0, 1,
+                0, 0, 1,
+                0, 0, 1
+            ],
+            texcoords: [
+                0, 0,
+                1, 0,
+                1, 1,
+                0, 0,
+                1, 1,
+                0, 1
+            ],
+            position: [0, 0, 0],
+            scale: [1, 1, 1],
+            texture: 'wall',
+            isTransparent: false
+        };
+    }
+    
+    // Parete posteriore
+    if (!models['backWall']) {
+        logger.log("Creazione parete posteriore");
+        models['backWall'] = {
+            vertices: [
+                -roomSize, 0, roomSize,
+                roomSize, -roomHeight, roomSize,
+                roomSize, 0, roomSize,
+                -roomSize, 0, roomSize,
+                -roomSize, -roomHeight, roomSize,
+                roomSize, -roomHeight, roomSize
+            ],
+            normals: [
+                0, 0, -1,
+                0, 0, -1,
+                0, 0, -1,
+                0, 0, -1,
+                0, 0, -1,
+                0, 0, -1
+            ],
+            texcoords: [
+                0, 0,
+                1, 1,
+                1, 0,
+                0, 0,
+                0, 1,
+                1, 1
+            ],
+            position: [0, 0, 0],
+            scale: [1, 1, 1],
+            texture: 'wall',
+            isTransparent: false
+        };
+    }
+    
+    // Parete sinistra
+    if (!models['leftWall']) {
+        logger.log("Creazione parete sinistra");
+        models['leftWall'] = {
+            vertices: [
+                -roomSize, 0, -roomSize,
+                -roomSize, -roomHeight, -roomSize,
+                -roomSize, -roomHeight, roomSize,
+                -roomSize, 0, -roomSize,
+                -roomSize, -roomHeight, roomSize,
+                -roomSize, 0, roomSize
+            ],
+            normals: [
+                1, 0, 0,
+                1, 0, 0,
+                1, 0, 0,
+                1, 0, 0,
+                1, 0, 0,
+                1, 0, 0
+            ],
+            texcoords: [
+                0, 0,
+                0, 1,
+                1, 1,
+                0, 0,
+                1, 1,
+                1, 0
+            ],
+            position: [0, 0, 0],
+            scale: [1, 1, 1],
+            texture: 'wall',
+            isTransparent: false
+        };
+    }
+    
+    // Parete destra
+    if (!models['rightWall']) {
+        logger.log("Creazione parete destra");
+        models['rightWall'] = {
+            vertices: [
+                roomSize, 0, -roomSize,
+                roomSize, 0, roomSize,
+                roomSize, -roomHeight, roomSize,
+                roomSize, 0, -roomSize,
+                roomSize, -roomHeight, roomSize,
+                roomSize, -roomHeight, -roomSize
+            ],
+            normals: [
+                -1, 0, 0,
+                -1, 0, 0,
+                -1, 0, 0,
+                -1, 0, 0,
+                -1, 0, 0,
+                -1, 0, 0
+            ],
+            texcoords: [
+                1, 0,
+                0, 0,
+                0, 1,
+                1, 0,
+                0, 1,
+                1, 1
+            ],
+            position: [0, 0, 0],
+            scale: [1, 1, 1],
+            texture: 'wall',
+            isTransparent: false
+        };
+    }
+    
+    logger.log("Verifica pareti completata");
+}
+
 // Sistema di logging
 const logger = {
     container: document.getElementById('log-container'),
