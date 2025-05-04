@@ -149,8 +149,8 @@ function updateCrosshair() {
     const interactableObjects = [
         // Definisci oggetti interattivi con posizione e raggio
         {
-            position: switchPosition,
-            radius: 3.0, // Aumentato da 2.5 per facilitare l'interazione
+            position: switchPosition, // Usiamo esattamente la posizione dello switch
+            radius: 3.0, // Aumentato per facilitare l'interazione
             name: 'switch'
         }
     ];
@@ -174,24 +174,13 @@ function updateCrosshair() {
             if (obj.name === 'switch') {
                 document.getElementById('instructions').style.visibility = 'visible';
                 isNearSwitch = true;
-
-                // Aggiungiamo un'animazione pulsante per l'interruttore quando vicini
-                if (models['fallbackSwitch']) {
-                    // Pulsazione leggera dell'interruttore
-                    const pulseScale = 1.0 + Math.sin(Date.now() * 0.005) * 0.1;
-                    models['fallbackSwitch'].scale = [pulseScale, pulseScale, pulseScale];
-                }
+                logger.log(`Giocatore vicino all'interruttore a distanza: ${distance.toFixed(2)}`);
             }
 
             break;
         } else {
             // Assicurati che le istruzioni siano nascoste se non siamo vicini
             document.getElementById('instructions').style.visibility = 'hidden';
-            
-            // Ripristina la scala normale dell'interruttore
-            if (models['fallbackSwitch']) {
-                models['fallbackSwitch'].scale = [1, 1, 1];
-            }
         }
     }
 
@@ -850,8 +839,14 @@ function checkDollProximity() {
 }
 
 function createSwitch() {
-    // Aumentiamo le dimensioni dell'interruttore per renderlo più visibile
-    const switchSize = 0.4; // Aumentato da 0.3
+    // Se il modello OBJ è già stato caricato, non creare il fallback
+    if (models['switch']) {
+        logger.log("Modello switch OBJ già caricato, fallback non necessario");
+        return;
+    }
+
+    // Dimensioni dell'interruttore
+    const switchSize = 0.4;
 
     // Vertici per un semplice parallelepipedo
     const switchVertices = [
@@ -929,13 +924,13 @@ function createSwitch() {
     }
 
     // Crea un colore rosso brillante per l'interruttore
-    const switchColor = createColorTexture([1.0, 0.2, 0.2, 1.0]); // Rosso più brillante
+    const switchColor = createColorTexture([1.0, 0.2, 0.2, 1.0]);
     textures['switchColor'] = switchColor;
 
-    // Posiziona l'interruttore sulla parete sinistra a un'altezza visibile
-    const switchX = -roomSize + 0.1; // Vicino alla parete sinistra
-    const switchY = 1.7; // Altezza a livello degli occhi (aggiustata per corrispondenza con la camera)
-    const switchZ = 2.5; // Centro della stanza lungo Z
+    // Posiziona l'interruttore sulla parete destra
+    const switchX = roomSize - 0.3; // Vicino alla parete destra
+    const switchY = -1.7; // Altezza occhi
+    const switchZ = 0; // Centro della stanza lungo Z
 
     // Aggiungi l'interruttore ai modelli
     models['fallbackSwitch'] = {
@@ -943,23 +938,22 @@ function createSwitch() {
         normals: switchNormals,
         texcoords: switchTexcoords,
         position: [switchX, switchY, switchZ],
-        rotation: [0, Math.PI / 2, 0],
-        scale: [1, 1, 1], // Scala normale
+        rotation: [0, -Math.PI / 2, 0], // Rivolto verso l'interno
+        scale: [1, 1, 1],
         texture: 'switchColor',
         isEmissive: true
     };
 
-    // Crea l'indicatore arancione accanto all'interruttore principale (non sotto)
-    // Lo posizioneremo leggermente a destra invece che sotto
+    // Crea l'indicatore arancione accanto all'interruttore principale
     const indicatorLight = createColorTexture([1.0, 0.5, 0.0, 1.0]); // Arancione
     textures['indicatorLight'] = indicatorLight;
 
-    // Aggiungi l'indicatore ACCANTO all'interruttore (non sotto)
+    // Aggiungi l'indicatore ACCANTO all'interruttore
     models['switchIndicator'] = {
         vertices: switchVertices,
         normals: switchNormals,
         texcoords: switchTexcoords,
-        position: [switchX, switchY, switchZ + 0.8], // Accanto all'interruttore
+        position: [switchX, switchY, switchZ - 0.8], // Accanto all'interruttore
         rotation: [0, 0, 0],
         scale: [0.7, 0.7, 0.7], // Più piccolo dell'interruttore principale
         texture: 'indicatorLight',
@@ -970,7 +964,7 @@ function createSwitch() {
     switchPosition = [switchX, switchY, switchZ];
 
     logger.log(`Interruttore fallback posizionato a: [${switchPosition}]`);
-    logger.log(`Indicatore arancione posizionato a: [${switchX}, ${switchY}, ${switchZ + 0.8}]`);
+    logger.log(`Indicatore arancione posizionato a: [${switchX}, ${switchY}, ${switchZ - 0.8}]`);
 }
 
 // Funzione per creare una lampada fallback se lamp.obj non si carica
@@ -1924,6 +1918,9 @@ function startGame() {
     document.getElementById('start-menu').style.display = 'none';
     document.getElementById('crosshair').style.display = 'block';
     document.getElementById('top-bar').style.display = 'flex';
+    
+    // Aggiorna la posizione dell'area interattiva dello switch
+    updateSwitchPosition();
 
     // Mostra controlli completi
     document.getElementById('game-controls').innerHTML =
@@ -2921,10 +2918,12 @@ function loadResources() {
     loadOBJModel('models/light_switch.obj', 'models/light_switch.mtl', 'switch');
     loadOBJModel('models/lamp.obj', 'models/lamp.mtl', 'lamp');
     loadOBJModel('models/pendent-clock.obj', 'models/pendent-clock.mtl', 'clock');
-    loadOBJModel('models/orologio-horror.obj', 'models/orologio-horror.mtl', 'horror_clock');
 
-    // Crea l'interruttore fallback nel caso il modello OBJ non si carichi
-    createSwitch();
+    // Crea l'interruttore fallback DOPO aver tentato di caricare l'OBJ
+    // Il controllo interno verificherà se è necessario
+    setTimeout(function() {
+        createSwitch();
+    }, 1000); // Attendi 1 secondo per dare tempo agli OBJ di caricarsi
 
     logger.log('Risorse in caricamento...');
 }
@@ -3073,13 +3072,14 @@ function createSkybox() {
 }
 
 // Carica modello OBJ
-function loadOBJModel(objUrl, mtlUrl, name) {
+function loadOBJModel(objUrl, mtlUrl, name, successCallback, errorCallback) {
     logger.log(`Caricamento modello: ${name}`);
 
     // Controlla se i percorsi sono definiti
     if (!objUrl) {
         logger.log(`ERRORE: Percorso OBJ non specificato per ${name}`);
-        createFallbackModel(name);
+        if (errorCallback) errorCallback();
+        else createFallbackModel(name);
         return;
     }
 
@@ -3092,7 +3092,8 @@ function loadOBJModel(objUrl, mtlUrl, name) {
                 // Verifica che objData non sia vuoto
                 if (!objData || objData.trim() === "") {
                     logger.log(`ERRORE: File OBJ vuoto per ${name}`);
-                    createFallbackModel(name);
+                    if (errorCallback) errorCallback();
+                    else createFallbackModel(name);
                     return;
                 }
 
@@ -3102,7 +3103,8 @@ function loadOBJModel(objUrl, mtlUrl, name) {
                 // Verifica che il modello abbia vertici validi
                 if (!model || !model.vertices || model.vertices.length === 0) {
                     logger.log(`ERRORE: Il modello ${name} non ha vertici validi`);
-                    createFallbackModel(name);
+                    if (errorCallback) errorCallback();
+                    else createFallbackModel(name);
                     return;
                 }
 
@@ -3121,14 +3123,19 @@ function loadOBJModel(objUrl, mtlUrl, name) {
                 positionModel(name);
 
                 logger.log(`Modello caricato: ${name} (${model.vertices.length / 3} vertici)`);
+                
+                // Chiama il callback di successo se fornito
+                if (successCallback) successCallback();
             } catch (error) {
                 logger.log(`Errore durante il parsing di ${name}: ${error.message}`);
-                createFallbackModel(name);
+                if (errorCallback) errorCallback();
+                else createFallbackModel(name);
             }
         },
         error: function(jqXHR, textStatus, errorThrown) {
             logger.log(`Errore durante il caricamento di ${name}: ${textStatus} - ${errorThrown}`);
-            createFallbackModel(name);
+            if (errorCallback) errorCallback();
+            else createFallbackModel(name);
         }
     });
 }
@@ -3156,12 +3163,12 @@ function positionModel(name) {
             models[cloneName] = Object.assign({}, models[name]);
             models[cloneName].position = [x, y, z];
             models[cloneName].rotation = [0, -angle + Math.PI, 0];
-            models[cloneName].scale = [0.05, 0.05, 0.05];
+            models[cloneName].scale = [0.03, 0.03, 0.03];
             models[cloneName].texture = 'skull_texture';
         }
     } else if (name === 'chair') {
         // Posiziona sedie sul pavimento DENTRO la stanza
-        models[name].position = [3, -6.79, -3]; // Y=0 è il pavimento
+        models[name].position = [3, -7.1, -3]; // Y=0 è il pavimento
         models[name].rotation = [0, Math.PI / 4, 0];
         models[name].scale = [0.15, 0.15, 0.15];
         models[name].texture = 'wood_texture';
@@ -3169,7 +3176,7 @@ function positionModel(name) {
         // Aggiungi una seconda sedia
         const cloneName = `${name}_2`;
         models[cloneName] = Object.assign({}, models[name]);
-        models[cloneName].position = [-3, -6.79, 2]; // Y=0 è il pavimento
+        models[cloneName].position = [-3, -7.1, 2]; // Y=0 è il pavimento
         models[cloneName].rotation = [0, -Math.PI / 3, 0];
     } else if (name === 'doll') {
         // Posiziona la bambola in modo casuale sul pavimento DENTRO la stanza
@@ -3201,38 +3208,45 @@ function positionModel(name) {
         // Aggiorna la posizione della luce
         lightPosition = [0, 0, 0];    
     } else if (name === 'switch' || name === 'lightSwitch') {
-        // Posiziona l'interruttore sulla parete sinistra
-        const switchX = -roomSize + 0.1; // Vicino alla parete sinistra
-        const switchY = 1.7; // Altezza a livello degli occhi (aggiustata)
-        const switchZ = 2.5; // Un po' avanti lungo la parete
-
+        // Posiziona l'interruttore sulla parete destra dove appare il messaggio
+        const switchX = roomSize - 0.3; // Vicino alla parete destra
+        const switchY = -1.7; // Altezza occhi
+        const switchZ = 0; // Centro della stanza lungo Z
+    
         models[name].position = [switchX, switchY, switchZ];
-        models[name].rotation = [0, Math.PI / 2, 0]; // Rivolto verso l'interno
-        models[name].scale = [0.1, 0.1, 0.1]; // Aumentato la scala per renderlo più visibile
-        models[name].isEmissive = true; // Lo rendiamo emissivo per maggiore visibilità
-
+        models[name].rotation = [0, -Math.PI / 2, 0]; // Rivolto verso l'interno
+        models[name].scale = [3.3, 3.3, 3.3]; // Dimensione ben visibile
+        models[name].isEmissive = true;
+        models[name].texture = 'switch_albedo'; // Usa la texture corretta
+    
         // Aggiorna la posizione per l'interazione
         switchPosition = [switchX, switchY, switchZ];
-        logger.log(`Modello interruttore OBJ posizionato a: [${switchPosition}]`);
+                
+        logger.log(`Modello interruttore OBJ posizionato sulla parete destra: [${switchPosition}]`);
     } else if (name === 'wheelie') {
         // Posiziona la sedia a rotelle in un angolo
-        models[name].position = [5, -6, 4]; // Sul pavimento, angolo destro
-        models[name].rotation = [0, Math.PI / 6, 0];
+        models[name].position = [5, -6.7, 4]; // Sul pavimento, angolo destro
+        models[name].rotation = [0, 0, 0];
         models[name].scale = [0.15, 0.15, 0.15];
         models[name].texture = 'wood_texture';
     } else if (name === 'clock') {
         // Posiziona l'orologio sulla parete
-        models[name].position = [0, -2, -roomSize + 0.15]; // Sul muro frontale
-        models[name].rotation = [0, 0, 0];
-        models[name].scale = [1, 1, 1];
+        models[name].position = [4, -5.5, -roomSize + 0.8]; // Sul muro frontale
+        models[name].rotation = [0, - Math.PI / 2, 0];
+        models[name].scale = [0.6, 0.6, 0.6];
         models[name].texture = 'clock_texture';
-    } else if (name === 'horror_clock') {
-        // Posiziona l'orologio horror sulla parete laterale
-        models[name].position = [roomSize - 0.15, -2, 0]; // Sul muro destro
-        models[name].rotation = [0, -Math.PI / 2, 0];
-        models[name].scale = [0.1, 0.1, 0.1];
-        models[name].texture = 'clock_texture';
-    }
+    } 
+}
+
+function updateSwitchPosition() {
+    // Trova la posizione attuale dove appare il messaggio (probabilmente sulla parete destra)
+    const messageX = roomSize - 0.3; // Vicino alla parete destra
+    const messageY = -1.7;          // Altezza degli occhi
+    const messageZ = 0;             // Centro della stanza lungo Z
+
+    // Aggiorna la posizione per l'interazione
+    switchPosition = [messageX, messageY, messageZ];
+    logger.log(`Area interattiva dell'interruttore aggiornata a: [${switchPosition}]`);
 }
 
 // Funzione di parsing OBJ
@@ -3593,6 +3607,23 @@ function toggleSpectatorMode() {
         
         logger.log('Modalità spettatore disattivata');
     }
+}
+
+// Funzione per attivare/disattivare lo sprint
+function toggleSprint(active) {
+    // Se in modalità spettatore, ignora lo sprint
+    if (isSpectatorMode) return;
+    
+    isSprinting = active;
+    
+    // Modifica la velocità del giocatore in base allo stato dello sprint
+    if (isSprinting) {
+        playerSpeed = 0.3; // Velocità di sprint
+    } else {
+        playerSpeed = 0.15; // Velocità normale
+    }
+    
+    logger.log(`Sprint ${isSprinting ? 'attivato' : 'disattivato'}`);
 }
 
 // Funzione per creare una texture di colore solido
