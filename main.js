@@ -1445,11 +1445,21 @@ function createWallWithHoles(wallName, wallType, windows) {
             maxX = windowX + windowWidth/2;
             minZ = wallType === 'front' ? -roomSize : roomSize;
             maxZ = minZ;
+            logger.log(`Apertura parete ${wallType}: x=${minX} a ${maxX}, y=${windowY}, z=${minZ}`);
         } else {
-            minZ = windowX - windowWidth/2;
-            maxZ = windowX + windowWidth/2;
-            minX = wallType === 'left' ? -roomSize : roomSize;
-            maxX = minX;
+            // Per le pareti laterali, X è costante, la finestra varia in Z
+            if (wallType === 'left') {
+                minX = -roomSize;
+                maxX = minX;
+                minZ = windowX - windowWidth/2; // NOTA: usiamo windowX per la coordinata Z
+                maxZ = windowX + windowWidth/2;
+            } else { // right wall
+                minX = roomSize;
+                maxX = minX;
+                minZ = -windowX - windowWidth/2; // Negativo di windowX!
+                maxZ = -windowX + windowWidth/2;
+            }
+            logger.log(`Apertura parete ${wallType}: x=${minX}, z=${minZ} a ${maxZ}, y=${windowY}`);
         }
         
         // Crea la parte superiore (sopra la finestra)
@@ -1554,32 +1564,27 @@ function createWallWithHoles(wallName, wallType, windows) {
             );
         }
         
-        // Aggiungi le normali per tutti i vertici
-        for (let i = 0; i < vertices.length / 3; i++) {
+        // Aggiungi le normali per tutti i vertici aggiunti
+        for (let i = 0; i < vertices.length / 3 - normals.length; i++) {
             normals.push(normalX, normalY, normalZ);
         }
+    }
+    
+    // Calcola le coordinate texture basate sulle posizioni dei vertici
+    for (let i = 0; i < vertices.length; i += 3) {
+        let u, v;
         
-        // Aggiungi coordinate texture approssimative
-        // (questa è una versione semplificata, potresti voler calcolare coordinate più precise)
-        for (let i = 0; i < vertices.length; i += 9) {
-            // Calcola coordinate texture basate sulla posizione dei vertici
-            for (let j = 0; j < 3; j++) {
-                const vIdx = i + j*3;
-                let u, v;
-                
-                if (wallType === 'front' || wallType === 'back') {
-                    // Per le pareti frontali/posteriori, usa X e Y
-                    u = (vertices[vIdx] + roomSize) / (2 * roomSize); // Normalizza X da -roomSize a roomSize
-                    v = -vertices[vIdx+1] / roomHeight;  // Normalizza Y (invertito perché Y è negativo)
-                } else {
-                    // Per le pareti laterali, usa Z e Y
-                    u = (vertices[vIdx+2] + roomSize) / (2 * roomSize); // Normalizza Z da -roomSize a roomSize
-                    v = -vertices[vIdx+1] / roomHeight;  // Normalizza Y (invertito)
-                }
-                
-                texcoords.push(u, v);
-            }
+        if (wallType === 'front' || wallType === 'back') {
+            // Per le pareti frontali/posteriori, usa X e Y
+            u = (vertices[i] + roomSize) / (2 * roomSize); // Normalizza X da -roomSize a roomSize
+            v = -vertices[i+1] / roomHeight;  // Normalizza Y (invertito perché Y è negativo)
+        } else {
+            // Per le pareti laterali, usa Z e Y
+            u = (vertices[i+2] + roomSize) / (2 * roomSize); // Normalizza Z da -roomSize a roomSize
+            v = -vertices[i+1] / roomHeight;  // Normalizza Y (invertito)
         }
+        
+        texcoords.push(u, v);
     }
     
     // Crea il modello della parete
@@ -1590,8 +1595,7 @@ function createWallWithHoles(wallName, wallType, windows) {
         position: [0, 0, 0],
         rotation: [0, 0, 0],
         scale: [1, 1, 1],
-        texture: 'wall',
-        isTransparent: false
+        texture: 'wall'
     };
     
     logger.log(`Parete ${wallName} creata con aperture per finestre`);
@@ -2209,10 +2213,10 @@ function addWindowOpenings() {
     
     // Definisci le posizioni delle finestre
     const windows = [
-        { x: 0, y: -1.3, wall: 'front' },
-        { x: 0, y: -1.3, wall: 'back' },
-        { x: 4, y: -1.3, wall: 'right' },
-        { x: -4, y: -1.3, wall: 'left' }
+        { x: 0, y: -1.3, wall: 'front' },  // Finestra sulla parete frontale
+        { x: 0, y: -1.3, wall: 'back' },   // Finestra sulla parete posteriore
+        { x: 4, y: -1.3, wall: 'right' },  // Finestra sulla parete destra
+        { x: -4, y: -1.3, wall: 'left' }   // Finestra sulla parete sinistra
     ];
     
     logger.log(`Creazione aperture finestre: ${windows.length}`);
@@ -2245,15 +2249,15 @@ function addWindowOpenings() {
                 break;
             case 'left':
                 x = -roomSize + wallOffset;
-                z = window.x;
+                z = window.x; // Importante: usiamo x come coordinata z per le pareti laterali
                 rotationY = Math.PI / 2;
-                logger.log(`Finestra sinistra: [${x}, ${y}, ${z}]`);
+                logger.log(`Finestra sinistra: x=${x}, z=${z}, y=${y}, rotazione=${rotationY}`);
                 break;
             case 'right':
                 x = roomSize - wallOffset;
-                z = -window.x;
+                z = -window.x; // Nota il segno negativo qui!
                 rotationY = -Math.PI / 2;
-                logger.log(`Finestra destra: [${x}, ${y}, ${z}]`);
+                logger.log(`Finestra destra: x=${x}, z=${z}, y=${y}, rotazione=${rotationY}`);
                 break;
         }
         
