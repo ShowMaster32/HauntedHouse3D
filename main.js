@@ -3185,9 +3185,9 @@ function positionModel(name) {
         logger.log(`Bambola posizionata a: [${randomX}, 0, ${randomZ}]`);
     } else if (name === 'lamp') {
         // Posiziona il lampadario al centro della stanza, attaccato al soffitto
-        models[name].position = [0, -roomHeight + 0.1, 0]; // Attaccato al soffitto
-        models[name].rotation = [Math.PI, 0, 0]; // Ruotalo per puntare verso il pavimento
-        models[name].scale = [0.3, 0.3, 0.3]; // Dimensione appropriata
+        models[name].position = [0, 0, 0]; // Attaccato al soffitto
+        models[name].rotation = [Math.PI/2, 0, 0]; // Ruotalo per puntare verso il pavimento
+        models[name].scale = [2.5, 2.5, 2.5]; // Dimensione appropriata
         models[name].isEmissive = true; // Il lampadario emette luce
         models[name].texture = 'lampLight'; // Assegna una texture luminosa
 
@@ -3199,7 +3199,7 @@ function positionModel(name) {
         models[name].texture = 'lampLight';
 
         // Aggiorna la posizione della luce
-        lightPosition = [0, -roomHeight + 1.0, 0]; // 1 metro sotto il soffitto        
+        lightPosition = [0, 0, 0];    
     } else if (name === 'switch' || name === 'lightSwitch') {
         // Posiziona l'interruttore sulla parete sinistra
         const switchX = -roomSize + 0.1; // Vicino alla parete sinistra
