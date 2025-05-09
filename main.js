@@ -146,49 +146,91 @@ function createViewMatrix() {
 
 // Funzione per aggiornare il crosshair in base alla vicinanza a oggetti interattivi
 function updateCrosshair() {
-    const interactableObjects = [
-        // Definisci oggetti interattivi con posizione e raggio
-        {
-            position: switchPosition, // Usiamo esattamente la posizione dello switch
-            radius: 3.0, // Aumentato per facilitare l'interazione
-            name: 'switch'
-        }
-    ];
-
-    // Reset dello stato di vicinanza all'interruttore
+    // Usa esattamente le coordinate dell'interruttore sulla parete DESTRA
+    const rightSwitchPos = [-9.9, 1.5, 0];  // Queste sono le coordinate ORIGINALI
+    
+    // Reset dello stato
     isNearSwitch = false;
-
-    // Verifica se la camera è vicina a qualche oggetto interattivo
-    let nearInteractable = false;
-
-    for (const obj of interactableObjects) {
-        const dx = camera.position[0] - obj.position[0];
-        const dy = camera.position[1] - obj.position[1];
-        const dz = camera.position[2] - obj.position[2];
-        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-        if (distance < obj.radius) {
-            nearInteractable = true;
-
-            // Se è vicino all'interruttore, mostra le istruzioni e aggiorna lo stato
-            if (obj.name === 'switch') {
-                document.getElementById('instructions').style.visibility = 'visible';
-                isNearSwitch = true;
-                logger.log(`Giocatore vicino all'interruttore a distanza: ${distance.toFixed(2)}`);
-            }
-
-            break;
-        } else {
-            // Assicurati che le istruzioni siano nascoste se non siamo vicini
-            document.getElementById('instructions').style.visibility = 'hidden';
-        }
+    
+    // Calcola distanza dal giocatore all'interruttore sulla DESTRA
+    const dx = camera.position[0] - rightSwitchPos[0];
+    const dy = camera.position[1] - rightSwitchPos[1];
+    const dz = camera.position[2] - rightSwitchPos[2];
+    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    
+    // Debug
+    if (distance < 8) {
+        logger.log(`Distanza dall'interruttore SULLA DESTRA: ${distance.toFixed(2)}`);
     }
-
-    // Cambia il colore del crosshair in base alla vicinanza
-    if (nearInteractable) {
+    
+    // Vicino all'interruttore sulla DESTRA?
+    if (distance < 4.0) {
+        // Mostra le istruzioni
+        const instructions = document.getElementById('instructions');
+        if (instructions) {
+            instructions.style.visibility = 'visible';
+            instructions.innerHTML = 'Premi <span style="color:#ff4d4d">F</span> per accendere la luce';
+            isNearSwitch = true;
+        }
+        
+        // Cambia il crosshair
         document.getElementById('crosshair').style.backgroundImage = "url('images/crosshair-selection.png')";
     } else {
+        // Nascondi le istruzioni
+        const instructions = document.getElementById('instructions');
+        if (instructions) {
+            instructions.style.visibility = 'hidden';
+        }
+        
+        // Reimposta il crosshair
         document.getElementById('crosshair').style.backgroundImage = "url('images/crosshair.png')";
+    }
+    
+    // Assicurati che switchPosition sia sempre aggiornata
+    switchPosition = rightSwitchPos;
+}
+
+// Funzione per verificare e riparare l'elemento instructions
+function ensureInstructionsExist() {
+    const instructions = document.getElementById('instructions');
+    
+    if (!instructions) {
+        // Se l'elemento non esiste affatto, crealo da zero
+        logger.log("ERRORE: Elemento instructions non trovato, verrà creato");
+        
+        const newInstructions = document.createElement('div');
+        newInstructions.id = 'instructions';
+        newInstructions.innerHTML = 'Premi <span style="color:#ff4d4d">F</span> per accendere la luce';
+        newInstructions.style.visibility = 'hidden';
+        newInstructions.style.position = 'absolute';
+        newInstructions.style.bottom = '20px';
+        newInstructions.style.left = '50%';
+        newInstructions.style.transform = 'translateX(-50%)';
+        newInstructions.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        newInstructions.style.color = 'white';
+        newInstructions.style.padding = '10px';
+        newInstructions.style.borderRadius = '5px';
+        newInstructions.style.zIndex = '100';
+        newInstructions.style.textAlign = 'center';
+        newInstructions.style.fontWeight = 'bold';
+        document.body.appendChild(newInstructions);
+        
+        return newInstructions;
+    } else {
+        // Se l'elemento esiste ma potrebbe avere problemi di stile, aggiorna comunque
+        instructions.style.position = 'absolute';
+        instructions.style.bottom = '20px';
+        instructions.style.left = '50%';
+        instructions.style.transform = 'translateX(-50%)';
+        instructions.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        instructions.style.color = 'white';
+        instructions.style.padding = '10px';
+        instructions.style.borderRadius = '5px';
+        instructions.style.zIndex = '100';
+        instructions.style.textAlign = 'center';
+        instructions.style.fontWeight = 'bold';
+        
+        return instructions;
     }
 }
 
@@ -303,33 +345,33 @@ function render() {
     // Clear canvas
     gl.clearColor(0.1, 0.1, 0.1, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
+    
     // Skip rendering if game not started
     if (!gameStarted) return;
-
+    
     // Enable depth testing
     gl.enable(gl.DEPTH_TEST);
-
+    
     // Crea matrice vista
     const viewMatrix = createViewMatrix();
-
+    
     // Calcola matrice di proiezione
     const aspect = canvas.width / canvas.height;
     const fov = Math.PI / 4; // 45 gradi, un valore standard
     const projectionMatrix = m4.perspective(fov, aspect, 0.1, 100);
-
+    
     // Renderizza skybox
     renderSkybox(viewMatrix, projectionMatrix);
-
+    
     // Usa il programma principale per il resto della scena
     gl.useProgram(program);
-
-    // Verifica che program sia valido prima di ottenere uniform locations
+    
+    // IMPORTANTE: Verifica che program sia valido prima di ottenere uniform locations
     if (!program) {
         logger.log("ERRORE: Programma shader non valido");
         return;
     }
-
+    
     // Ottieni tutte le locazioni uniform per gli shader
     const u_modelLoc = gl.getUniformLocation(program, 'u_model');
     const u_viewLoc = gl.getUniformLocation(program, 'u_view');
@@ -342,14 +384,18 @@ function render() {
     const u_externalLightColorLoc = gl.getUniformLocation(program, 'u_externalLightColor');
     const u_externalLightIntensityLoc = gl.getUniformLocation(program, 'u_externalLightIntensity');
     const u_normalMatrixLoc = gl.getUniformLocation(program, 'u_normalMatrix');
-
+    
+    // AGGIUNGI QUESTA RIGA: imposta l'intensità della luce
+    const lightIntensity = 2.0; // Aumentato da 1.0 a 2.0
+    gl.uniform1f(gl.getUniformLocation(program, 'u_lightIntensity'), lightIntensity);
+    
     // Passa le opzioni di rendering
     gl.uniform1i(gl.getUniformLocation(program, 'u_shadows'), renderOptions.shadows);
     gl.uniform1i(gl.getUniformLocation(program, 'u_reflections'), renderOptions.reflections);
     gl.uniform1i(gl.getUniformLocation(program, 'u_lightOn'), isLightOn);
     gl.uniform1i(gl.getUniformLocation(program, 'u_externalLightOn'), isExternalLightOn);
     gl.uniform1i(gl.getUniformLocation(program, 'u_advancedRendering'), renderOptions.advancedRendering);
-
+    
     // Imposta i valori per la luce esterna
     gl.uniform3f(u_externalLightColorLoc, 0.6, 0.6, 1.0); // Luce bluastra
     gl.uniform1f(u_externalLightIntensityLoc, 0.1); // Intensità bassa
@@ -381,12 +427,12 @@ function render() {
             const dx = camera.position[0] - modelX;
             const dy = camera.position[1] - modelY;
             const dz = camera.position[2] - modelZ;
-            
+
             transparentObjects.push({
                 name: modelName,
-                distanceToCamera: dx*dx + dy*dy + dz*dz
+                distanceToCamera: dx * dx + dy * dy + dz * dz
             });
-            
+
             continue;
         }
 
@@ -521,7 +567,7 @@ function render() {
         }
 
         // Ripristina le impostazioni del rendering
-        gl.depthMask(true);  // Riabilita scrittura nel depth buffer
+        gl.depthMask(true); // Riabilita scrittura nel depth buffer
         gl.disable(gl.BLEND);
     }
 }
@@ -532,20 +578,20 @@ function createGlassMaterial() {
     if (textures['glassMaterial']) {
         gl.deleteTexture(textures['glassMaterial']);
     }
-    
+
     // Crea un canvas per la texture
     const glassCanvas = document.createElement('canvas');
     glassCanvas.width = 128;
     glassCanvas.height = 128;
     const ctx = glassCanvas.getContext('2d');
-    
+
     // Crea un canvas vuoto (completamente trasparente)
     ctx.clearRect(0, 0, 128, 128);
-    
+
     // Aggiungi un colore azzurro MOLTO leggero e trasparente
     ctx.fillStyle = 'rgba(170, 200, 255, 0.15)';
     ctx.fillRect(0, 0, 128, 128);
-    
+
     // Aggiungi alcune variazioni per dare un'impressione di vetro
     for (let i = 0; i < 20; i++) {
         // Riflessi casuali
@@ -553,13 +599,13 @@ function createGlassMaterial() {
         const y = Math.random() * 128;
         const size = Math.random() * 5 + 1;
         const alpha = Math.random() * 0.03 + 0.02; // Molto trasparente
-        
+
         ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
         ctx.beginPath();
         ctx.arc(x, y, size, 0, Math.PI * 2);
         ctx.fill();
     }
-    
+
     // Crea la texture WebGL
     const glassTexture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, glassTexture);
@@ -569,11 +615,11 @@ function createGlassMaterial() {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.bindTexture(gl.TEXTURE_2D, null);
-    
+
     textures['glassMaterial'] = glassTexture;
-    
+
     logger.log('Nuovo materiale vetro creato con trasparenza reale');
-    
+
     return glassTexture;
 }
 
@@ -815,51 +861,48 @@ function createViewMatrix() {
     );
 }
 
-// Funzione per aggiornare il crosshair in base alla vicinanza a oggetti interattivi
 function updateCrosshair() {
-    const interactableObjects = [
-        // Definisci oggetti interattivi con posizione e raggio
-        {
-            position: switchPosition,
-            radius: 2.5,
-            name: 'switch'
-        } // Raggio aumentato per facilitare l'interazione
-    ];
-
-    // Reset dello stato di vicinanza all'interruttore
+    // Usa la posizione CORRETTA dell'interruttore (con X negativo)
+    const correctSwitchPosition = [-9.7, -2, 0];
+    
+    // Reset dello stato di vicinanza
     isNearSwitch = false;
-
-    // Verifica se la camera è vicina a qualche oggetto interattivo
-    let nearInteractable = false;
-
-    for (const obj of interactableObjects) {
-        const dx = camera.position[0] - obj.position[0];
-        const dy = camera.position[1] - obj.position[1];
-        const dz = camera.position[2] - obj.position[2];
-        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-        if (distance < obj.radius) {
-            nearInteractable = true;
-
-            // Se è vicino all'interruttore, mostra le istruzioni e aggiorna lo stato
-            if (obj.name === 'switch') {
-                document.getElementById('instructions').style.visibility = 'visible';
-                isNearSwitch = true;
-            }
-
-            break;
-        } else {
-            // Assicurati che le istruzioni siano nascoste se non siamo vicini
-            document.getElementById('instructions').style.visibility = 'hidden';
-        }
+    
+    // Calcola distanza dal giocatore all'interruttore
+    const dx = camera.position[0] - correctSwitchPosition[0];
+    const dy = camera.position[1] - correctSwitchPosition[1];
+    const dz = camera.position[2] - correctSwitchPosition[2];
+    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    
+    // Debug
+    if (distance < 8) {
+        logger.log(`Distanza dall'interruttore corretto [-9.7, -2, 0]: ${distance.toFixed(2)}`);
     }
-
-    // Cambia il colore del crosshair in base alla vicinanza
-    if (nearInteractable) {
+    
+    // Se sei vicino all'interruttore corretto
+    if (distance < 4.0) {
+        // Mostra le istruzioni
+        const instructions = document.getElementById('instructions');
+        if (instructions) {
+            instructions.style.visibility = 'visible';
+            isNearSwitch = true;
+        }
+        
+        // Cambia il crosshair
         document.getElementById('crosshair').style.backgroundImage = "url('images/crosshair-selection.png')";
     } else {
+        // Nascondi le istruzioni
+        const instructions = document.getElementById('instructions');
+        if (instructions) {
+            instructions.style.visibility = 'hidden';
+        }
+        
+        // Reimposta il crosshair
         document.getElementById('crosshair').style.backgroundImage = "url('images/crosshair.png')";
     }
+    
+    // Aggiorniamo anche la variabile globale per sicurezza
+    switchPosition = correctSwitchPosition;
 }
 
 // Funzione per mostrare le coordinate della camera
@@ -918,6 +961,7 @@ function checkDollProximity() {
     }
 }
 
+// Nel caso si usi createSwitch():
 function createSwitch() {
     // Se il modello OBJ è già stato caricato, non creare il fallback
     if (models['switch']) {
@@ -1003,14 +1047,13 @@ function createSwitch() {
         );
     }
 
-    // Crea un colore rosso brillante per l'interruttore
-    const switchColor = createColorTexture([1.0, 0.2, 0.2, 1.0]);
-    textures['switchColor'] = switchColor;
+    // Usa la nuova texture bianca ruvida
+    textures['switchColor'] = textures['switch_white'] || createColorTexture([1.0, 1.0, 1.0, 1.0]);
 
-    // Posiziona l'interruttore sulla parete destra
+    // Posiziona l'interruttore sulla parete DESTRA
     const switchX = roomSize - 0.3; // Vicino alla parete destra
-    const switchY = -1.7; // Altezza occhi
-    const switchZ = 0; // Centro della stanza lungo Z
+    const switchY = -2.0;          // Altezza degli occhi
+    const switchZ = 0;             // Centro della stanza lungo Z
 
     // Aggiungi l'interruttore ai modelli
     models['fallbackSwitch'] = {
@@ -1307,12 +1350,12 @@ function addCeilingLight() {
 // Crea una stanza semplice con aperture per le finestre
 function createSimpleRoom() {
     logger.log("Creazione stanza con aperture per finestre...");
-    
+
     // Definisci le dimensioni delle finestre
     const windowWidth = 4;
     const windowHeight = 2.5;
     const frameWidth = 0.2;
-    
+
     // Pavimento (a Y=0)
     models['floor'] = {
         vertices: [
@@ -1376,26 +1419,41 @@ function createSimpleRoom() {
     };
 
     // Definisci posizioni finestre
-    const windowPositions = [
-        { x: 0, y: -1.3, wall: 'front' }, 
-        { x: 0, y: -1.3, wall: 'back' },  
-        { x: 4, y: -1.3, wall: 'right' }, 
-        { x: -4, y: -1.3, wall: 'left' }  
+    const windowPositions = [{
+            x: 0,
+            y: -1.3,
+            wall: 'front'
+        },
+        {
+            x: 0,
+            y: -1.3,
+            wall: 'back'
+        },
+        {
+            x: 4,
+            y: -1.3,
+            wall: 'right'
+        },
+        {
+            x: -4,
+            y: -1.3,
+            wall: 'left'
+        }
     ];
 
     // Crea pareti con aperture per le finestre
     // Parete frontale
     createWallWithHoles('frontWall', 'front', windowPositions);
-    
+
     // Parete posteriore
     createWallWithHoles('backWall', 'back', windowPositions);
-    
+
     // Parete sinistra
     createWallWithHoles('leftWall', 'left', windowPositions);
-    
+
     // Parete destra
     createWallWithHoles('rightWall', 'right', windowPositions);
-    
+
     // Aggiungi le cornici delle finestre
     addWindowOpenings();
 
@@ -1405,44 +1463,46 @@ function createSimpleRoom() {
 // Funzione per creare una parete con aperture per finestre
 function createWallWithHoles(wallName, wallType, windows) {
     logger.log(`Creazione parete ${wallName} con aperture...`);
-    
+
     // Filtro solo le finestre per questa parete
     const windowsForThisWall = windows.filter(window => window.wall === wallType);
-    
+
     // Se non ci sono finestre per questa parete, crea una parete normale
     if (windowsForThisWall.length === 0) {
         createSimpleWall(wallName, wallType);
         return;
     }
-    
+
     // Altrimenti, crea una parete con aperture
     const windowWidth = 4;
     const windowHeight = 2.5;
-    
+
     // Prepara gli array per vertici, normali e coordinate texture
     let vertices = [];
     let normals = [];
     let texcoords = [];
-    
+
     // Determina la normale in base al tipo di parete
-    let normalX = 0, normalY = 0, normalZ = 0;
+    let normalX = 0,
+        normalY = 0,
+        normalZ = 0;
     if (wallType === 'front') normalZ = 1;
     else if (wallType === 'back') normalZ = -1;
     else if (wallType === 'left') normalX = 1;
     else if (wallType === 'right') normalX = -1;
-    
+
     // Per ogni finestra su questa parete
     for (const window of windowsForThisWall) {
         // Posizione Y della finestra
         const windowY = window.y;
         const windowX = window.x;
-        
+
         // Calcola i limiti della finestra
         let minX, maxX, minZ, maxZ;
-        
+
         if (wallType === 'front' || wallType === 'back') {
-            minX = windowX - windowWidth/2;
-            maxX = windowX + windowWidth/2;
+            minX = windowX - windowWidth / 2;
+            maxX = windowX + windowWidth / 2;
             minZ = wallType === 'front' ? -roomSize : roomSize;
             maxZ = minZ;
             logger.log(`Apertura parete ${wallType}: x=${minX} a ${maxX}, y=${windowY}, z=${minZ}`);
@@ -1451,17 +1511,17 @@ function createWallWithHoles(wallName, wallType, windows) {
             if (wallType === 'left') {
                 minX = -roomSize;
                 maxX = minX;
-                minZ = windowX - windowWidth/2; // NOTA: usiamo windowX per la coordinata Z
-                maxZ = windowX + windowWidth/2;
+                minZ = windowX - windowWidth / 2; // NOTA: usiamo windowX per la coordinata Z
+                maxZ = windowX + windowWidth / 2;
             } else { // right wall
                 minX = roomSize;
                 maxX = minX;
-                minZ = -windowX - windowWidth/2; // Negativo di windowX!
-                maxZ = -windowX + windowWidth/2;
+                minZ = -windowX - windowWidth / 2; // Negativo di windowX!
+                maxZ = -windowX + windowWidth / 2;
             }
             logger.log(`Apertura parete ${wallType}: x=${minX}, z=${minZ} a ${maxZ}, y=${windowY}`);
         }
-        
+
         // Crea la parte superiore (sopra la finestra)
         if (wallType === 'front' || wallType === 'back') {
             // Parte superiore
@@ -1473,7 +1533,7 @@ function createWallWithHoles(wallName, wallType, windows) {
                 roomSize, windowY, minZ,
                 -roomSize, windowY, minZ
             );
-            
+
             // Parte sinistra (a sinistra della finestra)
             vertices.push(
                 -roomSize, windowY, minZ,
@@ -1483,7 +1543,7 @@ function createWallWithHoles(wallName, wallType, windows) {
                 minX, windowY - windowHeight, minZ,
                 -roomSize, windowY - windowHeight, minZ
             );
-            
+
             // Parte destra (a destra della finestra)
             vertices.push(
                 maxX, windowY, minZ,
@@ -1493,7 +1553,7 @@ function createWallWithHoles(wallName, wallType, windows) {
                 roomSize, windowY - windowHeight, minZ,
                 maxX, windowY - windowHeight, minZ
             );
-            
+
             // Parte inferiore (sotto la finestra)
             vertices.push(
                 -roomSize, windowY - windowHeight, minZ,
@@ -1523,7 +1583,7 @@ function createWallWithHoles(wallName, wallType, windows) {
                 minX, windowY, roomSize,
                 minX, windowY, -roomSize
             );
-            
+
             // Parte frontale (davanti alla finestra)
             vertices.push(
                 minX, windowY, -roomSize,
@@ -1533,7 +1593,7 @@ function createWallWithHoles(wallName, wallType, windows) {
                 minX, windowY - windowHeight, minZ,
                 minX, windowY - windowHeight, -roomSize
             );
-            
+
             // Parte posteriore (dietro alla finestra)
             vertices.push(
                 minX, windowY, maxZ,
@@ -1543,7 +1603,7 @@ function createWallWithHoles(wallName, wallType, windows) {
                 minX, windowY - windowHeight, roomSize,
                 minX, windowY - windowHeight, maxZ
             );
-            
+
             // Parte inferiore (sotto la finestra)
             vertices.push(
                 minX, windowY - windowHeight, -roomSize,
@@ -1563,30 +1623,30 @@ function createWallWithHoles(wallName, wallType, windows) {
                 minX, windowY - windowHeight, roomSize
             );
         }
-        
+
         // Aggiungi le normali per tutti i vertici aggiunti
         for (let i = 0; i < vertices.length / 3 - normals.length; i++) {
             normals.push(normalX, normalY, normalZ);
         }
     }
-    
+
     // Calcola le coordinate texture basate sulle posizioni dei vertici
     for (let i = 0; i < vertices.length; i += 3) {
         let u, v;
-        
+
         if (wallType === 'front' || wallType === 'back') {
             // Per le pareti frontali/posteriori, usa X e Y
             u = (vertices[i] + roomSize) / (2 * roomSize); // Normalizza X da -roomSize a roomSize
-            v = -vertices[i+1] / roomHeight;  // Normalizza Y (invertito perché Y è negativo)
+            v = -vertices[i + 1] / roomHeight; // Normalizza Y (invertito perché Y è negativo)
         } else {
             // Per le pareti laterali, usa Z e Y
-            u = (vertices[i+2] + roomSize) / (2 * roomSize); // Normalizza Z da -roomSize a roomSize
-            v = -vertices[i+1] / roomHeight;  // Normalizza Y (invertito)
+            u = (vertices[i + 2] + roomSize) / (2 * roomSize); // Normalizza Z da -roomSize a roomSize
+            v = -vertices[i + 1] / roomHeight; // Normalizza Y (invertito)
         }
-        
+
         texcoords.push(u, v);
     }
-    
+
     // Crea il modello della parete
     models[wallName] = {
         vertices: vertices,
@@ -1597,14 +1657,14 @@ function createWallWithHoles(wallName, wallType, windows) {
         scale: [1, 1, 1],
         texture: 'wall'
     };
-    
+
     logger.log(`Parete ${wallName} creata con aperture per finestre`);
 }
 
 // Funzione per creare una parete semplice senza aperture
 function createSimpleWall(wallName, wallType) {
     let vertices, normals, texcoords;
-    
+
     if (wallType === 'front') {
         vertices = [
             -roomSize, 0, -roomSize,
@@ -1674,7 +1734,7 @@ function createSimpleWall(wallName, wallType) {
             -1, 0, 0
         ];
     }
-    
+
     texcoords = [
         0, 0,
         1, 0,
@@ -1683,7 +1743,7 @@ function createSimpleWall(wallName, wallType) {
         1, 1,
         0, 1
     ];
-    
+
     models[wallName] = {
         vertices: vertices,
         normals: normals,
@@ -1694,21 +1754,21 @@ function createSimpleWall(wallName, wallType) {
         texture: 'wall',
         isTransparent: false
     };
-    
+
     logger.log(`Parete ${wallName} creata (semplice, senza aperture)`);
 }
 
 // Funzione per creare una parete con apertura per finestra
 function createWallWithWindow(name, wallType, windowY, windowWidth, windowHeight) {
     const halfWidth = windowWidth / 2;
-    
+
     let vertices = [];
     let normals = [];
     let texcoords = [];
     let normalVector = [0, 0, 0];
-    
+
     // Determina il vettore normale in base al tipo di parete
-    switch(wallType) {
+    switch (wallType) {
         case 'front':
             normalVector = [0, 0, 1]; // +Z
             break;
@@ -1722,11 +1782,11 @@ function createWallWithWindow(name, wallType, windowY, windowWidth, windowHeight
             normalVector = [-1, 0, 0]; // -X
             break;
     }
-    
+
     // Determina le coordinate dei vertici in base al tipo di parete
     if (wallType === 'front' || wallType === 'back') {
         const z = wallType === 'front' ? -roomSize : roomSize;
-        
+
         // Parte superiore (sopra la finestra)
         vertices.push(
             // Triangolo 1
@@ -1738,7 +1798,7 @@ function createWallWithWindow(name, wallType, windowY, windowWidth, windowHeight
             roomSize, windowY, z,
             -roomSize, windowY, z
         );
-        
+
         // Parte sinistra (a sinistra della finestra)
         vertices.push(
             // Triangolo 1
@@ -1750,7 +1810,7 @@ function createWallWithWindow(name, wallType, windowY, windowWidth, windowHeight
             -halfWidth, windowY - windowHeight, z,
             -roomSize, windowY - windowHeight, z
         );
-        
+
         // Parte destra (a destra della finestra)
         vertices.push(
             // Triangolo 1
@@ -1762,7 +1822,7 @@ function createWallWithWindow(name, wallType, windowY, windowWidth, windowHeight
             roomSize, windowY - windowHeight, z,
             halfWidth, windowY - windowHeight, z
         );
-        
+
         // Parte inferiore (sotto la finestra)
         vertices.push(
             // Triangolo 1
@@ -1781,7 +1841,7 @@ function createWallWithWindow(name, wallType, windowY, windowWidth, windowHeight
     } else {
         // Per le pareti laterali (sinistra e destra)
         const x = wallType === 'left' ? -roomSize : roomSize;
-        
+
         // Parte superiore (sopra la finestra)
         vertices.push(
             // Triangolo 1
@@ -1793,7 +1853,7 @@ function createWallWithWindow(name, wallType, windowY, windowWidth, windowHeight
             x, windowY, roomSize,
             x, windowY, -roomSize
         );
-        
+
         // Parte frontale (davanti alla finestra)
         vertices.push(
             // Triangolo 1
@@ -1805,7 +1865,7 @@ function createWallWithWindow(name, wallType, windowY, windowWidth, windowHeight
             x, windowY - windowHeight, -halfWidth,
             x, windowY - windowHeight, -roomSize
         );
-        
+
         // Parte posteriore (dietro la finestra)
         vertices.push(
             // Triangolo 1
@@ -1817,7 +1877,7 @@ function createWallWithWindow(name, wallType, windowY, windowWidth, windowHeight
             x, windowY - windowHeight, roomSize,
             x, windowY - windowHeight, halfWidth
         );
-        
+
         // Parte inferiore (sotto la finestra)
         vertices.push(
             // Triangolo 1
@@ -1834,28 +1894,28 @@ function createWallWithWindow(name, wallType, windowY, windowWidth, windowHeight
             x, -roomHeight, -roomSize
         );
     }
-    
+
     // Appiattisci i vertici
     const flatVertices = [];
     for (let i = 0; i < vertices.length; i += 3) {
         flatVertices.push(vertices[i][0], vertices[i][1], vertices[i][2]);
-        flatVertices.push(vertices[i+1][0], vertices[i+1][1], vertices[i+1][2]);
-        flatVertices.push(vertices[i+2][0], vertices[i+2][1], vertices[i+2][2]);
+        flatVertices.push(vertices[i + 1][0], vertices[i + 1][1], vertices[i + 1][2]);
+        flatVertices.push(vertices[i + 2][0], vertices[i + 2][1], vertices[i + 2][2]);
     }
-    
+
     // Crea normali e coordinate texture
     for (let i = 0; i < vertices.length; i += 3) {
         // Aggiungi normali per i tre vertici del triangolo
         for (let j = 0; j < 3; j++) {
             normals.push(normalVector[0], normalVector[1], normalVector[2]);
         }
-        
+
         // Calcola coordinate texture approssimative
-        const triVerts = [vertices[i], vertices[i+1], vertices[i+2]];
-        
+        const triVerts = [vertices[i], vertices[i + 1], vertices[i + 2]];
+
         // Normalizza le coordinate in funzione delle dimensioni della stanza
         let u1, v1, u2, v2, u3, v3;
-        
+
         if (wallType === 'front' || wallType === 'back') {
             u1 = (triVerts[0][0] + roomSize) / (2 * roomSize);
             v1 = (-triVerts[0][1]) / roomHeight;
@@ -1871,10 +1931,10 @@ function createWallWithWindow(name, wallType, windowY, windowWidth, windowHeight
             u3 = (triVerts[2][2] + roomSize) / (2 * roomSize);
             v3 = (-triVerts[2][1]) / roomHeight;
         }
-        
+
         texcoords.push(u1, v1, u2, v2, u3, v3);
     }
-    
+
     // Crea il modello della parete
     models[name] = {
         vertices: flatVertices,
@@ -1891,25 +1951,25 @@ function createWallWithWindow(name, wallType, windowY, windowWidth, windowHeight
 function addWindows() {
     // Crea texture per vetro e cornici
     const glassTexture = createGlassMaterial();
-    
+
     // Crea texture per la cornice
     if (!textures['windowFrame']) {
         const frameCanvas = document.createElement('canvas');
         frameCanvas.width = 64;
         frameCanvas.height = 64;
         const frameCtx = frameCanvas.getContext('2d');
-        
+
         // Colore base legno scuro
         frameCtx.fillStyle = '#3A2A1A';
         frameCtx.fillRect(0, 0, 64, 64);
-        
+
         // Venature del legno
         for (let i = 0; i < 8; i++) {
             const y = i * 8;
             frameCtx.fillStyle = `rgba(80, 60, 30, 0.4)`;
             frameCtx.fillRect(0, y, 64, 3);
         }
-        
+
         const frameTexture = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, frameTexture);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frameCanvas);
@@ -1919,7 +1979,7 @@ function addWindows() {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.bindTexture(gl.TEXTURE_2D, null);
         textures['windowFrame'] = frameTexture;
-        
+
         logger.log('Texture cornice finestra creata');
     }
 
@@ -1927,28 +1987,43 @@ function addWindows() {
     const windowWidth = 4;
     const windowHeight = 2.5;
     const frameWidth = 0.2;
-    
+
     // Offset Z per evitare z-fighting
-    const glassOffset = 0.01;   // Offset per il vetro
-    const frameOffset = 0.02;   // Offset maggiore per le cornici (più avanti)
-    
+    const glassOffset = 0.01; // Offset per il vetro
+    const frameOffset = 0.02; // Offset maggiore per le cornici (più avanti)
+
     // Definisci le posizioni delle finestre
-    const windows = [
-        { x: 0, y: 3.0, wall: 'front' },  // Finestra sulla parete frontale
-        { x: 0, y: 3.0, wall: 'back' },   // Finestra sulla parete posteriore
-        { x: 4, y: 3.0, wall: 'right' },  // Finestra sulla parete destra
-        { x: -4, y: 3.0, wall: 'left' }   // Finestra sulla parete sinistra
+    const windows = [{
+            x: 0,
+            y: 3.0,
+            wall: 'front'
+        }, // Finestra sulla parete frontale
+        {
+            x: 0,
+            y: 3.0,
+            wall: 'back'
+        }, // Finestra sulla parete posteriore
+        {
+            x: 4,
+            y: 3.0,
+            wall: 'right'
+        }, // Finestra sulla parete destra
+        {
+            x: -4,
+            y: 3.0,
+            wall: 'left'
+        } // Finestra sulla parete sinistra
     ];
-    
+
     logger.log(`Creazione finestre: ${windows.length}`);
-    
+
     // Rimuovi vecchi modelli di finestre se esistono
     for (const key in models) {
         if (key.startsWith('window')) {
             delete models[key];
         }
     }
-    
+
     // Crea le finestre
     windows.forEach((window, index) => {
         // Determina i valori di posizione basati sulla parete
@@ -1957,8 +2032,8 @@ function addWindows() {
         let z = 0;
         let rotationY = 0;
         let wallOffset = 0.05; // Offset dalla parete per evitare z-fighting
-        
-        switch(window.wall) {
+
+        switch (window.wall) {
             case 'front':
                 z = -roomSize + wallOffset;
                 logger.log(`Finestra frontale: [${x}, ${y}, ${z}]`);
@@ -1981,16 +2056,16 @@ function addWindows() {
                 logger.log(`Finestra destra: [${x}, ${y}, ${z}]`);
                 break;
         }
-        
+
         // Vetro centrale - semplicemente un rettangolo trasparente
         models[`windowGlass_${index}`] = {
             vertices: [
-                -windowWidth/2, y, glassOffset,
-                windowWidth/2, y, glassOffset,
-                windowWidth/2, y - windowHeight, glassOffset,
-                -windowWidth/2, y, glassOffset,
-                windowWidth/2, y - windowHeight, glassOffset,
-                -windowWidth/2, y - windowHeight, glassOffset
+                -windowWidth / 2, y, glassOffset,
+                windowWidth / 2, y, glassOffset,
+                windowWidth / 2, y - windowHeight, glassOffset,
+                -windowWidth / 2, y, glassOffset,
+                windowWidth / 2, y - windowHeight, glassOffset,
+                -windowWidth / 2, y - windowHeight, glassOffset
             ],
             normals: new Array(18).fill(0), // Da impostare dopo
             texcoords: [
@@ -2007,31 +2082,31 @@ function addWindows() {
             texture: 'glassMaterial',
             isTransparent: true
         };
-        
+
         // Impostiamo le normali in base alla direzione della parete
         for (let i = 0; i < 6; i++) {
             if (window.wall === 'front') {
-                models[`windowGlass_${index}`].normals[i*3+2] = 1; // Normale in direzione +Z
+                models[`windowGlass_${index}`].normals[i * 3 + 2] = 1; // Normale in direzione +Z
             } else if (window.wall === 'back') {
-                models[`windowGlass_${index}`].normals[i*3+2] = -1; // Normale in direzione -Z
+                models[`windowGlass_${index}`].normals[i * 3 + 2] = -1; // Normale in direzione -Z
             } else if (window.wall === 'left') {
-                models[`windowGlass_${index}`].normals[i*3] = 1; // Normale in direzione +X
+                models[`windowGlass_${index}`].normals[i * 3] = 1; // Normale in direzione +X
             } else if (window.wall === 'right') {
-                models[`windowGlass_${index}`].normals[i*3] = -1; // Normale in direzione -X
+                models[`windowGlass_${index}`].normals[i * 3] = -1; // Normale in direzione -X
             }
         }
-        
+
         // Ora aggiungiamo le cornici
-        
+
         // Cornice superiore
         models[`windowFrameTop_${index}`] = {
             vertices: [
-                -windowWidth/2 - frameWidth, y + frameWidth, frameOffset,
-                windowWidth/2 + frameWidth, y + frameWidth, frameOffset,
-                windowWidth/2 + frameWidth, y, frameOffset,
-                -windowWidth/2 - frameWidth, y + frameWidth, frameOffset,
-                windowWidth/2 + frameWidth, y, frameOffset,
-                -windowWidth/2 - frameWidth, y, frameOffset
+                -windowWidth / 2 - frameWidth, y + frameWidth, frameOffset,
+                windowWidth / 2 + frameWidth, y + frameWidth, frameOffset,
+                windowWidth / 2 + frameWidth, y, frameOffset,
+                -windowWidth / 2 - frameWidth, y + frameWidth, frameOffset,
+                windowWidth / 2 + frameWidth, y, frameOffset,
+                -windowWidth / 2 - frameWidth, y, frameOffset
             ],
             normals: [...models[`windowGlass_${index}`].normals], // Copiamo le normali dal vetro
             texcoords: [
@@ -2047,16 +2122,16 @@ function addWindows() {
             scale: [1, 1, 1],
             texture: 'windowFrame'
         };
-        
+
         // Cornice inferiore
         models[`windowFrameBottom_${index}`] = {
             vertices: [
-                -windowWidth/2 - frameWidth, y - windowHeight, frameOffset,
-                windowWidth/2 + frameWidth, y - windowHeight, frameOffset,
-                windowWidth/2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
-                -windowWidth/2 - frameWidth, y - windowHeight, frameOffset,
-                windowWidth/2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
-                -windowWidth/2 - frameWidth, y - windowHeight - frameWidth, frameOffset
+                -windowWidth / 2 - frameWidth, y - windowHeight, frameOffset,
+                windowWidth / 2 + frameWidth, y - windowHeight, frameOffset,
+                windowWidth / 2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
+                -windowWidth / 2 - frameWidth, y - windowHeight, frameOffset,
+                windowWidth / 2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
+                -windowWidth / 2 - frameWidth, y - windowHeight - frameWidth, frameOffset
             ],
             normals: [...models[`windowGlass_${index}`].normals],
             texcoords: [
@@ -2072,16 +2147,16 @@ function addWindows() {
             scale: [1, 1, 1],
             texture: 'windowFrame'
         };
-        
+
         // Cornice sinistra
         models[`windowFrameLeft_${index}`] = {
             vertices: [
-                -windowWidth/2 - frameWidth, y + frameWidth, frameOffset,
-                -windowWidth/2, y + frameWidth, frameOffset,
-                -windowWidth/2, y - windowHeight - frameWidth, frameOffset,
-                -windowWidth/2 - frameWidth, y + frameWidth, frameOffset,
-                -windowWidth/2, y - windowHeight - frameWidth, frameOffset,
-                -windowWidth/2 - frameWidth, y - windowHeight - frameWidth, frameOffset
+                -windowWidth / 2 - frameWidth, y + frameWidth, frameOffset,
+                -windowWidth / 2, y + frameWidth, frameOffset,
+                -windowWidth / 2, y - windowHeight - frameWidth, frameOffset,
+                -windowWidth / 2 - frameWidth, y + frameWidth, frameOffset,
+                -windowWidth / 2, y - windowHeight - frameWidth, frameOffset,
+                -windowWidth / 2 - frameWidth, y - windowHeight - frameWidth, frameOffset
             ],
             normals: [...models[`windowGlass_${index}`].normals],
             texcoords: [
@@ -2097,16 +2172,16 @@ function addWindows() {
             scale: [1, 1, 1],
             texture: 'windowFrame'
         };
-        
+
         // Cornice destra
         models[`windowFrameRight_${index}`] = {
             vertices: [
-                windowWidth/2, y + frameWidth, frameOffset,
-                windowWidth/2 + frameWidth, y + frameWidth, frameOffset,
-                windowWidth/2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
-                windowWidth/2, y + frameWidth, frameOffset,
-                windowWidth/2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
-                windowWidth/2, y - windowHeight - frameWidth, frameOffset
+                windowWidth / 2, y + frameWidth, frameOffset,
+                windowWidth / 2 + frameWidth, y + frameWidth, frameOffset,
+                windowWidth / 2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
+                windowWidth / 2, y + frameWidth, frameOffset,
+                windowWidth / 2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
+                windowWidth / 2, y - windowHeight - frameWidth, frameOffset
             ],
             normals: [...models[`windowGlass_${index}`].normals],
             texcoords: [
@@ -2122,16 +2197,16 @@ function addWindows() {
             scale: [1, 1, 1],
             texture: 'windowFrame'
         };
-        
+
         // Traversa centrale orizzontale (opzionale)
         models[`windowFrameMiddle_${index}`] = {
             vertices: [
-                -windowWidth/2, y - windowHeight/2 + frameWidth/2, frameOffset,
-                windowWidth/2, y - windowHeight/2 + frameWidth/2, frameOffset,
-                windowWidth/2, y - windowHeight/2 - frameWidth/2, frameOffset,
-                -windowWidth/2, y - windowHeight/2 + frameWidth/2, frameOffset,
-                windowWidth/2, y - windowHeight/2 - frameWidth/2, frameOffset,
-                -windowWidth/2, y - windowHeight/2 - frameWidth/2, frameOffset
+                -windowWidth / 2, y - windowHeight / 2 + frameWidth / 2, frameOffset,
+                windowWidth / 2, y - windowHeight / 2 + frameWidth / 2, frameOffset,
+                windowWidth / 2, y - windowHeight / 2 - frameWidth / 2, frameOffset,
+                -windowWidth / 2, y - windowHeight / 2 + frameWidth / 2, frameOffset,
+                windowWidth / 2, y - windowHeight / 2 - frameWidth / 2, frameOffset,
+                -windowWidth / 2, y - windowHeight / 2 - frameWidth / 2, frameOffset
             ],
             normals: [...models[`windowGlass_${index}`].normals],
             texcoords: [
@@ -2148,22 +2223,22 @@ function addWindows() {
             texture: 'windowFrame'
         };
     });
-    
+
     logger.log('Finestre create con materiale vetro personalizzato');
-    
+
     // Rimuovi eventuali texture precedenti
     if (textures['glass']) {
         gl.deleteTexture(textures['glass']);
         delete textures['glass'];
         logger.log('Texture glass.png eliminata');
     }
-    
+
     // Rimuovi modelli precedenti delle vecchie finestre
     if (models['frontWindow']) {
         delete models['frontWindow'];
         logger.log('Modello frontWindow rimosso');
     }
-    
+
     if (models['backWindow']) {
         delete models['backWindow'];
         logger.log('Modello backWindow rimosso');
@@ -2178,18 +2253,18 @@ function addWindowOpenings() {
         frameCanvas.width = 64;
         frameCanvas.height = 64;
         const frameCtx = frameCanvas.getContext('2d');
-        
+
         // Colore base legno scuro
         frameCtx.fillStyle = '#3A2A1A';
         frameCtx.fillRect(0, 0, 64, 64);
-        
+
         // Venature del legno
         for (let i = 0; i < 8; i++) {
             const y = i * 8;
             frameCtx.fillStyle = `rgba(80, 60, 30, 0.4)`;
             frameCtx.fillRect(0, y, 64, 3);
         }
-        
+
         const frameTexture = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, frameTexture);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frameCanvas);
@@ -2199,7 +2274,7 @@ function addWindowOpenings() {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.bindTexture(gl.TEXTURE_2D, null);
         textures['windowFrame'] = frameTexture;
-        
+
         logger.log('Texture cornice finestra creata');
     }
 
@@ -2207,27 +2282,42 @@ function addWindowOpenings() {
     const windowWidth = 4;
     const windowHeight = 2.5;
     const frameWidth = 0.2;
-    
+
     // Offset Z per evitare z-fighting
     const frameOffset = 0.02;
-    
+
     // Definisci le posizioni delle finestre
-    const windows = [
-        { x: 0, y: -1.3, wall: 'front' },  // Finestra sulla parete frontale
-        { x: 0, y: -1.3, wall: 'back' },   // Finestra sulla parete posteriore
-        { x: 4, y: -1.3, wall: 'right' },  // Finestra sulla parete destra
-        { x: -4, y: -1.3, wall: 'left' }   // Finestra sulla parete sinistra
+    const windows = [{
+            x: 0,
+            y: -1.3,
+            wall: 'front'
+        }, // Finestra sulla parete frontale
+        {
+            x: 0,
+            y: -1.3,
+            wall: 'back'
+        }, // Finestra sulla parete posteriore
+        {
+            x: 4,
+            y: -1.3,
+            wall: 'right'
+        }, // Finestra sulla parete destra
+        {
+            x: -4,
+            y: -1.3,
+            wall: 'left'
+        } // Finestra sulla parete sinistra
     ];
-    
+
     logger.log(`Creazione aperture finestre: ${windows.length}`);
-    
+
     // Rimuovi vecchi modelli di finestre se esistono
     for (const key in models) {
         if (key.startsWith('window')) {
             delete models[key];
         }
     }
-    
+
     // Crea le finestre (solo le cornici)
     windows.forEach((window, index) => {
         // Determina i valori di posizione basati sulla parete
@@ -2236,8 +2326,8 @@ function addWindowOpenings() {
         let z = 0;
         let rotationY = 0;
         let wallOffset = 0.05; // Offset dalla parete
-        
-        switch(window.wall) {
+
+        switch (window.wall) {
             case 'front':
                 z = -roomSize + wallOffset;
                 logger.log(`Finestra frontale: [${x}, ${y}, ${z}]`);
@@ -2260,30 +2350,30 @@ function addWindowOpenings() {
                 logger.log(`Finestra destra: x=${x}, z=${z}, y=${y}, rotazione=${rotationY}`);
                 break;
         }
-        
+
         // Crea un array di normali in base alla direzione della parete
         const normals = new Array(18).fill(0);
         for (let i = 0; i < 6; i++) {
             if (window.wall === 'front') {
-                normals[i*3+2] = 1; // Normale in direzione +Z
+                normals[i * 3 + 2] = 1; // Normale in direzione +Z
             } else if (window.wall === 'back') {
-                normals[i*3+2] = -1; // Normale in direzione -Z
+                normals[i * 3 + 2] = -1; // Normale in direzione -Z
             } else if (window.wall === 'left') {
-                normals[i*3] = 1; // Normale in direzione +X
+                normals[i * 3] = 1; // Normale in direzione +X
             } else if (window.wall === 'right') {
-                normals[i*3] = -1; // Normale in direzione -X
+                normals[i * 3] = -1; // Normale in direzione -X
             }
         }
-        
+
         // Cornice superiore
         models[`windowFrameTop_${index}`] = {
             vertices: [
-                -windowWidth/2 - frameWidth, y + frameWidth, frameOffset,
-                windowWidth/2 + frameWidth, y + frameWidth, frameOffset,
-                windowWidth/2 + frameWidth, y, frameOffset,
-                -windowWidth/2 - frameWidth, y + frameWidth, frameOffset,
-                windowWidth/2 + frameWidth, y, frameOffset,
-                -windowWidth/2 - frameWidth, y, frameOffset
+                -windowWidth / 2 - frameWidth, y + frameWidth, frameOffset,
+                windowWidth / 2 + frameWidth, y + frameWidth, frameOffset,
+                windowWidth / 2 + frameWidth, y, frameOffset,
+                -windowWidth / 2 - frameWidth, y + frameWidth, frameOffset,
+                windowWidth / 2 + frameWidth, y, frameOffset,
+                -windowWidth / 2 - frameWidth, y, frameOffset
             ],
             normals: normals,
             texcoords: [
@@ -2299,16 +2389,16 @@ function addWindowOpenings() {
             scale: [1, 1, 1],
             texture: 'windowFrame'
         };
-        
+
         // Cornice inferiore
         models[`windowFrameBottom_${index}`] = {
             vertices: [
-                -windowWidth/2 - frameWidth, y - windowHeight, frameOffset,
-                windowWidth/2 + frameWidth, y - windowHeight, frameOffset,
-                windowWidth/2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
-                -windowWidth/2 - frameWidth, y - windowHeight, frameOffset,
-                windowWidth/2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
-                -windowWidth/2 - frameWidth, y - windowHeight - frameWidth, frameOffset
+                -windowWidth / 2 - frameWidth, y - windowHeight, frameOffset,
+                windowWidth / 2 + frameWidth, y - windowHeight, frameOffset,
+                windowWidth / 2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
+                -windowWidth / 2 - frameWidth, y - windowHeight, frameOffset,
+                windowWidth / 2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
+                -windowWidth / 2 - frameWidth, y - windowHeight - frameWidth, frameOffset
             ],
             normals: normals,
             texcoords: [
@@ -2324,16 +2414,16 @@ function addWindowOpenings() {
             scale: [1, 1, 1],
             texture: 'windowFrame'
         };
-        
+
         // Cornice sinistra
         models[`windowFrameLeft_${index}`] = {
             vertices: [
-                -windowWidth/2 - frameWidth, y + frameWidth, frameOffset,
-                -windowWidth/2, y + frameWidth, frameOffset,
-                -windowWidth/2, y - windowHeight - frameWidth, frameOffset,
-                -windowWidth/2 - frameWidth, y + frameWidth, frameOffset,
-                -windowWidth/2, y - windowHeight - frameWidth, frameOffset,
-                -windowWidth/2 - frameWidth, y - windowHeight - frameWidth, frameOffset
+                -windowWidth / 2 - frameWidth, y + frameWidth, frameOffset,
+                -windowWidth / 2, y + frameWidth, frameOffset,
+                -windowWidth / 2, y - windowHeight - frameWidth, frameOffset,
+                -windowWidth / 2 - frameWidth, y + frameWidth, frameOffset,
+                -windowWidth / 2, y - windowHeight - frameWidth, frameOffset,
+                -windowWidth / 2 - frameWidth, y - windowHeight - frameWidth, frameOffset
             ],
             normals: normals,
             texcoords: [
@@ -2349,16 +2439,16 @@ function addWindowOpenings() {
             scale: [1, 1, 1],
             texture: 'windowFrame'
         };
-        
+
         // Cornice destra
         models[`windowFrameRight_${index}`] = {
             vertices: [
-                windowWidth/2, y + frameWidth, frameOffset,
-                windowWidth/2 + frameWidth, y + frameWidth, frameOffset,
-                windowWidth/2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
-                windowWidth/2, y + frameWidth, frameOffset,
-                windowWidth/2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
-                windowWidth/2, y - windowHeight - frameWidth, frameOffset
+                windowWidth / 2, y + frameWidth, frameOffset,
+                windowWidth / 2 + frameWidth, y + frameWidth, frameOffset,
+                windowWidth / 2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
+                windowWidth / 2, y + frameWidth, frameOffset,
+                windowWidth / 2 + frameWidth, y - windowHeight - frameWidth, frameOffset,
+                windowWidth / 2, y - windowHeight - frameWidth, frameOffset
             ],
             normals: normals,
             texcoords: [
@@ -2374,16 +2464,16 @@ function addWindowOpenings() {
             scale: [1, 1, 1],
             texture: 'windowFrame'
         };
-        
+
         // Traversa centrale orizzontale
         models[`windowFrameMiddle_${index}`] = {
             vertices: [
-                -windowWidth/2, y - windowHeight/2 + frameWidth/2, frameOffset,
-                windowWidth/2, y - windowHeight/2 + frameWidth/2, frameOffset,
-                windowWidth/2, y - windowHeight/2 - frameWidth/2, frameOffset,
-                -windowWidth/2, y - windowHeight/2 + frameWidth/2, frameOffset,
-                windowWidth/2, y - windowHeight/2 - frameWidth/2, frameOffset,
-                -windowWidth/2, y - windowHeight/2 - frameWidth/2, frameOffset
+                -windowWidth / 2, y - windowHeight / 2 + frameWidth / 2, frameOffset,
+                windowWidth / 2, y - windowHeight / 2 + frameWidth / 2, frameOffset,
+                windowWidth / 2, y - windowHeight / 2 - frameWidth / 2, frameOffset,
+                -windowWidth / 2, y - windowHeight / 2 + frameWidth / 2, frameOffset,
+                windowWidth / 2, y - windowHeight / 2 - frameWidth / 2, frameOffset,
+                -windowWidth / 2, y - windowHeight / 2 - frameWidth / 2, frameOffset
             ],
             normals: normals,
             texcoords: [
@@ -2399,16 +2489,16 @@ function addWindowOpenings() {
             scale: [1, 1, 1],
             texture: 'windowFrame'
         };
-        
+
         // Traversa centrale verticale
         models[`windowFrameVertical_${index}`] = {
             vertices: [
-                -frameWidth/2, y + frameWidth, frameOffset,
-                frameWidth/2, y + frameWidth, frameOffset,
-                frameWidth/2, y - windowHeight - frameWidth, frameOffset,
-                -frameWidth/2, y + frameWidth, frameOffset,
-                frameWidth/2, y - windowHeight - frameWidth, frameOffset,
-                -frameWidth/2, y - windowHeight - frameWidth, frameOffset
+                -frameWidth / 2, y + frameWidth, frameOffset,
+                frameWidth / 2, y + frameWidth, frameOffset,
+                frameWidth / 2, y - windowHeight - frameWidth, frameOffset,
+                -frameWidth / 2, y + frameWidth, frameOffset,
+                frameWidth / 2, y - windowHeight - frameWidth, frameOffset,
+                -frameWidth / 2, y - windowHeight - frameWidth, frameOffset
             ],
             normals: normals,
             texcoords: [
@@ -2425,28 +2515,28 @@ function addWindowOpenings() {
             texture: 'windowFrame'
         };
     });
-    
+
     logger.log('Aperture finestre create (solo cornici, senza vetro)');
-    
+
     // Rimuovi eventuali texture e modelli precedenti
     if (textures['glass']) {
         gl.deleteTexture(textures['glass']);
         delete textures['glass'];
         logger.log('Texture glass.png eliminata');
     }
-    
+
     if (textures['glassMaterial']) {
         gl.deleteTexture(textures['glassMaterial']);
         delete textures['glassMaterial'];
         logger.log('Texture glassMaterial eliminata');
     }
-    
+
     // Rimuovi modelli precedenti
     if (models['frontWindow']) {
         delete models['frontWindow'];
         logger.log('Modello frontWindow rimosso');
     }
-    
+
     if (models['backWindow']) {
         delete models['backWindow'];
         logger.log('Modello backWindow rimosso');
@@ -2456,7 +2546,7 @@ function addWindowOpenings() {
 // Assicurati che i muri siano presenti e visibili
 function ensureWallsExist() {
     logger.log("Verifica pareti...");
-    
+
     // Parete frontale
     if (!models['frontWall']) {
         logger.log("Creazione parete frontale");
@@ -2491,7 +2581,7 @@ function ensureWallsExist() {
             isTransparent: false
         };
     }
-    
+
     // Parete posteriore
     if (!models['backWall']) {
         logger.log("Creazione parete posteriore");
@@ -2526,7 +2616,7 @@ function ensureWallsExist() {
             isTransparent: false
         };
     }
-    
+
     // Parete sinistra
     if (!models['leftWall']) {
         logger.log("Creazione parete sinistra");
@@ -2561,7 +2651,7 @@ function ensureWallsExist() {
             isTransparent: false
         };
     }
-    
+
     // Parete destra
     if (!models['rightWall']) {
         logger.log("Creazione parete destra");
@@ -2596,7 +2686,7 @@ function ensureWallsExist() {
             isTransparent: false
         };
     }
-    
+
     logger.log("Verifica pareti completata");
 }
 
@@ -2699,24 +2789,26 @@ const sounds = {
 
 (function() {
     // Verifica se siamo su un dispositivo mobile
-    const isMobile = 'ontouchstart' in window || 
-                    navigator.maxTouchPoints > 0 || 
-                    /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    
+    const isMobile = 'ontouchstart' in window ||
+        navigator.maxTouchPoints > 0 ||
+        /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
     if (isMobile) {
         // Imposta meta viewport per dispositivi mobili
         const viewportMeta = document.querySelector('meta[name="viewport"]');
         if (viewportMeta) {
             viewportMeta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
         }
-        
+
         // Previeni comportamenti indesiderati su touch
         window.addEventListener('DOMContentLoaded', function() {
             document.body.addEventListener('touchmove', function(e) {
                 if (e.target.tagName !== 'CANVAS') {
                     e.preventDefault();
                 }
-            }, { passive: false });
+            }, {
+                passive: false
+            });
         });
     }
 })();
@@ -2870,7 +2962,10 @@ function gameLoop(time) {
 
     // Aggiorna
     update(deltaTime);
-    
+
+    // Aggiorna esplicitamente il crosshair ogni frame
+    updateCrosshair();
+
     // Anima l'interruttore
     animateSwitchButton();
 
@@ -2946,45 +3041,20 @@ function togglePanel() {
 
 // Attiva/disattiva luce
 function toggleLight() {
-    // Verifica se il giocatore è vicino all'interruttore
+    // Verifica se il giocatore è vicino all'interruttore CORRETTO sulla parete destra
     if (isNearSwitch) {
         isLightOn = !isLightOn;
         document.getElementById('instructions').style.visibility = isLightOn ? 'hidden' : 'visible';
-
+        
         // Effetto di flickering quando la luce si accende
         if (isLightOn) {
             flickerLight();
             sounds.flicker.play();
-            
-            // Animazione dell'interruttore quando viene attivato
-            if (models['fallbackSwitch']) {
-                // Rotazione dell'interruttore
-                models['fallbackSwitch'].rotation[2] = Math.PI / 6; // Inclina leggermente
-                
-                // Ripristina la rotazione dopo 300ms
-                setTimeout(() => {
-                    if (models['fallbackSwitch']) {
-                        models['fallbackSwitch'].rotation[2] = 0;
-                    }
-                }, 300);
-            }
-            
-            // Aggiorna anche l'indicatore
-            if (models['switchIndicator']) {
-                models['switchIndicator'].texture = 'lampLight'; // Cambia colore a bianco acceso
-                
-                // Ripristina il colore dopo 1 secondo
-                setTimeout(() => {
-                    if (models['switchIndicator']) {
-                        models['switchIndicator'].texture = 'indicatorLight';
-                    }
-                }, 1000);
-            }
         }
-
+        
         logger.log(`Luce ${isLightOn ? 'accesa' : 'spenta'}`);
     } else {
-        logger.log("Devi essere vicino all'interruttore per accendere/spegnere la luce");
+        logger.log("Devi essere vicino all'interruttore CORRETTO sulla parete destra per accendere/spegnere la luce");
     }
 }
 
@@ -3006,12 +3076,64 @@ function flickerLight() {
 
 // Avvia il gioco
 function startGame() {
+    switchPosition = [-9.7, -2, 0]; 
+
+    const instructions = ensureInstructionsExist();
+    instructions.style.visibility = 'hidden'; // Inizialmente nascosto
+    logger.log("Elemento instructions verificato e configurato all'avvio del gioco");
+
+    // Forza un update del crosshair
+    setTimeout(() => {
+        const nearSwitch = updateCrosshair();
+        logger.log(`Forzato aggiornamento del crosshair all'avvio, vicino allo switch: ${nearSwitch}`);
+    }, 1000);
+
     document.getElementById('start-menu').style.display = 'none';
     document.getElementById('crosshair').style.display = 'block';
     document.getElementById('top-bar').style.display = 'flex';
     
-    // Aggiorna la posizione dell'area interattiva dello switch
+    // Correggi la posizione dell'interruttore subito
+    fixSwitchPosition();
+
+    // Assicuriamo che l'elemento instructions sia visibile e stilizzato correttamente
+    const instructionsElement = document.getElementById('instructions');
+    if (instructionsElement) {
+        instructionsElement.innerHTML = 'Premi <span style="color:#ff4d4d">F</span> per accendere la luce';
+        logger.log(`Elemento instructions trovato e configurato correttamente`);
+    } else {
+        logger.log(`ERRORE: Elemento instructions non trovato!`);
+        
+        // Crea l'elemento se non esiste
+        const newInstructionsElement = document.createElement('div');
+        newInstructionsElement.id = 'instructions';
+        newInstructionsElement.style.visibility = 'hidden';
+        newInstructionsElement.innerHTML = 'Premi <span style="color:#ff4d4d">F</span> per accendere la luce';
+        newInstructionsElement.style.position = 'absolute';
+        newInstructionsElement.style.bottom = '20px';
+        newInstructionsElement.style.left = '50%';
+        newInstructionsElement.style.transform = 'translateX(-50%)';
+        newInstructionsElement.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        newInstructionsElement.style.padding = '10px';
+        newInstructionsElement.style.borderRadius = '5px';
+        newInstructionsElement.style.zIndex = '10';
+        document.body.appendChild(newInstructionsElement);
+        logger.log(`Elemento instructions creato dinamicamente`);
+    }
+
+    // Sincronizza la posizione dell'interruttore all'avvio
     updateSwitchPosition();
+
+    // Forza un aggiornamento del crosshair
+    setTimeout(() => {
+        updateCrosshair();
+        
+        // Debug - posizioni attuali
+        logger.log("--- Posizioni after startup ---");
+        logger.log(`Switch position: ${switchPosition}`);
+        if (models['switch']) logger.log(`Switch model: ${models['switch'].position}`);
+        if (models['fallbackSwitch']) logger.log(`Fallback model: ${models['fallbackSwitch'].position}`);
+        if (models['lightSwitch']) logger.log(`Light switch model: ${models['lightSwitch'].position}`);
+    }, 1000);
 
     // Mostra controlli completi
     document.getElementById('game-controls').innerHTML =
@@ -3035,7 +3157,7 @@ function startGame() {
     // Mostra un suggerimento sull'interruttore
     const switchHint = document.createElement('div');
     switchHint.id = 'switch-hint';
-    switchHint.innerHTML = 'Cerca l\'interruttore sulla parete SINISTRA! <br>Look for the ORANGE LIGHT!';
+    switchHint.innerHTML = 'Cerca l\'interruttore sulla parete DESTRA!';
     switchHint.style.position = 'absolute';
     switchHint.style.bottom = '80px';
     switchHint.style.left = '50%';
@@ -3083,19 +3205,82 @@ function startGame() {
     logger.log('Gioco avviato');
 }
 
+// Questa funzione aggiorna la posizione interattiva dello switch
+// e si assicura che NON ci siano aree interattive errate nella parete sinistra
+function fixSwitchPosition() {
+    // Posizione corretta dell'interruttore sulla parete destra
+    const correctX = roomSize - 0.3;  // Parete destra
+    const correctY = -2.0;           // Altezza
+    const correctZ = 0;              // Centro stanza
+    
+    // Imposta la posizione corretta dello switch per l'interazione
+    switchPosition = [correctX, correctY, correctZ];
+    
+    // Verifica che non ci siano modelli obsoleti nella parete sinistra
+    // che potrebbero causare falsi trigger dell'interazione
+    for (const modelName in models) {
+        // Cerca eventuali modelli dell'interruttore sulla parete sbagliata
+        if (modelName.includes('switch') || modelName.includes('Switch')) {
+            const model = models[modelName];
+            // Se c'è un modello dell'interruttore sulla parete sinistra
+            if (model.position && model.position[0] < 0) {
+                logger.log(`CORREZIONE: Rimosso/spostato modello ${modelName} dalla parete sinistra`);
+                // Opzione 1: Rimuoverlo
+                // delete models[modelName];
+                
+                // Opzione 2: Spostarlo nella posizione corretta
+                model.position = [correctX, correctY, correctZ];
+                
+                // Se è un indicatore, posizionalo accanto
+                if (modelName.includes('indicator') || modelName.includes('Indicator')) {
+                    model.position = [correctX, correctY, correctZ - 0.8];
+                }
+            }
+        }
+    }
+    
+    logger.log(`Posizione switch corretta fissata a: [${switchPosition}]`);
+}
+
+// Aggiungi questa funzione di debug
+function debugSwitchAndInstructions() {
+    const instructions = document.getElementById('instructions');
+    logger.log("--- Debug Switch e Instructions ---");
+    logger.log(`switchPosition: [${switchPosition}]`);
+    
+    if (instructions) {
+        logger.log(`Elemento instructions trovato: ${instructions.outerHTML}`);
+        logger.log(`Stile visibility: ${instructions.style.visibility}`);
+        logger.log(`Posizione: ${instructions.style.position}, bottom: ${instructions.style.bottom}, left: ${instructions.style.left}`);
+    } else {
+        logger.log("ERRORE: Elemento instructions NON trovato!");
+    }
+    
+    // Calcola e logga la distanza attuale dallo switch
+    const dx = camera.position[0] - switchPosition[0];
+    const dy = camera.position[1] - switchPosition[1];
+    const dz = camera.position[2] - switchPosition[2];
+    const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+    logger.log(`Distanza corrente dallo switch: ${distance.toFixed(2)}`);
+    logger.log(`isNearSwitch = ${isNearSwitch}`);
+}
+
+// Chiamala nel game loop o nella funzione startGame()
+setTimeout(debugSwitchAndInstructions, 2000);
+
 // Inizializzazione del pannello GUI avanzato
 // Inizializzazione del pannello di controllo semplificata e funzionante
 function initGUI() {
     // Aggiorniamo l'aspetto del pannello laterale
     const sidePanel = document.getElementById('side-panel');
     sidePanel.innerHTML = ''; // Rimuoviamo il contenuto esistente
-    
+
     // Stile migliorato
     sidePanel.style.width = '320px';
     sidePanel.style.backgroundColor = 'rgba(20, 20, 20, 0.9)';
     sidePanel.style.borderLeft = '2px solid #ff4d4d';
     sidePanel.style.boxShadow = '-5px 0 20px rgba(255, 77, 77, 0.3)';
-    
+
     // Titolo del pannello
     const header = document.createElement('div');
     header.innerHTML = `
@@ -3108,10 +3293,10 @@ function initGUI() {
         </p>
     `;
     sidePanel.appendChild(header);
-    
+
     // SEZIONE: ILLUMINAZIONE
     addSection(sidePanel, 'Illuminazione');
-    
+
     // Toggle per la luce della stanza
     addBasicToggle(sidePanel, 'Luce Stanza', isLightOn, function() {
         isLightOn = !isLightOn;
@@ -3121,42 +3306,42 @@ function initGUI() {
         }
         logger.log(`Luce stanza ${isLightOn ? 'accesa' : 'spenta'} dal pannello`);
     });
-    
+
     // Toggle per la luce esterna
     addBasicToggle(sidePanel, 'Luce Esterna', isExternalLightOn, function() {
         isExternalLightOn = !isExternalLightOn;
         logger.log(`Luce esterna ${isExternalLightOn ? 'accesa' : 'spenta'}`);
     });
-    
+
     // SEZIONE: RENDERING
     addSection(sidePanel, 'Rendering');
-    
+
     // Toggle per le ombre
     addBasicToggle(sidePanel, 'Ombre', renderOptions.shadows, function() {
         renderOptions.shadows = !renderOptions.shadows;
         logger.log(`Ombre ${renderOptions.shadows ? 'attivate' : 'disattivate'}`);
     });
-    
+
     // Toggle per le riflessioni
     addBasicToggle(sidePanel, 'Riflessioni', renderOptions.reflections, function() {
         renderOptions.reflections = !renderOptions.reflections;
         logger.log(`Riflessioni ${renderOptions.reflections ? 'attivate' : 'disattivate'}`);
     });
-    
+
     // Toggle per il rendering avanzato
     addBasicToggle(sidePanel, 'Rendering Avanzato', renderOptions.advancedRendering, function() {
         renderOptions.advancedRendering = !renderOptions.advancedRendering;
         logger.log(`Rendering avanzato ${renderOptions.advancedRendering ? 'attivato' : 'disattivato'}`);
     });
-    
+
     // SEZIONE: CAMERA
     addSection(sidePanel, 'Fotocamera');
-    
+
     // Toggle per la modalità spettatore
     addBasicToggle(sidePanel, 'Modalità Spettatore', isSpectatorMode, function() {
         toggleSpectatorMode();
     });
-    
+
     // Toggle per le coordinate della camera
     addBasicToggle(sidePanel, 'Mostra Coordinate', showCameraCoordinates, function() {
         showCameraCoordinates = !showCameraCoordinates;
@@ -3166,15 +3351,15 @@ function initGUI() {
         }
         logger.log(`Coordinate camera ${showCameraCoordinates ? 'visibili' : 'nascoste'}`);
     });
-    
+
     // SEZIONE: DEBUG
     addSection(sidePanel, 'Debug');
-    
+
     // Toggle per i log
     addBasicToggle(sidePanel, 'Mostra Log', logger.enabled, function() {
         logger.toggle();
     });
-    
+
     // Toggle per FPS
     addBasicToggle(sidePanel, 'Mostra FPS', renderOptions.showFPS, function() {
         renderOptions.showFPS = !renderOptions.showFPS;
@@ -3184,7 +3369,7 @@ function initGUI() {
         }
         logger.log(`FPS counter ${renderOptions.showFPS ? 'attivato' : 'disattivato'}`);
     });
-    
+
     // Bottone per resettare la posizione
     const resetButton = document.createElement('button');
     resetButton.textContent = 'Ripristina Posizione';
@@ -3203,7 +3388,7 @@ function initGUI() {
         logger.log('Posizione camera ripristinata');
     };
     sidePanel.appendChild(resetButton);
-    
+
     // Bottone di chiusura
     const closeButton = document.createElement('button');
     closeButton.textContent = 'Chiudi Pannello';
@@ -3220,7 +3405,7 @@ function initGUI() {
     closeButton.style.fontFamily = "'Creepster', cursive";
     closeButton.onclick = togglePanel;
     sidePanel.appendChild(closeButton);
-    
+
     logger.log('Pannello di controllo semplificato inizializzato');
 }
 
@@ -3244,12 +3429,12 @@ function addBasicToggle(parent, label, initialState, onChange) {
     toggleContainer.style.alignItems = 'center';
     toggleContainer.style.padding = '5px 20px';
     toggleContainer.style.margin = '10px 0';
-    
+
     // Etichetta
     const labelElement = document.createElement('span');
     labelElement.textContent = label;
     labelElement.style.color = '#ccc';
-    
+
     // Bottone semplice che funziona sicuramente
     const button = document.createElement('button');
     button.textContent = initialState ? 'ON' : 'OFF';
@@ -3261,13 +3446,13 @@ function addBasicToggle(parent, label, initialState, onChange) {
     button.style.cursor = 'pointer';
     button.style.minWidth = '60px';
     button.style.transition = 'background-color 0.3s';
-    
+
     button.onclick = function() {
         if (onChange) onChange();
         button.textContent = button.textContent === 'ON' ? 'OFF' : 'ON';
         button.style.backgroundColor = button.textContent === 'ON' ? '#ff4d4d' : '#555';
     };
-    
+
     toggleContainer.appendChild(labelElement);
     toggleContainer.appendChild(button);
     parent.appendChild(toggleContainer);
@@ -3280,12 +3465,12 @@ function createSection(title, iconName) {
     section.style.marginBottom = '25px';
     section.style.borderBottom = '1px solid #444';
     section.style.paddingBottom = '15px';
-    
+
     const header = document.createElement('div');
     header.style.display = 'flex';
     header.style.alignItems = 'center';
     header.style.marginBottom = '15px';
-    
+
     const icon = document.createElement('div');
     icon.style.width = '24px';
     icon.style.height = '24px';
@@ -3293,17 +3478,17 @@ function createSection(title, iconName) {
     icon.style.backgroundImage = `url('images/icons/${iconName}')`;
     icon.style.backgroundSize = 'contain';
     icon.style.backgroundRepeat = 'no-repeat';
-    
+
     const sectionTitle = document.createElement('h3');
     sectionTitle.textContent = title;
     sectionTitle.style.margin = '0';
     sectionTitle.style.color = '#ddd';
     sectionTitle.style.fontSize = '18px';
-    
+
     header.appendChild(icon);
     header.appendChild(sectionTitle);
     section.appendChild(header);
-    
+
     return section;
 }
 
@@ -3314,23 +3499,23 @@ function addToggle(parent, label, initialState, onChange) {
     container.style.justifyContent = 'space-between';
     container.style.alignItems = 'center';
     container.style.margin = '10px 0';
-    
+
     const labelElem = document.createElement('label');
     labelElem.textContent = label;
     labelElem.style.color = '#ccc';
-    
+
     const toggleWrapper = document.createElement('div');
     toggleWrapper.style.position = 'relative';
     toggleWrapper.style.width = '50px';
     toggleWrapper.style.height = '24px';
-    
+
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.checked = initialState;
     checkbox.style.opacity = '0';
     checkbox.style.width = '0';
     checkbox.style.height = '0';
-    
+
     const slider = document.createElement('span');
     slider.style.position = 'absolute';
     slider.style.cursor = 'pointer';
@@ -3341,7 +3526,7 @@ function addToggle(parent, label, initialState, onChange) {
     slider.style.backgroundColor = initialState ? '#ff4d4d' : '#555';
     slider.style.transition = '0.4s';
     slider.style.borderRadius = '24px';
-    
+
     const knob = document.createElement('span');
     knob.style.position = 'absolute';
     knob.style.content = '""';
@@ -3352,20 +3537,20 @@ function addToggle(parent, label, initialState, onChange) {
     knob.style.backgroundColor = 'white';
     knob.style.transition = '0.4s';
     knob.style.borderRadius = '50%';
-    
+
     checkbox.addEventListener('change', function() {
         slider.style.backgroundColor = this.checked ? '#ff4d4d' : '#555';
         knob.style.left = this.checked ? '30px' : '4px';
         if (onChange) onChange(this.checked);
     });
-    
+
     slider.appendChild(knob);
     toggleWrapper.appendChild(checkbox);
     toggleWrapper.appendChild(slider);
-    
+
     container.appendChild(labelElem);
     container.appendChild(toggleWrapper);
-    
+
     parent.appendChild(container);
 }
 
@@ -3373,23 +3558,23 @@ function addToggle(parent, label, initialState, onChange) {
 function addSlider(parent, label, initialValue, min, max, step, onChange) {
     const container = document.createElement('div');
     container.style.margin = '15px 0';
-    
+
     const labelContainer = document.createElement('div');
     labelContainer.style.display = 'flex';
     labelContainer.style.justifyContent = 'space-between';
     labelContainer.style.marginBottom = '5px';
-    
+
     const labelElem = document.createElement('label');
     labelElem.textContent = label;
     labelElem.style.color = '#ccc';
-    
+
     const valueDisplay = document.createElement('span');
     valueDisplay.textContent = initialValue.toFixed(1);
     valueDisplay.style.color = '#ff4d4d';
-    
+
     labelContainer.appendChild(labelElem);
     labelContainer.appendChild(valueDisplay);
-    
+
     const slider = document.createElement('input');
     slider.type = 'range';
     slider.min = min;
@@ -3402,7 +3587,7 @@ function addSlider(parent, label, initialValue, min, max, step, onChange) {
     slider.style.appearance = 'none';
     slider.style.backgroundColor = '#333';
     slider.style.outline = 'none';
-    
+
     // Styling personalizzato per lo slider
     const style = document.createElement('style');
     style.textContent = `
@@ -3423,39 +3608,39 @@ function addSlider(parent, label, initialValue, min, max, step, onChange) {
         }
     `;
     document.head.appendChild(style);
-    
+
     slider.addEventListener('input', function() {
         valueDisplay.textContent = parseFloat(this.value).toFixed(1);
         if (onChange) onChange(parseFloat(this.value));
     });
-    
+
     container.appendChild(labelContainer);
     container.appendChild(slider);
-    
+
     parent.appendChild(container);
 }
 
 // Funzione migliorata per l'animazione dell'interruttore
 function animateSwitchButton() {
     // Questa funzione verrà chiamata nel gameLoop per animare costantemente l'interruttore
-    
+
     // Verifica che l'interruttore esista
     if (!models['fallbackSwitch'] && !models['switch']) {
         return;
     }
-    
+
     // Determina quale modello usare (fallback o caricato da OBJ)
     const switchModel = models['switch'] || models['fallbackSwitch'];
     const indicatorModel = models['switchIndicator'];
-    
+
     // Tempo attuale per l'animazione
     const time = Date.now() * 0.001; // Converte in secondi
-    
+
     // Animazione per quando il giocatore è vicino all'interruttore
     if (isNearSwitch) {
         // Pulsazione dell'interruttore (scaling)
-        const pulseScale = 1.0 + Math.sin(time * 4) * 0.1;
-        
+        const pulseScale = 1.0 + Math.sin(time * 4) * 0.05; // Ridotta l'intensità da 0.1 a 0.05
+
         // Applica la scala mantenendo le proporzioni originali
         if (switchModel.originalScale) {
             switchModel.scale = [
@@ -3472,25 +3657,25 @@ function animateSwitchButton() {
                 switchModel.scale[2] * pulseScale
             ];
         }
-        
+
         // Animazione dell'indicatore (se esiste)
         if (indicatorModel) {
             // Fai lampeggiare l'indicatore
             const blinkIntensity = (Math.sin(time * 8) * 0.5 + 0.5);
-            
+
             // Crea un colore che lampeggia tra arancione e rosso
             const indicatorColor = createColorTexture([
-                1.0,                           // R - Rosso sempre al massimo
-                0.5 * blinkIntensity,          // G - Verde varia per ottenere tonalità arancione/rosse
-                0.0,                           // B - Blu sempre a 0
-                1.0                            // A - Alpha sempre al massimo
+                1.0, // R - Rosso sempre al massimo
+                0.5 * blinkIntensity, // G - Verde varia per ottenere tonalità arancione/rosse
+                0.0, // B - Blu sempre a 0
+                1.0 // A - Alpha sempre al massimo
             ]);
-            
+
             // Aggiorna la texture solo se siamo vicini all'interruttore
             textures['indicatorLight'] = indicatorColor;
             indicatorModel.texture = 'indicatorLight';
         }
-        
+
         // Aggiunta di un effetto visivo che indica che l'interruttore può essere usato
         if (!document.getElementById('switch-glow')) {
             const switchGlow = document.createElement('div');
@@ -3508,7 +3693,7 @@ function animateSwitchButton() {
             switchGlow.style.pointerEvents = 'none';
             switchGlow.style.zIndex = '1';
             document.body.appendChild(switchGlow);
-            
+
             // Aggiungi l'animazione se non esiste
             if (!document.getElementById('pulse-animation')) {
                 const style = document.createElement('style');
@@ -3527,13 +3712,13 @@ function animateSwitchButton() {
         if (switchModel.originalScale) {
             switchModel.scale = [...switchModel.originalScale];
         }
-        
+
         // Rimuovi l'effetto visivo se esiste
         const switchGlow = document.getElementById('switch-glow');
         if (switchGlow) {
             document.body.removeChild(switchGlow);
         }
-        
+
         // Animazione leggera anche quando non siamo vicini
         if (indicatorModel) {
             // Leggera pulsazione dell'indicatore
@@ -3541,22 +3726,10 @@ function animateSwitchButton() {
             indicatorModel.scale = [gentlePulse * 0.7, gentlePulse * 0.7, gentlePulse * 0.7];
         }
     }
-    
-    // Animazione speciale quando la luce è accesa/spenta
-    if (isLightOn) {
-        // Quando la luce è accesa, l'interruttore è in posizione "on"
-        if (switchModel.switchAnimation !== 'on') {
-            // Rotazione dell'interruttore (se non è già animato)
-            switchModel.rotation[2] = Math.PI / 8; // Inclina leggermente
-            switchModel.switchAnimation = 'on';
-        }
-    } else {
-        // Quando la luce è spenta, l'interruttore è in posizione "off"
-        if (switchModel.switchAnimation !== 'off') {
-            switchModel.rotation[2] = -Math.PI / 8; // Inclina nell'altra direzione
-            switchModel.switchAnimation = 'off';
-        }
-    }
+
+    // Modificato: NON cambiare la rotazione quando la luce è accesa/spenta
+    // Lasciamo l'interruttore con la sua rotazione originale
+    // In questo modo non apparirà storto quando cambia lo stato della luce
 }
 
 // Aggiornata la funzione toggleLight per migliorare il feedback visivo
@@ -3570,50 +3743,7 @@ function toggleLight() {
         if (isLightOn) {
             flickerLight();
             sounds.flicker.play();
-            
-            // Animazione più elaborata dell'interruttore quando viene attivato
-            if (models['fallbackSwitch'] || models['switch']) {
-                const switchModel = models['switch'] || models['fallbackSwitch'];
-                
-                // Sequenza di animazione
-                let animationStep = 0;
-                const animationInterval = setInterval(() => {
-                    animationStep++;
-                    
-                    // Movimenti rapidi dell'interruttore
-                    switch(animationStep) {
-                        case 1:
-                            switchModel.rotation[2] = Math.PI / 4; // Inclina molto
-                            break;
-                        case 2:
-                            switchModel.rotation[2] = -Math.PI / 6; // Inclina nell'altra direzione
-                            break;
-                        case 3:
-                            switchModel.rotation[2] = Math.PI / 8; // Posizione finale
-                            clearInterval(animationInterval);
-                            break;
-                    }
-                }, 80);
-            }
-            
-            // Aggiorna anche l'indicatore
-            if (models['switchIndicator']) {
-                // Effetto flash
-                const originalTexture = models['switchIndicator'].texture;
-                models['switchIndicator'].texture = 'lampLight'; // Cambia colore a bianco acceso
-                
-                // Sequenza di lampeggiamento
-                setTimeout(() => {
-                    if (models['switchIndicator']) models['switchIndicator'].texture = originalTexture;
-                    setTimeout(() => {
-                        if (models['switchIndicator']) models['switchIndicator'].texture = 'lampLight';
-                        setTimeout(() => {
-                            if (models['switchIndicator']) models['switchIndicator'].texture = originalTexture;
-                        }, 100);
-                    }, 100);
-                }, 100);
-            }
-            
+
             // Aggiungiamo un effetto visivo a tutto schermo
             const flashEffect = document.createElement('div');
             flashEffect.style.position = 'fixed';
@@ -3625,18 +3755,12 @@ function toggleLight() {
             flashEffect.style.zIndex = '999';
             flashEffect.style.pointerEvents = 'none';
             document.body.appendChild(flashEffect);
-            
+
             // Rimuovi l'effetto flash dopo un breve periodo
             setTimeout(() => {
                 document.body.removeChild(flashEffect);
             }, 100);
         } else {
-            // Animazione per lo spegnimento della luce
-            if (models['fallbackSwitch'] || models['switch']) {
-                const switchModel = models['switch'] || models['fallbackSwitch'];
-                switchModel.rotation[2] = -Math.PI / 8; // Inclina in posizione "off"
-            }
-            
             // Flash breve di buio totale
             const darkFlash = document.createElement('div');
             darkFlash.style.position = 'fixed';
@@ -3648,7 +3772,7 @@ function toggleLight() {
             darkFlash.style.zIndex = '999';
             darkFlash.style.pointerEvents = 'none';
             document.body.appendChild(darkFlash);
-            
+
             // Rimuovi l'effetto gradualmente
             setTimeout(() => {
                 darkFlash.style.transition = 'opacity 0.5s';
@@ -3673,7 +3797,7 @@ function setupTouchControls() {
     if ('ontouchstart' in window || navigator.maxTouchPoints > 0 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
         const touchControls = document.querySelector('.touch-controls');
         touchControls.style.display = 'flex';
-        
+
         // Aggiungiamo un pulsante dedicato per il pannello di controllo
         const panelButton = document.createElement('div');
         panelButton.id = 'touch-panel';
@@ -3725,16 +3849,16 @@ function setupTouchControls() {
 
         // Interazione luce
         document.getElementById('touch-light').addEventListener('touchstart', toggleLight);
-        
+
         // Pannello di controllo
         panelButton.addEventListener('touchstart', togglePanel);
-        
+
         // Modalità look around
         let lookMode = false;
         lookButton.addEventListener('touchstart', () => {
             lookMode = !lookMode;
             lookButton.style.backgroundColor = lookMode ? 'rgba(255, 77, 77, 0.7)' : 'rgba(30, 30, 30, 0.7)';
-            
+
             // Mostra messaggio di aiuto
             const lookModeMsg = document.getElementById('look-mode-msg') || document.createElement('div');
             lookModeMsg.id = 'look-mode-msg';
@@ -3748,7 +3872,7 @@ function setupTouchControls() {
             lookModeMsg.style.borderRadius = '5px';
             lookModeMsg.style.textAlign = 'center';
             lookModeMsg.style.zIndex = '100';
-            
+
             if (lookMode) {
                 lookModeMsg.textContent = 'Modalità Vista: Tocca e trascina per guardare intorno';
                 document.body.appendChild(lookModeMsg);
@@ -3767,7 +3891,7 @@ function setupTouchControls() {
 
         canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            
+
             if (lookMode && e.touches.length === 1) {
                 touchStartX = e.touches[0].clientX;
                 touchStartY = e.touches[0].clientY;
@@ -3777,21 +3901,21 @@ function setupTouchControls() {
 
         canvas.addEventListener('touchmove', (e) => {
             e.preventDefault();
-            
+
             if (lookMode && isMoving && e.touches.length === 1) {
                 const touchX = e.touches[0].clientX;
                 const touchY = e.touches[0].clientY;
-                
+
                 // Aumentata sensibilità per migliorare l'esperienza su mobile
                 const sensitivity = 0.008;
-                
+
                 // Calcola il movimento e aggiorna la rotazione della camera
                 camera.rotation[1] -= (touchX - touchStartX) * sensitivity;
                 camera.rotation[0] += (touchY - touchStartY) * sensitivity;
-                
+
                 // Limita la rotazione verticale per evitare capovolgimenti
                 camera.rotation[0] = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, camera.rotation[0]));
-                
+
                 // Aggiorna le posizioni di partenza per il prossimo movimento
                 touchStartX = touchX;
                 touchStartY = touchY;
@@ -3822,7 +3946,7 @@ function setupTouchControls() {
         const originalUpdateCrosshair = updateCrosshair;
         updateCrosshair = function() {
             originalUpdateCrosshair();
-            
+
             // Mostra indicatore di interazione su mobile
             if (isNearSwitch) {
                 touchInteractionIndicator.textContent = 'Premi F per l\'interruttore';
@@ -3988,6 +4112,9 @@ function loadResources() {
     loadTexture('textures/wood.jpg', 'ceiling');
     loadTexture('textures/glass.png', 'glass');
 
+    // Crea la texture bianca ruvida per l'interruttore
+    createRoughWhiteTexture();
+
     // Carica texture per gli oggetti
     loadTexture('textures/Skull.jpg', 'skull_texture');
     loadTexture('textures/wood-clock.png', 'wood_texture');
@@ -3997,7 +4124,11 @@ function loadResources() {
 
     // Carica texture della skybox e altre texture
     loadSkyboxTextures();
-    loadTexture('textures/switch/Albedo.png', 'switch_albedo');
+
+    // Assicurati che le texture dell'interruttore originali siano comunque caricate
+    loadTexture('textures/switch/Albedo.png', 'switch_albedo', () => {
+        logger.log('Texture interruttore (Albedo) caricata con successo');
+    });
     loadTexture('textures/switch/normal.png', 'switch_normal');
     loadTexture('textures/switch/roughness.png', 'switch_roughness');
 
@@ -4006,7 +4137,19 @@ function loadResources() {
     loadOBJModel('models/kurumaisu.unity_1.obj', 'models/kurumaisu.unity_1.mtl', 'chair');
     loadOBJModel('models/UnsavedScene_1.obj', 'models/UnsavedScene_1.mtl', 'wheelie');
     loadOBJModel('models/doll.obj', 'models/doll.mtl', 'doll');
-    loadOBJModel('models/light_switch.obj', 'models/light_switch.mtl', 'switch');
+
+    // Carica l'interruttore con callback di completamento
+    loadOBJModel('models/light_switch.obj', 'models/light_switch.mtl', 'switch',
+        function() {
+            logger.log('Modello interruttore caricato con successo');
+            // Assegna esplicitamente la texture dopo il caricamento
+            if (models['switch']) {
+                models['switch'].texture = 'switch_white';
+                logger.log('Texture bianca ruvida assegnata al modello switch');
+            }
+        }
+    );
+
     loadOBJModel('models/lamp.obj', 'models/lamp.mtl', 'lamp');
     loadOBJModel('models/pendent-clock.obj', 'models/pendent-clock.mtl', 'clock');
 
@@ -4214,7 +4357,7 @@ function loadOBJModel(objUrl, mtlUrl, name, successCallback, errorCallback) {
                 positionModel(name);
 
                 logger.log(`Modello caricato: ${name} (${model.vertices.length / 3} vertici)`);
-                
+
                 // Chiama il callback di successo se fornito
                 if (successCallback) successCallback();
             } catch (error) {
@@ -4229,6 +4372,72 @@ function loadOBJModel(objUrl, mtlUrl, name, successCallback, errorCallback) {
             else createFallbackModel(name);
         }
     });
+}
+
+// Modifica alla funzione che crea la texture per lo switch
+function createRoughWhiteTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+
+    // Colore di base bianco-avorio invecchiato (meno bianco, più giallastro)
+    ctx.fillStyle = '#e8e2d0';
+    ctx.fillRect(0, 0, 256, 256);
+
+    // Aggiungi effetto di ruvidità con piccole macchie casuali più scure
+    for (let i = 0; i < 5000; i++) {
+        const x = Math.random() * 256;
+        const y = Math.random() * 256;
+        const radius = Math.random() * 1.5 + 0.5;
+        const opacity = Math.random() * 0.25; // Opacità maggiore per un effetto più evidente
+
+        ctx.fillStyle = `rgba(80, 70, 50, ${opacity})`;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Aggiungi qualche segno di usura
+    for (let i = 0; i < 20; i++) {
+        const x = Math.random() * 256;
+        const y = Math.random() * 256;
+        const width = Math.random() * 30 + 5;
+        const height = Math.random() * 3 + 1;
+        const angle = Math.random() * Math.PI;
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+        ctx.fillStyle = 'rgba(40, 30, 20, 0.2)';
+        ctx.fillRect(-width / 2, -height / 2, width, height);
+        ctx.restore();
+    }
+
+    // Aggiungi un bordo nero più marcato
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(3, 3, 250, 250);
+
+    // Crea la texture WebGL
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+
+    // Imposta i parametri della texture
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.generateMipmap(gl.TEXTURE_2D);
+
+    // Rilascia il binding
+    gl.bindTexture(gl.TEXTURE_2D, null);
+
+    textures['switch_white'] = texture;
+    logger.log('Texture invecchiata con bordo nero creata per lo switch');
+
+    return texture;
 }
 
 // Posiziona i modelli nella scena in base al tipo
@@ -4284,31 +4493,28 @@ function positionModel(name) {
     } else if (name === 'lamp') {
         // Posiziona il lampadario al centro della stanza, attaccato al soffitto
         models[name].position = [0, 0, 0]; // Attaccato al soffitto
-        models[name].rotation = [Math.PI/2, 0, 0]; // Ruotalo per puntare verso il pavimento
+        models[name].rotation = [Math.PI/2, 0, 0]; // Ruota di 180° attorno all'asse X
         models[name].scale = [2.5, 2.5, 2.5]; // Dimensione appropriata
         models[name].isEmissive = true; // Il lampadario emette luce
-        models[name].texture = 'lampLight'; // Assegna una texture luminosa
-
-        // Crea una texture luminosa se non esiste già
-        if (!textures['lampLight']) {
-            const lampLightColor = createColorTexture([1.0, 0.95, 0.8, 1.0]); // Bianco caldo
-            textures['lampLight'] = lampLightColor;
-        }
+        
+        // Aumenta l'intensità della luce creando una texture più luminosa
+        const lampLightColor = createColorTexture([1.0, 0.95, 0.8, 1.0], 1.5); // Aumenta l'intensità a 1.5
+        textures['lampLight'] = lampLightColor;
         models[name].texture = 'lampLight';
-
-        // Aggiorna la posizione della luce
-        lightPosition = [0, 0, 0];    
+        
+        // Aggiorna posizione della luce
+        lightPosition = [0, -roomHeight + 1.0, 0];
     } else if (name === 'switch' || name === 'lightSwitch') {
         // Posiziona l'interruttore sulla parete destra dove appare il messaggio
-        const switchX = roomSize - 0.3; // Vicino alla parete destra
-        const switchY = -1.7; // Altezza occhi
+        const switchX = roomSize - 0.01; // Vicino alla parete destra
+        const switchY = -2.0; // Altezza abbassata
         const switchZ = 0; // Centro della stanza lungo Z
     
         models[name].position = [switchX, switchY, switchZ];
         models[name].rotation = [0, -Math.PI / 2, 0]; // Rivolto verso l'interno
-        models[name].scale = [3.3, 3.3, 3.3]; // Dimensione ben visibile
+        models[name].scale = [4.95, 4.95, 4.95];
         models[name].isEmissive = true;
-        models[name].texture = 'switch_albedo'; // Usa la texture corretta
+        models[name].texture = 'switch_white'; // Usa la texture corretta
     
         // Aggiorna la posizione per l'interazione
         switchPosition = [switchX, switchY, switchZ];
@@ -4323,20 +4529,31 @@ function positionModel(name) {
     } else if (name === 'clock') {
         // Posiziona l'orologio sulla parete
         models[name].position = [4, -5.5, -roomSize + 0.8]; // Sul muro frontale
-        models[name].rotation = [0, - Math.PI / 2, 0];
+        models[name].rotation = [0, -Math.PI / 2, 0];
         models[name].scale = [0.6, 0.6, 0.6];
         models[name].texture = 'clock_texture';
-    } 
+    }
 }
 
+// Funzione per aggiornare la posizione interattiva dello switch
 function updateSwitchPosition() {
-    // Trova la posizione attuale dove appare il messaggio (probabilmente sulla parete destra)
-    const messageX = roomSize - 0.3; // Vicino alla parete destra
-    const messageY = -1.7;          // Altezza degli occhi
-    const messageZ = 0;             // Centro della stanza lungo Z
-
+    // Ottieni la posizione effettiva dello switch dal modello
+    let actualSwitchPos;
+    
+    if (models['switch']) {
+        actualSwitchPos = models['switch'].position;
+    } else if (models['fallbackSwitch']) {
+        actualSwitchPos = models['fallbackSwitch'].position;
+    } else if (models['lightSwitch']) {
+        actualSwitchPos = models['lightSwitch'].position;
+    } else {
+        // Posizione di default se non troviamo nessun modello
+        actualSwitchPos = [roomSize - 0.3, -2.0, 0]; // Parete destra
+    }
+    
     // Aggiorna la posizione per l'interazione
-    switchPosition = [messageX, messageY, messageZ];
+    switchPosition = [...actualSwitchPos]; // Copia i valori
+    
     logger.log(`Area interattiva dell'interruttore aggiornata a: [${switchPosition}]`);
 }
 
@@ -4657,15 +4874,15 @@ function createFallbackModel(name) {
 // Funzione per attivare/disattivare la modalità spettatore
 function toggleSpectatorMode() {
     isSpectatorMode = !isSpectatorMode;
-    
+
     if (isSpectatorMode) {
         // Salva la posizione originale
         camera.originalPosition = [...camera.position];
         camera.originalRotation = [...camera.rotation];
-        
+
         // Aumenta la velocità
         camera.speed = 0.3;
-        
+
         // Mostra le istruzioni per la modalità spettatore
         const spectatorInstructions = document.createElement('div');
         spectatorInstructions.id = 'spectator-instructions';
@@ -4680,22 +4897,22 @@ function toggleSpectatorMode() {
         spectatorInstructions.style.borderRadius = '5px';
         spectatorInstructions.style.zIndex = '10';
         document.body.appendChild(spectatorInstructions);
-        
+
         logger.log('Modalità spettatore attivata (collisioni disabilitate, usa Q per scendere ed E per salire)');
     } else {
         // Ripristina velocità normale
         camera.speed = 0.1;
-        
+
         // Ritorna alla posizione originale
         camera.position = [...camera.originalPosition];
         camera.rotation = [...camera.originalRotation];
-        
+
         // Rimuovi le istruzioni
         const spectatorInstructions = document.getElementById('spectator-instructions');
         if (spectatorInstructions) {
             document.body.removeChild(spectatorInstructions);
         }
-        
+
         logger.log('Modalità spettatore disattivata');
     }
 }
@@ -4704,40 +4921,48 @@ function toggleSpectatorMode() {
 function toggleSprint(active) {
     // Se in modalità spettatore, ignora lo sprint
     if (isSpectatorMode) return;
-    
+
     isSprinting = active;
-    
+
     // Modifica la velocità del giocatore in base allo stato dello sprint
     if (isSprinting) {
         playerSpeed = 0.3; // Velocità di sprint
     } else {
         playerSpeed = 0.15; // Velocità normale
     }
-    
+
     logger.log(`Sprint ${isSprinting ? 'attivato' : 'disattivato'}`);
 }
 
-// Funzione per creare una texture di colore solido
-function createColorTexture(color) {
+// Funzione per creare una texture con un colore solido e una intensità specifica
+function createColorTexture(color, intensity = 1.0) {
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
-
+    
+    // Applica l'intensità ai componenti RGB, mantenendo l'alpha invariato
+    const adjustedColor = [
+        Math.min(color[0] * intensity, 1.0),
+        Math.min(color[1] * intensity, 1.0),
+        Math.min(color[2] * intensity, 1.0),
+        color[3]
+    ];
+    
     // Crea un pixel con il colore specificato
     const pixel = new Uint8Array([
-        Math.floor(color[0] * 255),
-        Math.floor(color[1] * 255),
-        Math.floor(color[2] * 255),
-        Math.floor(color[3] * 255)
+        Math.floor(adjustedColor[0] * 255),
+        Math.floor(adjustedColor[1] * 255), 
+        Math.floor(adjustedColor[2] * 255), 
+        Math.floor(adjustedColor[3] * 255)
     ]);
-
+    
     // Carica un pixel di colore come texture
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
-
+    
     // Non serve mipmap per un colore solido
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-
+    
     return texture;
 }
