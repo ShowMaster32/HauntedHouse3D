@@ -147,22 +147,22 @@ function createViewMatrix() {
 // Funzione per aggiornare il crosshair in base alla vicinanza a oggetti interattivi
 function updateCrosshair() {
     // Usa esattamente le coordinate dell'interruttore sulla parete DESTRA
-    const rightSwitchPos = [-9.9, 1.5, 0];  // Queste sono le coordinate ORIGINALI
-    
+    const rightSwitchPos = [-9.9, 1.5, 0]; // Queste sono le coordinate ORIGINALI
+
     // Reset dello stato
     isNearSwitch = false;
-    
+
     // Calcola distanza dal giocatore all'interruttore sulla DESTRA
     const dx = camera.position[0] - rightSwitchPos[0];
     const dy = camera.position[1] - rightSwitchPos[1];
     const dz = camera.position[2] - rightSwitchPos[2];
     const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    
+
     // Debug
     if (distance < 8) {
         logger.log(`Distanza dall'interruttore SULLA DESTRA: ${distance.toFixed(2)}`);
     }
-    
+
     // Vicino all'interruttore sulla DESTRA?
     if (distance < 4.0) {
         // Mostra le istruzioni
@@ -172,7 +172,7 @@ function updateCrosshair() {
             instructions.innerHTML = 'Premi <span style="color:#ff4d4d">F</span> per accendere la luce';
             isNearSwitch = true;
         }
-        
+
         // Cambia il crosshair
         document.getElementById('crosshair').style.backgroundImage = "url('images/crosshair-selection.png')";
     } else {
@@ -181,11 +181,11 @@ function updateCrosshair() {
         if (instructions) {
             instructions.style.visibility = 'hidden';
         }
-        
+
         // Reimposta il crosshair
         document.getElementById('crosshair').style.backgroundImage = "url('images/crosshair.png')";
     }
-    
+
     // Assicurati che switchPosition sia sempre aggiornata
     switchPosition = rightSwitchPos;
 }
@@ -193,11 +193,11 @@ function updateCrosshair() {
 // Funzione per verificare e riparare l'elemento instructions
 function ensureInstructionsExist() {
     const instructions = document.getElementById('instructions');
-    
+
     if (!instructions) {
         // Se l'elemento non esiste affatto, crealo da zero
         logger.log("ERRORE: Elemento instructions non trovato, verrà creato");
-        
+
         const newInstructions = document.createElement('div');
         newInstructions.id = 'instructions';
         newInstructions.innerHTML = 'Premi <span style="color:#ff4d4d">F</span> per accendere la luce';
@@ -214,7 +214,7 @@ function ensureInstructionsExist() {
         newInstructions.style.textAlign = 'center';
         newInstructions.style.fontWeight = 'bold';
         document.body.appendChild(newInstructions);
-        
+
         return newInstructions;
     } else {
         // Se l'elemento esiste ma potrebbe avere problemi di stile, aggiorna comunque
@@ -229,7 +229,7 @@ function ensureInstructionsExist() {
         instructions.style.zIndex = '100';
         instructions.style.textAlign = 'center';
         instructions.style.fontWeight = 'bold';
-        
+
         return instructions;
     }
 }
@@ -345,33 +345,33 @@ function render() {
     // Clear canvas
     gl.clearColor(0.1, 0.1, 0.1, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    
+
     // Skip rendering if game not started
     if (!gameStarted) return;
-    
+
     // Enable depth testing
     gl.enable(gl.DEPTH_TEST);
-    
+
     // Crea matrice vista
     const viewMatrix = createViewMatrix();
-    
+
     // Calcola matrice di proiezione
     const aspect = canvas.width / canvas.height;
     const fov = Math.PI / 4; // 45 gradi, un valore standard
     const projectionMatrix = m4.perspective(fov, aspect, 0.1, 100);
-    
+
     // Renderizza skybox
     renderSkybox(viewMatrix, projectionMatrix);
-    
+
     // Usa il programma principale per il resto della scena
     gl.useProgram(program);
-    
+
     // IMPORTANTE: Verifica che program sia valido prima di ottenere uniform locations
     if (!program) {
         logger.log("ERRORE: Programma shader non valido");
         return;
     }
-    
+
     // Ottieni tutte le locazioni uniform per gli shader
     const u_modelLoc = gl.getUniformLocation(program, 'u_model');
     const u_viewLoc = gl.getUniformLocation(program, 'u_view');
@@ -384,18 +384,18 @@ function render() {
     const u_externalLightColorLoc = gl.getUniformLocation(program, 'u_externalLightColor');
     const u_externalLightIntensityLoc = gl.getUniformLocation(program, 'u_externalLightIntensity');
     const u_normalMatrixLoc = gl.getUniformLocation(program, 'u_normalMatrix');
-    
+
     // AGGIUNGI QUESTA RIGA: imposta l'intensità della luce
     const lightIntensity = 2.0; // Aumentato da 1.0 a 2.0
     gl.uniform1f(gl.getUniformLocation(program, 'u_lightIntensity'), lightIntensity);
-    
+
     // Passa le opzioni di rendering
     gl.uniform1i(gl.getUniformLocation(program, 'u_shadows'), renderOptions.shadows);
     gl.uniform1i(gl.getUniformLocation(program, 'u_reflections'), renderOptions.reflections);
     gl.uniform1i(gl.getUniformLocation(program, 'u_lightOn'), isLightOn);
     gl.uniform1i(gl.getUniformLocation(program, 'u_externalLightOn'), isExternalLightOn);
     gl.uniform1i(gl.getUniformLocation(program, 'u_advancedRendering'), renderOptions.advancedRendering);
-    
+
     // Imposta i valori per la luce esterna
     gl.uniform3f(u_externalLightColorLoc, 0.6, 0.6, 1.0); // Luce bluastra
     gl.uniform1f(u_externalLightIntensityLoc, 0.1); // Intensità bassa
@@ -864,21 +864,21 @@ function createViewMatrix() {
 function updateCrosshair() {
     // Usa la posizione CORRETTA dell'interruttore (con X negativo)
     const correctSwitchPosition = [-9.7, -2, 0];
-    
+
     // Reset dello stato di vicinanza
     isNearSwitch = false;
-    
+
     // Calcola distanza dal giocatore all'interruttore
     const dx = camera.position[0] - correctSwitchPosition[0];
     const dy = camera.position[1] - correctSwitchPosition[1];
     const dz = camera.position[2] - correctSwitchPosition[2];
     const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    
+
     // Debug
     if (distance < 8) {
         logger.log(`Distanza dall'interruttore corretto [-9.7, -2, 0]: ${distance.toFixed(2)}`);
     }
-    
+
     // Se sei vicino all'interruttore corretto
     if (distance < 4.0) {
         // Mostra le istruzioni
@@ -887,7 +887,7 @@ function updateCrosshair() {
             instructions.style.visibility = 'visible';
             isNearSwitch = true;
         }
-        
+
         // Cambia il crosshair
         document.getElementById('crosshair').style.backgroundImage = "url('images/crosshair-selection.png')";
     } else {
@@ -896,11 +896,11 @@ function updateCrosshair() {
         if (instructions) {
             instructions.style.visibility = 'hidden';
         }
-        
+
         // Reimposta il crosshair
         document.getElementById('crosshair').style.backgroundImage = "url('images/crosshair.png')";
     }
-    
+
     // Aggiorniamo anche la variabile globale per sicurezza
     switchPosition = correctSwitchPosition;
 }
@@ -1052,8 +1052,8 @@ function createSwitch() {
 
     // Posiziona l'interruttore sulla parete DESTRA
     const switchX = roomSize - 0.3; // Vicino alla parete destra
-    const switchY = -2.0;          // Altezza degli occhi
-    const switchZ = 0;             // Centro della stanza lungo Z
+    const switchY = -2.0; // Altezza degli occhi
+    const switchZ = 0; // Centro della stanza lungo Z
 
     // Aggiungi l'interruttore ai modelli
     models['fallbackSwitch'] = {
@@ -1457,7 +1457,159 @@ function createSimpleRoom() {
     // Aggiungi le cornici delle finestre
     addWindowOpenings();
 
+    // Aggiungo foto autore
+    createAuthorPicture();
+
     logger.log('Stanza con finestre creata');
+}
+
+function createAuthorPicture() {
+    logger.log("Creazione quadro con foto dell'autore...");
+    
+    // Dimensioni del quadro
+    const frameWidth = 1.5;
+    const frameHeight = 2.0;
+    const frameDepth = 0.05;
+    
+    // Posizione: parete frontale, sinistra della finestra centrale
+    const frameX = -3.5; // Sinistra della finestra (che è a X=0)
+    const frameY = -2.5;  // Altezza occhi
+    const frameZ = -roomSize + 0.02; // Sulla parete frontale, leggermente staccato
+
+    // Vertici del quadro (rettangolo)
+    const frameVertices = [
+        // Faccia frontale del quadro
+        frameX - frameWidth/2, frameY + frameHeight/2, frameZ,
+        frameX + frameWidth/2, frameY + frameHeight/2, frameZ,
+        frameX + frameWidth/2, frameY - frameHeight/2, frameZ,
+        frameX - frameWidth/2, frameY + frameHeight/2, frameZ,
+        frameX + frameWidth/2, frameY - frameHeight/2, frameZ,
+        frameX - frameWidth/2, frameY - frameHeight/2, frameZ
+    ];
+
+    // Normali (tutte verso l'interno della stanza)
+    const frameNormals = [
+        0, 0, 1, 0, 0, 1, 0, 0, 1,
+        0, 0, 1, 0, 0, 1, 0, 0, 1
+    ];
+
+    // Coordinate texture (importanti per mostrare correttamente la foto)
+    const frameTexcoords = [
+        0, 0,  // In basso a sinistra
+        1, 0,  // In basso a destra  
+        1, 1,  // In alto a destra
+        0, 0,  // In basso a sinistra
+        1, 1,  // In alto a destra
+        0, 1   // In alto a sinistra
+    ];
+
+    // Aggiungi il quadro ai modelli
+    models['authorPicture'] = {
+        vertices: frameVertices,
+        normals: frameNormals,
+        texcoords: frameTexcoords,
+        position: [0, 0, 0], // Già posizionato nei vertici
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+        texture: 'author_photo' // FOTO DELL'AUTORE - REQUISITO OBBLIGATORIO
+    };
+
+    logger.log(`Quadro con foto dell'autore creato in posizione [${frameX}, ${frameY}, ${frameZ}]`);
+}
+
+function createAuthorPicture() {
+    logger.log("Creazione quadro con foto dell'autore...");
+    
+    // Dimensioni del quadro
+    const frameWidth = 1.5;
+    const frameHeight = 2.0;
+    
+    // Posizione: parete frontale, sinistra della finestra centrale  
+    const frameX = -3.5; // Sinistra della finestra
+    const frameY = -2.5;  // Altezza occhi
+    const frameZ = -roomSize + 0.02; // Sulla parete frontale
+
+    // QUADRO PRINCIPALE con la foto
+    const frameVertices = [
+        frameX - frameWidth/2, frameY + frameHeight/2, frameZ,
+        frameX + frameWidth/2, frameY + frameHeight/2, frameZ,
+        frameX + frameWidth/2, frameY - frameHeight/2, frameZ,
+        frameX - frameWidth/2, frameY + frameHeight/2, frameZ,
+        frameX + frameWidth/2, frameY - frameHeight/2, frameZ,
+        frameX - frameWidth/2, frameY - frameHeight/2, frameZ
+    ];
+
+    const frameNormals = [
+        0, 0, 1, 0, 0, 1, 0, 0, 1,
+        0, 0, 1, 0, 0, 1, 0, 0, 1
+    ];
+
+    const frameTexcoords = [
+        0, 0,  // In basso a sinistra del quadro = in alto a sinistra della texture
+        1, 0,  // In basso a destra del quadro = in alto a destra della texture  
+        1, 1,  // In alto a destra del quadro = in basso a destra della texture
+        0, 0,  // In basso a sinistra del quadro = in alto a sinistra della texture
+        1, 1,  // In alto a destra del quadro = in basso a destra della texture
+        0, 1   // In alto a sinistra del quadro = in basso a sinistra della texture
+    ];
+
+    models['authorPicture'] = {
+        vertices: frameVertices,
+        normals: frameNormals,
+        texcoords: frameTexcoords,
+        position: [0, 0, 0],
+        rotation: [Math.PI*2, 0, 0], 
+        scale: [1, 1, 1],
+        texture: 'author_photo' // FOTO DELL'AUTORE
+    };
+
+    // CORNICE del quadro (legno scuro)
+    const border = 0.1;
+    const borderVertices = [];
+    const borderNormals = []; 
+    const borderTexcoords = [];
+
+    // Cornice superiore
+    const topFrame = [
+        frameX - frameWidth/2 - border, frameY + frameHeight/2 + border, frameZ,
+        frameX + frameWidth/2 + border, frameY + frameHeight/2 + border, frameZ,
+        frameX + frameWidth/2 + border, frameY + frameHeight/2, frameZ,
+        frameX - frameWidth/2 - border, frameY + frameHeight/2 + border, frameZ,
+        frameX + frameWidth/2 + border, frameY + frameHeight/2, frameZ,
+        frameX - frameWidth/2 - border, frameY + frameHeight/2, frameZ
+    ];
+    borderVertices.push(...topFrame);
+
+    // Cornice inferiore, sinistra, destra (simile)
+    const bottomFrame = [
+        frameX - frameWidth/2 - border, frameY - frameHeight/2, frameZ,
+        frameX + frameWidth/2 + border, frameY - frameHeight/2, frameZ,
+        frameX + frameWidth/2 + border, frameY - frameHeight/2 - border, frameZ,
+        frameX - frameWidth/2 - border, frameY - frameHeight/2, frameZ,
+        frameX + frameWidth/2 + border, frameY - frameHeight/2 - border, frameZ,
+        frameX - frameWidth/2 - border, frameY - frameHeight/2 - border, frameZ
+    ];
+    borderVertices.push(...bottomFrame);
+
+    // Normali e texture coordinates per la cornice
+    for(let i = 0; i < borderVertices.length/3; i++) {
+        borderNormals.push(0, 0, 1);
+    }
+    for(let i = 0; i < borderVertices.length/3; i++) {
+        borderTexcoords.push(0, 0); // Texture semplice
+    }
+
+    models['authorPictureFrame'] = {
+        vertices: borderVertices,
+        normals: borderNormals, 
+        texcoords: borderTexcoords,
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+        texture: 'wall' // Texture legno scuro
+    };
+
+    logger.log(`Quadro con foto dell'autore creato a sinistra della finestra frontale`);
 }
 
 // Funzione per creare una parete con aperture per finestre
@@ -3045,13 +3197,13 @@ function toggleLight() {
     if (isNearSwitch) {
         isLightOn = !isLightOn;
         document.getElementById('instructions').style.visibility = isLightOn ? 'hidden' : 'visible';
-        
+
         // Effetto di flickering quando la luce si accende
         if (isLightOn) {
             flickerLight();
             sounds.flicker.play();
         }
-        
+
         logger.log(`Luce ${isLightOn ? 'accesa' : 'spenta'}`);
     } else {
         logger.log("Devi essere vicino all'interruttore CORRETTO sulla parete destra per accendere/spegnere la luce");
@@ -3076,7 +3228,7 @@ function flickerLight() {
 
 // Avvia il gioco
 function startGame() {
-    switchPosition = [-9.7, -2, 0]; 
+    switchPosition = [-9.7, -2, 0];
 
     const instructions = ensureInstructionsExist();
     instructions.style.visibility = 'hidden'; // Inizialmente nascosto
@@ -3091,7 +3243,7 @@ function startGame() {
     document.getElementById('start-menu').style.display = 'none';
     document.getElementById('crosshair').style.display = 'block';
     document.getElementById('top-bar').style.display = 'flex';
-    
+
     // Correggi la posizione dell'interruttore subito
     fixSwitchPosition();
 
@@ -3102,7 +3254,7 @@ function startGame() {
         logger.log(`Elemento instructions trovato e configurato correttamente`);
     } else {
         logger.log(`ERRORE: Elemento instructions non trovato!`);
-        
+
         // Crea l'elemento se non esiste
         const newInstructionsElement = document.createElement('div');
         newInstructionsElement.id = 'instructions';
@@ -3126,7 +3278,7 @@ function startGame() {
     // Forza un aggiornamento del crosshair
     setTimeout(() => {
         updateCrosshair();
-        
+
         // Debug - posizioni attuali
         logger.log("--- Posizioni after startup ---");
         logger.log(`Switch position: ${switchPosition}`);
@@ -3209,13 +3361,13 @@ function startGame() {
 // e si assicura che NON ci siano aree interattive errate nella parete sinistra
 function fixSwitchPosition() {
     // Posizione corretta dell'interruttore sulla parete destra
-    const correctX = roomSize - 0.3;  // Parete destra
-    const correctY = -2.0;           // Altezza
-    const correctZ = 0;              // Centro stanza
-    
+    const correctX = roomSize - 0.3; // Parete destra
+    const correctY = -2.0; // Altezza
+    const correctZ = 0; // Centro stanza
+
     // Imposta la posizione corretta dello switch per l'interazione
     switchPosition = [correctX, correctY, correctZ];
-    
+
     // Verifica che non ci siano modelli obsoleti nella parete sinistra
     // che potrebbero causare falsi trigger dell'interazione
     for (const modelName in models) {
@@ -3227,10 +3379,10 @@ function fixSwitchPosition() {
                 logger.log(`CORREZIONE: Rimosso/spostato modello ${modelName} dalla parete sinistra`);
                 // Opzione 1: Rimuoverlo
                 // delete models[modelName];
-                
+
                 // Opzione 2: Spostarlo nella posizione corretta
                 model.position = [correctX, correctY, correctZ];
-                
+
                 // Se è un indicatore, posizionalo accanto
                 if (modelName.includes('indicator') || modelName.includes('Indicator')) {
                     model.position = [correctX, correctY, correctZ - 0.8];
@@ -3238,7 +3390,7 @@ function fixSwitchPosition() {
             }
         }
     }
-    
+
     logger.log(`Posizione switch corretta fissata a: [${switchPosition}]`);
 }
 
@@ -3247,7 +3399,7 @@ function debugSwitchAndInstructions() {
     const instructions = document.getElementById('instructions');
     logger.log("--- Debug Switch e Instructions ---");
     logger.log(`switchPosition: [${switchPosition}]`);
-    
+
     if (instructions) {
         logger.log(`Elemento instructions trovato: ${instructions.outerHTML}`);
         logger.log(`Stile visibility: ${instructions.style.visibility}`);
@@ -3255,12 +3407,12 @@ function debugSwitchAndInstructions() {
     } else {
         logger.log("ERRORE: Elemento instructions NON trovato!");
     }
-    
+
     // Calcola e logga la distanza attuale dallo switch
     const dx = camera.position[0] - switchPosition[0];
     const dy = camera.position[1] - switchPosition[1];
     const dz = camera.position[2] - switchPosition[2];
-    const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
     logger.log(`Distanza corrente dallo switch: ${distance.toFixed(2)}`);
     logger.log(`isNearSwitch = ${isNearSwitch}`);
 }
@@ -3388,6 +3540,30 @@ function initGUI() {
         logger.log('Posizione camera ripristinata');
     };
     sidePanel.appendChild(resetButton);
+
+    // Informazioni sul progetto (come richiesto)
+    const projectInfo = document.createElement('div');
+    projectInfo.innerHTML = `
+        <div style="margin: 20px; padding: 15px; background-color: rgba(40, 40, 40, 0.8); 
+                    border-radius: 8px; border: 1px solid #666;">
+            <h4 style="color: #ff4d4d; margin: 0 0 10px 0; font-family: 'Creepster', cursive;">
+                Progetto Computer Graphics A.A.2023/24
+            </h4>
+            <p style="color: #ccc; font-size: 12px; margin: 5px 0;">
+                <strong>Applicazione:</strong> Casa Infestata 3D<br>
+                <strong>Tecnologie:</strong> WebGL, GLSL, JavaScript<br>
+                <strong>Requisiti implementati:</strong><br>
+                ✓ Proiezione prospettica<br>
+                ✓ Input utente (WASD, mouse, touch)<br>
+                ✓ Illuminazione e ombre<br>
+                ✓ Texture mapping + foto autore<br>
+                ✓ Rendering avanzato<br>
+                ✓ Pannello di controllo<br>
+                ✓ Supporto mobile
+            </p>
+        </div>
+    `;
+    sidePanel.appendChild(projectInfo);
 
     // Bottone di chiusura
     const closeButton = document.createElement('button');
@@ -4112,6 +4288,9 @@ function loadResources() {
     loadTexture('textures/wood.jpg', 'ceiling');
     loadTexture('textures/glass.png', 'glass');
 
+    // *** AGGIUNGI QUESTA RIGA - OBBLIGATORIA ***
+    loadTexture('textures/author_photo.jpg', 'author_photo');
+
     // Crea la texture bianca ruvida per l'interruttore
     createRoughWhiteTexture();
 
@@ -4464,7 +4643,14 @@ function positionModel(name) {
             models[cloneName].position = [x, y, z];
             models[cloneName].rotation = [0, -angle + Math.PI, 0];
             models[cloneName].scale = [0.03, 0.03, 0.03];
-            models[cloneName].texture = 'skull_texture';
+
+            // *** MODIFICA: Applica la foto dell'autore al primo teschio ***
+            if (i === 0) {
+                models[cloneName].texture = 'author_photo'; // FOTO DELL'AUTORE
+                logger.log('Foto dell\'autore applicata al primo teschio');
+            } else {
+                models[cloneName].texture = 'skull_texture';
+            }
         }
     } else if (name === 'chair') {
         // Posiziona sedie sul pavimento DENTRO la stanza
@@ -4493,15 +4679,15 @@ function positionModel(name) {
     } else if (name === 'lamp') {
         // Posiziona il lampadario al centro della stanza, attaccato al soffitto
         models[name].position = [0, 0, 0]; // Attaccato al soffitto
-        models[name].rotation = [Math.PI/2, 0, 0]; // Ruota di 180° attorno all'asse X
+        models[name].rotation = [Math.PI / 2, 0, 0]; // Ruota di 180° attorno all'asse X
         models[name].scale = [2.5, 2.5, 2.5]; // Dimensione appropriata
         models[name].isEmissive = true; // Il lampadario emette luce
-        
+
         // Aumenta l'intensità della luce creando una texture più luminosa
         const lampLightColor = createColorTexture([1.0, 0.95, 0.8, 1.0], 1.5); // Aumenta l'intensità a 1.5
         textures['lampLight'] = lampLightColor;
         models[name].texture = 'lampLight';
-        
+
         // Aggiorna posizione della luce
         lightPosition = [0, -roomHeight + 1.0, 0];
     } else if (name === 'switch' || name === 'lightSwitch') {
@@ -4509,16 +4695,16 @@ function positionModel(name) {
         const switchX = roomSize - 0.01; // Vicino alla parete destra
         const switchY = -2.0; // Altezza abbassata
         const switchZ = 0; // Centro della stanza lungo Z
-    
+
         models[name].position = [switchX, switchY, switchZ];
         models[name].rotation = [0, -Math.PI / 2, 0]; // Rivolto verso l'interno
         models[name].scale = [4.95, 4.95, 4.95];
         models[name].isEmissive = true;
         models[name].texture = 'switch_white'; // Usa la texture corretta
-    
+
         // Aggiorna la posizione per l'interazione
         switchPosition = [switchX, switchY, switchZ];
-                
+
         logger.log(`Modello interruttore OBJ posizionato sulla parete destra: [${switchPosition}]`);
     } else if (name === 'wheelie') {
         // Posiziona la sedia a rotelle in un angolo
@@ -4539,7 +4725,7 @@ function positionModel(name) {
 function updateSwitchPosition() {
     // Ottieni la posizione effettiva dello switch dal modello
     let actualSwitchPos;
-    
+
     if (models['switch']) {
         actualSwitchPos = models['switch'].position;
     } else if (models['fallbackSwitch']) {
@@ -4550,10 +4736,10 @@ function updateSwitchPosition() {
         // Posizione di default se non troviamo nessun modello
         actualSwitchPos = [roomSize - 0.3, -2.0, 0]; // Parete destra
     }
-    
+
     // Aggiorna la posizione per l'interazione
     switchPosition = [...actualSwitchPos]; // Copia i valori
-    
+
     logger.log(`Area interattiva dell'interruttore aggiornata a: [${switchPosition}]`);
 }
 
@@ -4938,7 +5124,7 @@ function toggleSprint(active) {
 function createColorTexture(color, intensity = 1.0) {
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    
+
     // Applica l'intensità ai componenti RGB, mantenendo l'alpha invariato
     const adjustedColor = [
         Math.min(color[0] * intensity, 1.0),
@@ -4946,23 +5132,23 @@ function createColorTexture(color, intensity = 1.0) {
         Math.min(color[2] * intensity, 1.0),
         color[3]
     ];
-    
+
     // Crea un pixel con il colore specificato
     const pixel = new Uint8Array([
         Math.floor(adjustedColor[0] * 255),
-        Math.floor(adjustedColor[1] * 255), 
-        Math.floor(adjustedColor[2] * 255), 
+        Math.floor(adjustedColor[1] * 255),
+        Math.floor(adjustedColor[2] * 255),
         Math.floor(adjustedColor[3] * 255)
     ]);
-    
+
     // Carica un pixel di colore come texture
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
-    
+
     // Non serve mipmap per un colore solido
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    
+
     return texture;
 }
