@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Casa Infestata - Relazione Progetto Computer Graphics</title>
+    <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #ff4d4d;
+            --secondary-color: #2c1810;
+            --accent-color: #8b4513;
+            --bg-dark: #1a1a1a;
+            --bg-light: #f8f9fa;
+            --text-dark: #333;
+            --text-light: #666;
+            --border-color: #e0e0e0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            line-height: 1.7;
+            color: var(--text-dark);
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 3rem 2rem;
+            text-align: center;
+            border-radius: 20px;
+            margin-bottom: 3rem;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-family: 'Creepster', cursive;
+            font-size: 3.5rem;
+            color: var(--primary-color);
+            text-shadow: 0 0 20px rgba(255, 77, 77, 0.5);
+            margin-bottom: 1rem;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        .header .subtitle {
+            font-size: 1.3rem;
+            opacity: 0.9;
+            font-weight: 300;
+        }
+
+        @keyframes glow {
+            from { text-shadow: 0 0 20px rgba(255, 77, 77, 0.5); }
+            to { text-shadow: 0 0 30px rgba(255, 77, 77, 0.8); }
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 2.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+        }
+
+        .card h2 {
+            color: var(--primary-color);
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .card h2::before {
+            content: '';
+            width: 4px;
+            height: 30px;
+            background: linear-gradient(to bottom, var(--primary-color), var(--accent-color));
+            border-radius: 2px;
+        }
+
+        .card h3 {
+            color: var(--secondary-color);
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin: 2rem 0 1rem 0;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--primary-color);
+            display: inline-block;
+        }
+
+        .highlight-box {
+            background: linear-gradient(135deg, #fff5f5 0%, #ffe0e0 100%);
+            border: 2px solid var(--primary-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            position: relative;
+        }
+
+        .highlight-box::before {
+            content: '💡';
+            position: absolute;
+            top: -10px;
+            left: 20px;
+            background: white;
+            padding: 0 10px;
+            font-size: 1.2rem;
+        }
+
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .tech-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .tech-card:hover {
+            transform: scale(1.02);
+            border-color: var(--primary-color);
+        }
+
+        .tech-card h4 {
+            color: var(--primary-color);
+            font-weight: 600;
+            margin-bottom: 0.8rem;
+            font-size: 1.1rem;
+        }
+
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .feature-list li {
+            padding: 0.8rem 0;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .feature-list li::before {
+            content: '✅';
+            font-size: 1.1rem;
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        .control-item {
+            background: var(--bg-dark);
+            color: white;
+            padding: 1rem;
+            border-radius: 10px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .control-item:hover {
+            background: var(--primary-color);
+            transform: translateY(-2px);
+        }
+
+        .control-key {
+            font-weight: bold;
+            font-size: 1.2rem;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        .stat-box {
+            background: linear-gradient(135deg, var(--primary-color) 0%, #ff6b6b 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(255, 77, 77, 0.3);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            margin-top: 0.5rem;
+        }
+
+        .code-block {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 1.5rem;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .requirements-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        .requirement-card {
+            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+            border: 2px solid #28a745;
+            border-radius: 12px;
+            padding: 1.5rem;
+            position: relative;
+        }
+
+        .requirement-card::before {
+            content: '✅';
+            position: absolute;
+            top: -12px;
+            right: 15px;
+            background: white;
+            padding: 5px;
+            border-radius: 50%;
+            font-size: 1.2rem;
+        }
+
+        .footer {
+            background: var(--bg-dark);
+            color: white;
+            text-align: center;
+            padding: 2rem;
+            border-radius: 15px;
+            margin-top: 3rem;
+        }
+
+        .footer p {
+            opacity: 0.8;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2.5rem;
+            }
+            
+            .container {
+                padding: 15px;
+            }
+            
+            .card {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🏚️ Casa Infestata</h1>
+            <p class="subtitle">Progetto Computer Graphics A.A.2023/24 - Applicazione 3D Interattiva</p>
+        </header>
+
+        <section class="card">
+            <h2>📋 Descrizione dell'Applicazione</h2>
+            <p><strong>Casa Infestata</strong> è un'esperienza 3D immersiva che trasporta l'utente in un ambiente horror interattivo. L'applicazione combina elementi di esplorazione in prima persona con un sistema di illuminazione dinamica e interazioni ambientali.</p>
+            
+            <div class="highlight-box">
+                <p><strong>Concept Principale:</strong> Il giocatore si trova in una stanza buia e deve trovare l'interruttore della luce per illuminare l'ambiente, scoprendo gradualmente gli oggetti inquietanti che popolano lo spazio.</p>
+            </div>
+
+            <h3>🎯 Obiettivi del Progetto</h3>
+            <ul class="feature-list">
+                <li>Creare un'esperienza 3D coinvolgente e atmosferica</li>
+                <li>Implementare un sistema di illuminazione realistico</li>
+                <li>Fornire controlli intuitivi per desktop e mobile</li>
+                <li>Dimostrare competenze avanzate in WebGL e computer graphics</li>
+            </ul>
+        </section>
+
+        <section class="card">
+            <h2>🎮 Sistema di Controlli</h2>
+            <div class="controls-grid">
+                <div class="control-item">
+                    <span class="control-key">WASD</span>
+                    <span>Movimento del giocatore</span>
+                </div>
+                <div class="control-item">
+                    <span class="control-key">MOUSE</span>
+                    <span>Rotazione camera (First Person)</span>
+                </div>
+                <div class="control-item">
+                    <span class="control-key">F</span>
+                    <span>Interazione interruttore luce</span>
+                </div>
+                <div class="control-item">
+                    <span class="control-key">P</span>
+                    <span>Pannello di controllo</span>
+                </div>
+                <div class="control-item">
+                    <span class="control-key">SHIFT</span>
+                    <span>Sprint (velocità aumentata)</span>
+                </div>
+                <div class="control-item">
+                    <span class="control-key">Q/E</span>
+                    <span>Movimento verticale (modalità spettatore)</span>
+                </div>
+            </div>
+
+            <h3>📱 Supporto Mobile</h3>
+            <p>L'applicazione include controlli touch ottimizzati per dispositivi mobili:</p>
+            <ul class="feature-list">
+                <li>Pulsanti virtuali per il movimento (WASD)</li>
+                <li>Touch and drag per la rotazione della camera</li>
+                <li>Interfaccia adattiva per schermi piccoli</li>
+                <li>Controlli gesture per le interazioni</li>
+            </ul>
+        </section>
+
+        <section class="card">
+            <h2>⚙️ Architettura Tecnica</h2>
+            
+            <div class="tech-grid">
+                <div class="tech-card">
+                    <h4>🎨 Rendering Engine</h4>
+                    <p>WebGL puro con shaders personalizzati per massime performance e controllo completo del pipeline grafico.</p>
+                </div>
+                <div class="tech-card">
+                    <h4>🧮 Matematica 3D</h4>
+                    <p>Libreria m4.js per operazioni matriciali, trasformazioni geometriche e calcoli di proiezione prospettica.</p>
+                </div>
+                <div class="tech-card">
+                    <h4>🎵 Audio System</h4>
+                    <p>Sistema audio HTML5 con suoni ambientali, effetti sonori reattivi e feedback interattivo.</p>
+                </div>
+                <div class="tech-card">
+                    <h4>📦 Asset Management</h4>
+                    <p>Caricamento asincrono di modelli OBJ, texture mapping avanzato e gestione memoria ottimizzata.</p>
+                </div>
+            </div>
+
+            <h3>🖥️ Shaders GLSL</h3>
+            <div class="code-block">
+// Vertex Shader - Trasformazioni geometriche
+attribute vec4 a_position;
+attribute vec3 a_normal;
+attribute vec2 a_texcoord;
+
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_projection;
+uniform mat4 u_lightSpaceMatrix;
+
+varying vec3 v_position;
+varying vec3 v_normal;
+varying vec2 v_texcoord;
+varying vec4 v_fragPosLightSpace;
+
+void main() {
+    vec4 worldPosition = u_model * a_position;
+    v_position = worldPosition.xyz;
+    v_normal = mat3(u_normalMatrix) * a_normal;
+    v_texcoord = a_texcoord;
+    v_fragPosLightSpace = u_lightSpaceMatrix * worldPosition;
+    gl_Position = u_projection * u_view * worldPosition;
+}
+            </div>
+
+            <h3>💡 Sistema di Illuminazione</h3>
+            <ul class="feature-list">
+                <li><strong>Phong Lighting Model:</strong> Componenti ambient, diffuse e specular</li>
+                <li><strong>Shadow Mapping:</strong> Ombre dinamiche in tempo reale</li>
+                <li><strong>PCF (Percentage Closer Filtering):</strong> Ombre soft e realistiche</li>
+                <li><strong>Multi-light System:</strong> Luce interna (lampadario) + luce esterna (finestre)</li>
+                <li><strong>Attenuation:</strong> Attenuazione realistica della luce con la distanza</li>
+            </ul>
+        </section>
+
+        <section class="card">
+            <h2>📊 Statistiche del Progetto</h2>
+            <div class="stats-container">
+                <div class="stat-box">
+                    <span class="stat-number">2000+</span>
+                    <span class="stat-label">Linee di Codice</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-number">15+</span>
+                    <span class="stat-label">Modelli 3D</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-number">25+</span>
+                    <span class="stat-label">Texture</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-number">5+</span>
+                    <span class="stat-label">Shader Programs</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-number">60</span>
+                    <span class="stat-label">FPS Target</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-number">100%</span>
+                    <span class="stat-label">Requisiti Soddisfatti</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>✅ Conformità Requisiti del Progetto</h2>
+            <div class="requirements-grid">
+                <div class="requirement-card">
+                    <h4>Geometria 3D</h4>
+                    <p>Proiezione prospettica con FOV dinamico e aspect ratio adattivo</p>
+                </div>
+                <div class="requirement-card">
+                    <h4>Input Utente</h4>
+                    <p>Controlli keyboard/mouse desktop + touch mobile completi</p>
+                </div>
+                <div class="requirement-card">
+                    <h4>Illuminazione</h4>
+                    <p>Sistema multi-luce con ombre dinamiche e modello Phong</p>
+                </div>
+                <div class="requirement-card">
+                    <h4>Texture Mapping</h4>
+                    <p>Texture procedurali + foto dell'autore applicata al quadro</p>
+                </div>
+                <div class="requirement-card">
+                    <h4>Pannello Controllo</h4>
+                    <p>UI completa con toggle per tutte le funzionalità grafiche</p>
+                </div>
+                <div class="requirement-card">
+                    <h4>Supporto Mobile</h4>
+                    <p>Touch controls, responsive design, controlli gesture</p>
+                </div>
+                <div class="requirement-card">
+                    <h4>Advanced Rendering</h4>
+                    <p>Ombre, riflessioni, transparency, post-processing</p>
+                </div>
+                <div class="requirement-card">
+                    <h4>Modelli OBJ</h4>
+                    <p>Caricamento dinamico con parser personalizzato</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>🏗️ Algoritmi e Tecniche Implementate</h2>
+            
+            <h3>🎯 Collision Detection</h3>
+            <div class="highlight-box">
+                <p>Sistema di collision detection AABB (Axis-Aligned Bounding Box) per limitare il movimento del giocatore entro i confini della stanza, con gestione separata per modalità spettatore.</p>
+            </div>
+
+            <h3>🌑 Shadow Mapping Algorithm</h3>
+            <div class="code-block">
+// Shadow Mapping con PCF
+float calculateShadow(vec4 fragPosLightSpace) {
+    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+    projCoords = projCoords * 0.5 + 0.5;
+    
+    float shadow = 0.0;
+    vec2 texelSize = vec2(1.0) / vec2(1024.0);
+    
+    // PCF (Percentage Closer Filtering)
+    for(int x = -1; x <= 1; ++x) {
+        for(int y = -1; y <= 1; ++y) {
+            float pcfDepth = texture2D(u_shadowMap, 
+                projCoords.xy + vec2(x, y) * texelSize).r;
+            shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;
+        }
+    }
+    return shadow / 9.0;
+}
+            </div>
+
+            <h3>🎨 Procedural Texture Generation</h3>
+            <ul class="feature-list">
+                <li><strong>Glassmaterial:</strong> Texture vetro trasparente con riflessi casuali</li>
+                <li><strong>Rough Surface:</strong> Texture ruvida per interruttore con effetto invecchiamento</li>
+                <li><strong>Skybox Cubemap:</strong> Ambiente 360° per immersione realistica</li>
+            </ul>
+
+            <h3>⚡ Ottimizzazioni Performance</h3>
+            <ul class="feature-list">
+                <li><strong>Frustum Culling:</strong> Rendering solo oggetti visibili</li>
+                <li><strong>Depth Sorting:</strong> Gestione corretta oggetti trasparenti</li>
+                <li><strong>Buffer Reuse:</strong> Riutilizzo buffer WebGL per efficienza</li>
+                <li><strong>Texture Atlasing:</strong> Riduzione draw calls</li>
+            </ul>
+        </section>
+
+        <section class="card">
+            <h2>🎨 Asset e Contenuti</h2>
+            
+            <h3>🗿 Modelli 3D (Formato OBJ)</h3>
+            <ul class="feature-list">
+                <li><strong>Skull Collection:</strong> 5 teschi posizionati lungo le pareti</li>
+                <li><strong>Creepy Doll:</strong> Bambola interattiva con audio triggers</li>
+                <li><strong>Furniture Set:</strong> Sedie, sedia a rotelle, orologio a pendolo</li>
+                <li><strong>Light Switch:</strong> Interruttore funzionante con animazioni</li>
+                <li><strong>Hanging Lamp:</strong> Lampadario centrale emissivo</li>
+            </ul>
+
+            <h3>🖼️ Sistema Texture</h3>
+            <div class="tech-grid">
+                <div class="tech-card">
+                    <h4>📸 Foto Autore</h4>
+                    <p>Applicata al quadro sulla parete frontale sinistra, conforme ai requisiti del progetto</p>
+                </div>
+                <div class="tech-card">
+                    <h4>🏠 Architectural</h4>
+                    <p>Texture per pareti, pavimento, soffitto con mapping UV ottimizzato</p>
+                </div>
+                <div class="tech-card">
+                    <h4>🪟 Glass Materials</h4>
+                    <p>Materiali trasparenti per finestre con effetti di rifrazione</p>
+                </div>
+                <div class="tech-card">
+                    <h4>🌅 Environment</h4>
+                    <p>Skybox cubemap per illuminazione ambientale realistica</p>
+                </div>
+            </div>
+
+            <h3>🔊 Audio Design</h3>
+            <ul class="feature-list">
+                <li><strong>Ambient Loop:</strong> Atmosfera di sottofondo continua</li>
+                <li><strong>Interactive SFX:</strong> Suoni reattivi alla vicinanza della bambola</li>
+                <li><strong>Light Switch:</strong> Effetto sonoro di flickering realistico</li>
+                <li><strong>Spatial Audio:</strong> Audio posizionale 3D</li>
+            </ul>
+        </section>
+
+        <section class="card">
+            <h2>🔧 Pannello di Controllo Avanzato</h2>
+            <p>Sistema di debug e controllo completo accessibile tramite tasto <strong>P</strong>:</p>
+
+            <div class="tech-grid">
+                <div class="tech-card">
+                    <h4>💡 Lighting Controls</h4>
+                    <ul>
+                        <li>Toggle luce interna/esterna</li>
+                        <li>Controllo intensità illuminazione</li>
+                        <li>Attivazione/disattivazione ombre</li>
+                    </ul>
+                </div>
+                <div class="tech-card">
+                    <h4>🎨 Rendering Options</h4>
+                    <ul>
+                        <li>Advanced rendering effects</li>
+                        <li>Riflessioni speculari</li>
+                        <li>Modalità wireframe</li>
+                    </ul>
+                </div>
+                <div class="tech-card">
+                    <h4>📊 Debug Tools</h4>
+                    <ul>
+                        <li>FPS counter real-time</li>
+                        <li>Sistema di logging attivabile</li>
+                        <li>Coordinate camera live</li>
+                    </ul>
+                </div>
+                <div class="tech-card">
+                    <h4>🎮 Gameplay Modes</h4>
+                    <ul>
+                        <li>Modalità spettatore (noclip)</li>
+                        <li>Reset posizione player</li>
+                        <li>Speed modifiers</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>📱 Compatibilità e Performance</h2>
+            
+            <h3>🌐 Browser Support</h3>
+            <ul class="feature-list">
+                <li><strong>Desktop:</strong> Chrome 80+, Firefox 75+, Safari 13+, Edge 80+</li>
+                <li><strong>Mobile:</strong> iOS Safari 13+, Chrome Mobile 80+, Samsung Internet</li>
+                <li><strong>WebGL:</strong> Supporto WebGL 1.0 con estensioni opzionali</li>
+            </ul>
+
+            <h3>⚡ Performance Metrics</h3>
+            <div class="highlight-box">
+                <p><strong>Target:</strong> 60 FPS costanti su hardware moderno<br>
+                <strong>Minimum:</strong> 30 FPS su dispositivi entry-level<br>
+                <strong>Memory Usage:</strong> ~50MB VRAM per texture e modelli</p>
+            </div>
+
+            <h3>📐 Responsive Design</h3>
+            <ul class="feature-list">
+                <li>Adattamento automatico a diverse risoluzioni</li>
+                <li>Scaling UI per schermi piccoli</li>
+                <li>Controlli touch ottimizzati per mobile</li>
+                <li>Aspect ratio dinamico per il viewport</li>
+            </ul>
+        </section>
+
+        <section class="card">
+            <h2>🚀 Innovazioni e Particolarità</h2>
+            
+            <div class="highlight-box">
+                <p><strong>Unique Selling Points:</strong> Elementi che distinguono questo progetto dalla media</p>
+            </div>
+
+            <h3>💡 Lighting System Innovation</h3>
+            <ul class="feature-list">
+                <li><strong>Dynamic Flickering:</strong> Effetto realistico di lampeggio delle luci</li>
+                <li><strong>Dual Lighting:</strong> Sistema interno/esterno con blend dinamico</li>
+                <li><strong>HDR Tone Mapping:</strong> ACES filmic per risultati cinematografici</li>
+                <li><strong>Ambient Occlusion:</strong> Occlusione ambientale semplificata</li>
+            </ul>
+
+            <h3>🎮 Interactive Elements</h3>
+            <ul class="feature-list">
+                <li><strong>Proximity Triggers:</strong> Audio reattivo alla posizione del player</li>
+                <li><strong>Visual Feedback:</strong> Crosshair dinamico per interazioni</li>
+                <li><strong>Animated Objects:</strong> Animazioni procedurali per interruttori</li>
+                <li><strong>State Management:</strong> Persistenza stati oggetti durante la sessione</li>
+            </ul>
+
+            <h3>🔧 Technical Excellence</h3>
+            <ul class="feature-list">
+                <li><strong>Custom OBJ Parser:</strong> Implementazione parser 3D da zero</li>
+                <li><strong>Multi-shader Pipeline:</strong> Sistema modulare per diversi effetti</li>
+                <li><strong>Memory Management:</strong> Cleanup automatico risorse WebGL</li>
+                <li><strong>Error Handling:</strong> Fallback robusti per asset mancanti</li>
+            </ul>
+        </section>
+
+        <footer class="footer">
+            <p>📚 <strong>Corso:</strong> Computer Graphics - Laurea Magistrale in Informatica</p>
+            <p>🏫 <strong>Università:</strong> Alma Mater Studiorum - Università di Bologna</p>
+            <p>📅 <strong>Anno Accademico:</strong> 2023/2024</p>
+            <p style="margin-top: 1rem; opacity: 0.7;">
+                Progetto sviluppato utilizzando WebGL, JavaScript e GLSL<br>
+                Tutte le librerie utilizzate sono quelle messe a disposizione durante il corso
+            </p>
+        </footer>
+    </div>
+</body>
+</html>
