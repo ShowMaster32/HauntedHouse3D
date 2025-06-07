@@ -259,53 +259,324 @@ body {
 }
 
 /* Stili migliorati per i controlli touch */
-.touch-controls {
+.mobile-controls {
     position: fixed;
-    bottom: 30px;
+    bottom: 0;
     left: 0;
     width: 100%;
+    height: 200px;
     display: none;
-    justify-content: center;
     z-index: 1000;
-    gap: 12px;
+    pointer-events: none;
 }
 
-.touch-button {
-    width: 70px;
-    height: 70px;
+.mobile-controls.active {
+    display: block;
+}
+
+/* Pad direzionale sinistro */
+.direction-pad {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    width: 140px;
+    height: 140px;
+    pointer-events: all;
+}
+
+/* Base del pad direzionale */
+.direction-pad::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100px;
+    height: 100px;
+    background: radial-gradient(circle, rgba(40, 40, 40, 0.8) 60%, rgba(20, 20, 20, 0.9) 100%);
     border-radius: 50%;
-    background-color: rgba(30, 30, 30, 0.7);
+    border: 3px solid #ff4d4d;
+    box-shadow: 0 0 20px rgba(255, 77, 77, 0.3);
+}
+
+/* Pulsanti direzionali */
+.direction-btn {
+    position: absolute;
+    width: 45px;
+    height: 45px;
+    background: linear-gradient(135deg, rgba(60, 60, 60, 0.9) 0%, rgba(30, 30, 30, 0.9) 100%);
     border: 2px solid #ff4d4d;
+    border-radius: 8px;
     display: flex;
     justify-content: center;
     align-items: center;
     color: white;
     font-weight: bold;
-    box-shadow: 0 0 10px rgba(255, 77, 77, 0.5);
+    font-size: 18px;
+    text-shadow: 0 0 5px rgba(255, 77, 77, 0.7);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    transition: all 0.1s ease;
     user-select: none;
     -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent;
 }
 
-.touch-button:active {
-    background-color: rgba(255, 77, 77, 0.7);
-    transform: scale(1.1);
+.direction-btn:active {
+    transform: scale(0.95);
+    background: linear-gradient(135deg, rgba(255, 77, 77, 0.8) 0%, rgba(200, 40, 40, 0.9) 100%);
+    box-shadow: 0 0 15px rgba(255, 77, 77, 0.8);
 }
 
+/* Posizionamento dei pulsanti direzionali */
+.direction-btn.up {
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.direction-btn.up::before {
+    content: '▲';
+    font-size: 16px;
+}
+
+.direction-btn.down {
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.direction-btn.down::before {
+    content: '▼';
+    font-size: 16px;
+}
+
+.direction-btn.left {
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.direction-btn.left::before {
+    content: '◀';
+    font-size: 16px;
+}
+
+.direction-btn.right {
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.direction-btn.right::before {
+    content: '▶';
+    font-size: 16px;
+}
+
+/* Controlli azione destri */
+.action-controls {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    pointer-events: all;
+}
+
+.action-btn {
+    width: 65px;
+    height: 65px;
+    background: linear-gradient(135deg, rgba(60, 60, 60, 0.9) 0%, rgba(30, 30, 30, 0.9) 100%);
+    border: 3px solid #ff4d4d;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-weight: bold;
+    font-size: 18px;
+    text-shadow: 0 0 5px rgba(255, 77, 77, 0.7);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+    transition: all 0.1s ease;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.action-btn:active {
+    transform: scale(0.9);
+    background: linear-gradient(135deg, rgba(255, 77, 77, 0.8) 0%, rgba(200, 40, 40, 0.9) 100%);
+    box-shadow: 0 0 20px rgba(255, 77, 77, 0.8);
+}
+
+/* Pulsanti azione specifici */
+.action-btn.light {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.9) 0%, rgba(255, 165, 0, 0.9) 100%);
+    border-color: #ffd700;
+    box-shadow: 0 6px 12px rgba(255, 215, 0, 0.4);
+}
+
+.action-btn.light:active {
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+}
+
+.action-btn.panel {
+    background: linear-gradient(135deg, rgba(138, 43, 226, 0.9) 0%, rgba(75, 0, 130, 0.9) 100%);
+    border-color: #8a2be2;
+    box-shadow: 0 6px 12px rgba(138, 43, 226, 0.4);
+}
+
+.action-btn.panel:active {
+    box-shadow: 0 0 20px rgba(138, 43, 226, 0.8);
+}
+
+/* Controlli spettatore (nascosti di default) */
+.spectator-controls {
+    position: absolute;
+    bottom: 80px;
+    right: 20px;
+    display: none;
+    flex-direction: row;
+    gap: 15px;
+    pointer-events: all;
+}
+
+.spectator-controls.active {
+    display: flex;
+}
+
+.spectator-btn {
+    width: 55px;
+    height: 55px;
+    background: linear-gradient(135deg, rgba(0, 100, 200, 0.9) 0%, rgba(0, 50, 150, 0.9) 100%);
+    border: 2px solid #00bfff;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-weight: bold;
+    font-size: 16px;
+    text-shadow: 0 0 5px rgba(0, 191, 255, 0.7);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    transition: all 0.1s ease;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.spectator-btn:active {
+    transform: scale(0.9);
+    background: linear-gradient(135deg, rgba(0, 191, 255, 0.8) 0%, rgba(0, 100, 200, 0.9) 100%);
+    box-shadow: 0 0 15px rgba(0, 191, 255, 0.8);
+}
+
+/* Camera control per mobile */
+.camera-control {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, rgba(40, 40, 40, 0.9) 0%, rgba(20, 20, 20, 0.9) 100%);
+    border: 2px solid #ff4d4d;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-size: 24px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    pointer-events: all;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.camera-control:active {
+    transform: scale(0.95);
+    background: linear-gradient(135deg, rgba(255, 77, 77, 0.8) 0%, rgba(200, 40, 40, 0.9) 100%);
+}
+
+.camera-control.active {
+    background: linear-gradient(135deg, rgba(255, 77, 77, 0.8) 0%, rgba(200, 40, 40, 0.9) 100%);
+    box-shadow: 0 0 15px rgba(255, 77, 77, 0.8);
+}
+
+/* Indicatore di interazione mobile */
+.mobile-interaction-hint {
+    position: absolute;
+    bottom: 45%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: #ff4d4d;
+    padding: 15px 25px;
+    border-radius: 25px;
+    border: 2px solid #ff4d4d;
+    font-weight: bold;
+    font-size: 16px;
+    text-align: center;
+    display: none;
+    animation: pulse-hint 2s infinite;
+    pointer-events: none;
+    z-index: 1001;
+}
+
+@keyframes pulse-hint {
+    0%, 100% { 
+        opacity: 0.7; 
+        transform: translateX(-50%) scale(1); 
+    }
+    50% { 
+        opacity: 1; 
+        transform: translateX(-50%) scale(1.05); 
+    }
+}
+
+/* Responsive adjustments */
 @media (max-height: 600px) {
-    .touch-controls {
+    .direction-pad {
+        width: 120px;
+        height: 120px;
         bottom: 10px;
+        left: 10px;
     }
     
-    .touch-button {
-        width: 50px;
-        height: 50px;
-        font-size: 18px;
+    .direction-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+    }
+    
+    .action-controls {
+        bottom: 10px;
+        right: 10px;
+        gap: 10px;
+    }
+    
+    .action-btn {
+        width: 55px;
+        height: 55px;
+        font-size: 16px;
     }
 }
 
-/* Animazione per gli elementi interattivi */
-@keyframes pulse {
-    0% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
-    100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0.1; }
+@media (max-width: 480px) {
+    .direction-pad {
+        width: 110px;
+        height: 110px;
+    }
+    
+    .direction-btn {
+        width: 38px;
+        height: 38px;
+        font-size: 14px;
+    }
+    
+    .action-btn {
+        width: 50px;
+        height: 50px;
+        font-size: 14px;
+    }
 }
