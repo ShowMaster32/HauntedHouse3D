@@ -142,162 +142,181 @@
     
     <!-- Fragment Shader -->
     <script id="fragment-shader" type="x-shader/x-fragment">
-    precision highp float;
+precision highp float;
 
-    uniform vec3 u_lightPos;
-    uniform vec3 u_viewPos;
-    uniform bool u_useTexture;
-    uniform sampler2D u_texture;
-    uniform bool u_shadows;
-    uniform bool u_reflections;
-    uniform bool u_advancedRendering;
-    uniform sampler2D u_shadowMap;
-    uniform vec3 u_externalLightColor;
-    uniform float u_externalLightIntensity;
-    uniform bool u_lightOn;
-    uniform bool u_externalLightOn;
-    uniform float u_lightIntensity;
-    uniform float u_shadowBias;
-    uniform int u_shadowSamples;
+uniform vec3 u_lightPos;
+uniform vec3 u_viewPos;
+uniform bool u_useTexture;
+uniform sampler2D u_texture;
+uniform bool u_shadows;
+uniform bool u_reflections;
+uniform bool u_advancedRendering;
+uniform sampler2D u_shadowMap;
+uniform vec3 u_externalLightColor;
+uniform float u_externalLightIntensity;
+uniform bool u_lightOn;
+uniform bool u_externalLightOn;
+uniform float u_lightIntensity;
+uniform float u_shadowBias;
+uniform int u_shadowSamples;
+
+varying vec3 v_normal;
+varying vec3 v_position;
+varying vec2 v_texcoord;
+varying float v_isEmissive;
+varying vec4 v_fragPosLightSpace;
+
+// Funzione PCF migliorata per ombre più visibili
+float calculateShadowPCF(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir) {
+    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+    projCoords = projCoords * 0.5 + 0.5;
     
-    varying vec3 v_normal;
-    varying vec3 v_position;
-    varying vec2 v_texcoord;
-    varying float v_isEmissive;
-    varying vec4 v_fragPosLightSpace;
-    
-    // Funzione PCF per le ombre
-    float calculateShadowPCF(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir) {
-        // Conversione coordinate NDC
-        vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
-        projCoords = projCoords * 0.5 + 0.5;
-        
-        // Controllo bounds
-        if (projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || 
-            projCoords.y < 0.0 || projCoords.y > 1.0) {
-            return 0.0;
-        }
-        
-        // Bias dinamico
-        float bias = max(0.005 * (1.0 - dot(normal, lightDir)), 0.001);
-        
-        // PCF sampling
-        float shadow = 0.0;
-        vec2 texelSize = vec2(1.0 / 2048.0);
-        
-        for(int x = -1; x <= 1; ++x) {
-            for(int y = -1; y <= 1; ++y) {
-                float pcfDepth = texture2D(u_shadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
-                float currentDepth = projCoords.z;
-                shadow += (currentDepth - bias) > pcfDepth ? 0.7 : 0.0;
-            }
-        }
-        shadow /= 9.0;
-        
-        return shadow;
+    // Check bounds
+    if (projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || 
+        projCoords.y < 0.0 || projCoords.y > 1.0) {
+        return 0.0;
     }
     
-    void main() {
-        vec3 normal = normalize(v_normal);
-        vec3 lightDir = normalize(u_lightPos - v_position);
-        
-        // Colore base
-        vec4 color;
-        if (u_useTexture) {
-            color = texture2D(u_texture, v_texcoord);
-        } else {
-            color = vec4(0.8, 0.8, 0.8, 1.0);
-        }
-        
-        // Oggetti emissivi (lampada)
-        if (v_isEmissive > 0.5) {
-            float brightness = u_lightOn ? 3.0 : 0.5;
-            gl_FragColor = vec4(color.rgb * brightness, color.a);
-            return;
-        }
-
-        // === SISTEMA ILLUMINAZIONE MIGLIORATO ===
-        
-        // Illuminazione ambientale BASE più forte
-        float ambientStrength = u_externalLightOn ? 0.15 : 0.08;  // Aumentato
-        vec3 ambient = ambientStrength * color.rgb;
-
-        // Luce esterna (dalle finestre) più forte
-        vec3 externalLight = vec3(0.0);
-        if (u_externalLightOn) {
-            externalLight = u_externalLightIntensity * 0.6 * u_externalLightColor * color.rgb;  // Aumentato da 0.4
-        }
-        
-        // Luce interna (dalla lampada) - MIGLIORATA
-        vec3 diffuse = vec3(0.0);
-        vec3 specular = vec3(0.0);
-
-        if (u_lightOn) {
-            // Calcola distanza dalla sorgente luminosa
-            float distance = length(u_lightPos - v_position);
-            
-            // ATTENUAZIONE PIÙ DOLCE per illuminare meglio la stanza
-            float attenuation = 1.0 / (1.0 + 0.045 * distance + 0.0075 * distance * distance);  // Ridotto i coefficienti
-            attenuation = max(attenuation, 0.1);  // Minimo più alto per garantire illuminazione base
-            
-            // Calcolo diffuse lighting migliorato
-            float dotNL = max(dot(normal, lightDir), 0.0);
-            
-            // Intensità luce base più forte
-            float baseIntensity = u_lightIntensity * 1.5;  // Moltiplicatore aggiuntivo
-            
-            diffuse = dotNL * vec3(1.0, 0.95, 0.85) * color.rgb * baseIntensity * attenuation;
-            
-            // BOOST SPECIFICO per superfici orizzontali (pavimento e soffitto)
-            if (abs(normal.y) > 0.8) { 
-                diffuse *= 2.0;  // Boost maggiore per pavimento e soffitto
-            }
-            
-            // BOOST per pareti verticali
-            if (abs(normal.x) > 0.8 || abs(normal.z) > 0.8) {
-                diffuse *= 1.5;  // Boost per le pareti
-            }
-            
-            // Specular lighting migliorato
-            if (u_reflections && dotNL > 0.0) {
-                vec3 viewDir = normalize(u_viewPos - v_position);
-                vec3 reflectDir = reflect(-lightDir, normal);
-                float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
-                specular = 0.5 * spec * vec3(1.0, 0.95, 0.85) * attenuation;  // Aumentato da 0.3
-            }
-        }
-        
-        // Calcolo ombre - MIGLIORATO
-        float shadow = 0.0;
-        if (u_shadows && u_lightOn) {
-            // Calcola le ombre solo se c'è illuminazione diretta
-            if (dot(normal, lightDir) > 0.0) {
-                shadow = calculateShadowPCF(v_fragPosLightSpace, normal, lightDir);
-                shadow = min(shadow, 0.5);  // Ombre meno intense per non oscurare troppo
-            }
-        }
-        
-        // Combina illuminazione finale
-        vec3 finalColor = ambient + externalLight + (1.0 - shadow) * (diffuse + specular);
-        
-        // Assicura che ci sia sempre un minimo di illuminazione visibile
-        finalColor = max(finalColor, color.rgb * 0.05);
-        
-        // Effetti avanzati opzionali
-        if (u_advancedRendering) {
-            // Ambient Occlusion ridotto
-            float aoFactor = 1.0 - 0.15 * max(0.0, 1.0 - length(v_normal.xz));  // Ridotto da 0.3
-            finalColor *= aoFactor;
-            
-            // Tone mapping ACES
-            finalColor = clamp((finalColor * (2.51 * finalColor + 0.03)) / (finalColor * (2.43 * finalColor + 0.59) + 0.14), 0.0, 1.0);
-            
-            // Gamma correction
-            finalColor = pow(finalColor, vec3(1.0 / 2.2));
-        }
-        
-        gl_FragColor = vec4(finalColor, color.a);
+    float currentDepth = projCoords.z;
+    
+    // Bias dinamico basato sull'angolo tra normale e luce
+    float bias = max(0.005 * (1.0 - dot(normal, lightDir)), 0.001);
+    
+    // Bias speciale per superfici orizzontali (pavimento)
+    if (abs(normal.y) > 0.9) {
+        bias = 0.002; // Bias ridotto per il pavimento
     }
+    
+    float shadow = 0.0;
+    vec2 texelSize = vec2(1.0 / 2048.0);
+    
+    // PCF 5x5 per ombre più morbide sul pavimento
+    int samples = 0;
+    for(int x = -2; x <= 2; ++x) {
+        for(int y = -2; y <= 2; ++y) {
+            vec4 rgbaDepth = texture2D(u_shadowMap, projCoords.xy + vec2(x, y) * texelSize);
+            float pcfDepth = rgbaDepth.r;
+            if ((currentDepth - bias) > pcfDepth) {
+                shadow += 1.0;
+            }
+            samples++;
+        }
+    }
+    shadow /= float(samples);
+    
+    // Intensifica le ombre
+    shadow = clamp(shadow * 1.2, 0.0, 1.0);
+    
+    return shadow;
+}
+
+void main() {
+    vec3 normal = normalize(v_normal);
+    vec3 lightDir = normalize(u_lightPos - v_position);
+    
+    // Colore base dalla texture
+    vec4 color;
+    if (u_useTexture) {
+        color = texture2D(u_texture, v_texcoord);
+    } else {
+        color = vec4(0.8, 0.8, 0.8, 1.0);
+    }
+    
+    // Oggetti emissivi (lampada)
+    if (v_isEmissive > 0.5) {
+        float brightness = u_lightOn ? 3.0 : 0.5;
+        gl_FragColor = vec4(color.rgb * brightness, color.a);
+        return;
+    }
+    
+    // Illuminazione ambientale base
+    float ambientStrength = u_externalLightOn ? 0.15 : 0.08;
+    vec3 ambient = ambientStrength * color.rgb;
+    
+    // Luce esterna
+    vec3 externalLight = vec3(0.0);
+    if (u_externalLightOn) {
+        externalLight = u_externalLightIntensity * 0.3 * u_externalLightColor * color.rgb;
+    }
+    
+    // Luce interna (dalla lampada)
+    vec3 diffuse = vec3(0.0);
+    vec3 specular = vec3(0.0);
+    
+    if (u_lightOn) {
+        float distance = length(u_lightPos - v_position);
+        float attenuation = 1.0 / (1.0 + 0.045 * distance + 0.0075 * distance * distance);
+        
+        float baseIntensity = u_lightIntensity * 0.7;
+        
+        // Diffuse lighting
+        float dotNL = max(dot(normal, lightDir), 0.0);
+        diffuse = dotNL * vec3(1.0, 0.95, 0.85) * color.rgb * baseIntensity * attenuation;
+        
+        // Boost per superfici orizzontali
+        if (abs(normal.y) > 0.7) {
+            diffuse *= 2.5;
+        }
+        
+        // Specular lighting
+        if (u_reflections && dotNL > 0.0) {
+            vec3 viewDir = normalize(u_viewPos - v_position);
+            vec3 reflectDir = reflect(-lightDir, normal);
+            float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
+            specular = 0.3 * spec * vec3(1.0, 0.95, 0.85) * attenuation;
+        }
+    }
+    
+    // CALCOLO OMBRE MIGLIORATO
+    float shadow = 0.0;
+    if (u_shadows && u_lightOn) {
+        shadow = calculateShadowPCF(v_fragPosLightSpace, normal, lightDir);
+    }
+    
+    // APPLICAZIONE OMBRE PIÙ DRASTICA
+    vec3 finalColor = ambient + externalLight;
+    
+    if (u_shadows && u_lightOn) {
+        // Applica le ombre in modo più evidente
+        vec3 litColor = diffuse + specular;
+        
+        // Mescola tra luce piena e ombra profonda
+        // shadow = 0.0 -> completamente illuminato
+        // shadow = 1.0 -> completamente in ombra
+        vec3 shadowedColor = litColor * (1.0 - shadow * 0.8); // Riduce la luce dell'80% nelle ombre
+        
+        finalColor += shadowedColor;
+        
+        // Aggiungi un tono blu/viola sottile nelle ombre per maggiore realismo
+        if (shadow > 0.1) {
+            finalColor = mix(finalColor, finalColor * vec3(0.8, 0.85, 1.0), shadow * 0.3);
+        }
+    } else {
+        // Senza ombre, aggiungi illuminazione normale
+        finalColor += diffuse + specular;
+    }
+    
+    // Assicura che ci sia sempre un minimo di visibilità
+    finalColor = max(finalColor, color.rgb * 0.05);
+    
+    // Effetti avanzati opzionali
+    if (u_advancedRendering) {
+        // Ambient Occlusion semplificato
+        float aoFactor = 1.0 - 0.1 * max(0.0, 1.0 - length(v_normal.xz));
+        finalColor *= aoFactor;
+        
+        // Tone mapping ACES semplificato
+        finalColor = finalColor / (finalColor + vec3(0.155)) * 1.019;
+        
+        // Gamma correction
+        finalColor = pow(finalColor, vec3(1.0 / 2.2));
+    }
+    
+    // Clamp finale per sicurezza
+    finalColor = clamp(finalColor, 0.0, 1.0);
+    
+    gl_FragColor = vec4(finalColor, color.a);
+}
 </script>
     
     <!-- Shadow Vertex Shader -->

@@ -412,13 +412,13 @@ function render() {
     const u_normalMatrixLoc = gl.getUniformLocation(program, 'u_normalMatrix');
     const u_lightSpaceMatrixLoc = gl.getUniformLocation(program, 'u_lightSpaceMatrix');
 
-    // CORREZIONE: Imposta intensità luce più forte per illuminare la stanza
-    const lightIntensity = isLightOn ? 4.0 : 0.0; // Aumentato da 2.5 a 4.0
+    // CORREZIONE: Imposta intensità luce BILANCIATA per illuminare tutta la stanza
+    const lightIntensity = isLightOn ? 2.5 : 0.0; // Ridotto da 4.0 a 2.5 per evitare sovraesposizione
     gl.uniform1f(gl.getUniformLocation(program, 'u_lightIntensity'), lightIntensity);
 
     // DEBUG: Log periodico dell'intensità luce
     if (frameCount % 120 === 0) { // Ogni 2 secondi circa (60 FPS)
-        logger.log(`Intensità luce: ${lightIntensity}, Luce accesa: ${isLightOn}`);
+        logger.log(`Intensità luce BILANCIATA: ${lightIntensity}, Luce accesa: ${isLightOn}`);
         logger.log(`Posizione luce: [${lightPosition}]`);
     }
 
@@ -430,8 +430,8 @@ function render() {
     gl.uniform1i(gl.getUniformLocation(program, 'u_advancedRendering'), renderOptions.advancedRendering);
 
     // CORREZIONE: Luce esterna più intensa
-    const externalColor = isExternalLightOn ? [0.8, 0.9, 1.0] : [0.1, 0.1, 0.2]; // Più chiara
-    const externalIntensity = isExternalLightOn ? 0.25 : 0.05; // Aumentato da 0.15
+    const externalColor = isExternalLightOn ? [0.7, 0.8, 0.9] : [0.1, 0.1, 0.15]; // Colori meno intensi
+    const externalIntensity = isExternalLightOn ? 0.2 : 0.05;
     gl.uniform3fv(gl.getUniformLocation(program, 'u_externalLightColor'), externalColor);
     gl.uniform1f(gl.getUniformLocation(program, 'u_externalLightIntensity'), externalIntensity);
 
@@ -494,6 +494,12 @@ function render() {
     // Renderizza oggetti trasparenti ordinati
     renderTransparentObjects(transparentObjects, u_modelLoc, u_normalMatrixLoc, 
                             u_isEmissiveLoc, u_useTextureLoc, u_textureLoc);
+
+                            if (renderOptions.shadows && isLightOn) {
+    console.log("SHADOWS ACTIVE - Frame:", frameCount);
+} else {
+    console.log("SHADOWS DISABLED - shadows:", renderOptions.shadows, "light:", isLightOn);
+}
 }
 
 // Funzione per configurare le uniforms delle ombre migliorate
@@ -508,15 +514,25 @@ function setupImprovedShadowUniforms() {
 
 // Funzione per creare la matrice light space migliorata
 function createLightSpaceMatrix() {
-    //logger.log(`Creazione light space matrix con luce a: [${lightPosition}]`);
+    // Posizione della luce corretta per il sistema Y invertito
+    // La luce è a Y=-4, quindi è 1 unità sotto il soffitto (che è a Y=-5)
     
-    const lightTarget = [0, -2, 0];
+    // Target della luce: centro della stanza ma più in basso
+    const lightTarget = [0, -3, 0]; // Guarda un po' più in alto rispetto al centro
+    
+    // Crea view matrix dalla luce
     const lightView = m4.lookAt(lightPosition, lightTarget, [0, 0, 1]);
-    const orthoSize = 15.0;
-    const lightProjection = m4.orthographic(-orthoSize, orthoSize, -orthoSize, orthoSize, 0.1, 30.0);
+    
+    // Proiezione ortografica più ampia per catturare tutte le ombre
+    const orthoSize = 20.0; // Aumentato per coprire tutta la stanza
+    const lightProjection = m4.orthographic(
+        -orthoSize, orthoSize,  // left, right
+        -orthoSize, orthoSize,  // bottom, top
+        0.1, 40.0              // near, far aumentato
+    );
+    
     const lightSpaceMatrix = m4.multiply(lightProjection, lightView);
     
-    //logger.log('Light space matrix creata per debug ombre');
     return lightSpaceMatrix;
 }
 
@@ -616,10 +632,24 @@ function renderShadowMap() {
             
             // RENDERIZZA PIÙ OGGETTI per vedere le ombre
             const shadowCasters = [
-                'floor', 'ceiling', 'frontWall', 'backWall', 'leftWall', 'rightWall', // Pareti
-                'skull_0', 'skull_1', 'skull_2', 'skull_3', 'skull_4', // Teschi
-                'doll', 'chair', 'chair_2', 'wheelie', 'clock' // Altri oggetti
-            ];
+            // Tutti gli elementi della stanza
+            'floor', 'ceiling', 'frontWall', 'backWall', 'leftWall', 'rightWall',
+            
+            // Tutti gli oggetti
+            'skull_0', 'skull_1', 'skull_2', 'skull_3', 'skull_4',
+            'doll', 'chair', 'chair_2', 'wheelie', 'clock', 'lamp',
+            'switch', 'fallbackSwitch', 'lightSwitch', 'switchIndicator',
+            'ceilingLight', 'lampFallback',
+            
+            // Finestre e cornici (potrebbero proiettare ombre interessanti)
+            'windowFrameTop_0', 'windowFrameBottom_0', 'windowFrameLeft_0', 'windowFrameRight_0',
+            'windowFrameTop_1', 'windowFrameBottom_1', 'windowFrameLeft_1', 'windowFrameRight_1',
+            'windowFrameTop_2', 'windowFrameBottom_2', 'windowFrameLeft_2', 'windowFrameRight_2',
+            'windowFrameTop_3', 'windowFrameBottom_3', 'windowFrameLeft_3', 'windowFrameRight_3',
+            
+            // Quadro autore
+            'authorPicture', 'authorPictureFrame'
+        ];
 
             let objectsRendered = 0;
             for (const modelName of shadowCasters) {
@@ -1057,26 +1087,27 @@ function createViewMatrix() {
 }
 
 function updateCrosshair() {
-    // Usa la posizione CORRETTA dell'interruttore (parete DESTRA, coordinate positive)
-    const correctSwitchPosition = [9.99, -2, 0]; // [9.7, -2, 0]
-
+    // CORREZIONE: Usa la posizione CORRETTA dell'interruttore sulla parete DESTRA
+    // Ma visto che hai l'asse invertito, devi invertire anche il controllo del crosshair
+    const correctSwitchPosition = [-9.99, -2, 0]; // INVERTITO: ora è sulla sinistra visiva
+    
     // Reset dello stato
     isNearSwitch = false;
 
-    // Calcola distanza dal giocatore all'interruttore sulla DESTRA
+    // Calcola distanza dal giocatore all'interruttore
     const dx = camera.position[0] - correctSwitchPosition[0];
     const dy = camera.position[1] - correctSwitchPosition[1];
     const dz = camera.position[2] - correctSwitchPosition[2];
     const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-    // Debug
-    if (distance < 8) {
-        logger.log(`Distanza dall'interruttore: ${distance.toFixed(2)}`);
-        logger.log(`Player: [${camera.position[0].toFixed(1)}, ${camera.position[1].toFixed(1)}, ${camera.position[2].toFixed(1)}]`);
-        logger.log(`Switch: [${correctSwitchPosition}]`);
+    // Debug ogni volta che siamo vicini
+    if (distance < 6) {
+        logger.log(`CROSSHAIR DEBUG - Distanza dall'interruttore: ${distance.toFixed(2)}`);
+        logger.log(`CROSSHAIR DEBUG - Player: [${camera.position[0].toFixed(1)}, ${camera.position[1].toFixed(1)}, ${camera.position[2].toFixed(1)}]`);
+        logger.log(`CROSSHAIR DEBUG - Switch: [${correctSwitchPosition}]`);
     }
 
-    // Vicino all'interruttore sulla DESTRA?
+    // Vicino all'interruttore?
     if (distance < 4.0) {
         // Mostra le istruzioni
         const instructions = document.getElementById('instructions');
@@ -1084,6 +1115,7 @@ function updateCrosshair() {
             instructions.style.visibility = 'visible';
             instructions.innerHTML = 'Premi <span style="color:#ff4d4d">F</span> per accendere la luce';
             isNearSwitch = true;
+            logger.log(`CROSSHAIR ATTIVATO - Distanza: ${distance.toFixed(2)}`);
         }
 
         // Cambia il crosshair
@@ -1099,7 +1131,7 @@ function updateCrosshair() {
         document.getElementById('crosshair').style.backgroundImage = "url('images/crosshair.png')";
     }
 
-    // Assicurati che switchPosition sia sempre aggiornata
+    // Aggiorna la posizione globale
     switchPosition = correctSwitchPosition;
 }
 
@@ -3359,10 +3391,25 @@ function handleSpecialKeys(e) {
     } else if (e.code === 'KeyL') {
         logger.toggle();
     } else if (e.code === 'KeyO') {
+        // NUOVO: Debug ombre completo
         debugShadowSystem();
         testShadowVisibility();
         testMoveAwayFromLight();
-        logger.log('Tasto O premuto - Debug ombre eseguito');
+        
+        // FORZA test ombre immediate
+        isLightOn = true;
+        renderOptions.shadows = true;
+        logger.log('🔦 TASTO O - Debug ombre eseguito + TEST FORZATO');
+        logger.log('🎯 Ora dovresti vedere ombre scure su pavimento e pareti!');
+        logger.log('📍 Muoviti verso gli angoli della stanza per vedere le ombre più chiaramente');
+    } else if (e.code === 'KeyU') {
+        // NUOVO: Toggle rapido ombre per test
+        renderOptions.shadows = !renderOptions.shadows;
+        isLightOn = !isLightOn;
+        logger.log(`🔄 TASTO U - Toggle rapido: Luce ${isLightOn ? 'ON' : 'OFF'}, Ombre ${renderOptions.shadows ? 'ON' : 'OFF'}`);
+        if (isLightOn && renderOptions.shadows) {
+            logger.log('👁️ Dovresti vedere ombre degli oggetti su pavimento e pareti!');
+        }
     } else if (e.code === 'KeyI') {
         // NUOVO: Debug illuminazione completo
         debugLightingSystem();
@@ -3426,6 +3473,9 @@ function handleSpecialKeys(e) {
         // NUOVO: Test coordinate system
         testCoordinateSystem();
     }
+else if (e.code === 'KeyY') {
+    testShadowStrength();
+}
 }
 
 // Attiva/disattiva pannello
@@ -3543,7 +3593,7 @@ function startGame() {
 
     // Mostra controlli completi
     document.getElementById('game-controls').innerHTML =
-        'W: Avanti | S: Indietro | A: Sinistra | D: Destra | F: Luce | P: Pannello | SHIFT: Sprint | I: Debug Luce';
+    'W: Avanti | S: Indietro | A: Sinistra | D: Destra | F: Luce | P: Pannello | SHIFT: Sprint | I: Debug Luce | O: Test Ombre | U: Toggle Ombre';
 
     // Aggiungi informazioni sul pannello di controllo
     const panelInfo = document.createElement('div');
@@ -3760,6 +3810,23 @@ function initGUI() {
         logger.log('FORZATO: Ombre e luce attivate');
     });
 
+    let shadowIntensityContainer = document.createElement('div');
+shadowIntensityContainer.style.padding = '10px 20px';
+shadowIntensityContainer.innerHTML = `
+    <label style="color: #ccc;">Intensità Ombre: <span id="shadow-intensity-value">80%</span></label>
+    <input type="range" id="shadow-intensity-slider" min="0" max="100" step="10" value="80" 
+        style="width: 100%; margin-top: 5px;">
+`;
+sidePanel.appendChild(shadowIntensityContainer);
+
+document.getElementById('shadow-intensity-slider').addEventListener('input', function() {
+    const intensity = parseInt(this.value);
+    document.getElementById('shadow-intensity-value').textContent = intensity + '%';
+    // Questa variabile verrà usata nel fragment shader
+    window.shadowIntensity = intensity / 100.0;
+    logger.log(`Intensità ombre impostata a: ${intensity}%`);
+});
+
     // Slider per qualità ombre
     let shadowQualityContainer = document.createElement('div'); // ← CAMBIATO: const → let
     shadowQualityContainer.style.padding = '10px 20px';
@@ -3780,6 +3847,15 @@ function initGUI() {
     addBasicToggle(sidePanel, 'Ombre', renderOptions.shadows, function() {
         renderOptions.shadows = !renderOptions.shadows;
         logger.log(`Ombre ${renderOptions.shadows ? 'attivate' : 'disattivate'}`);
+    });
+
+    addBasicToggle(sidePanel, 'TEST Ombre', false, function() {
+        isLightOn = true;
+        renderOptions.shadows = true;
+        renderOptions.advancedRendering = true;
+        logger.log('🔦 TEST OMBRE: Luce e ombre forzatamente attivate per test');
+        logger.log('💡 Muoviti nella stanza per vedere le ombre su pavimento e pareti!');
+        logger.log(`📍 Posizione luce: [${lightPosition}] per ombre chiare`);
     });
 
     // Toggle per le riflessioni
@@ -5204,23 +5280,23 @@ function positionModel(name) {
         dollPosition = [randomX, 0, randomZ]; // Questa rimane per l'interazione
         logger.log(`Bambola posizionata a: [${randomX}, -5, ${randomZ}] (modello), interazione: [${randomX}, 0, ${randomZ}]`);
     } else if (name === 'lamp') {
-        // RIPRISTINO: TUE coordinate originali per il modello
-        models[name].position = [0, 0, 0]; // Posizione originale
-        models[name].rotation = [Math.PI / 2, 0, 0];
-        models[name].scale = [2.5, 2.5, 2.5];
-        models[name].isEmissive = true;
-        
-        // SOLO la posizione della LUCE è corretta per l'illuminazione
-        lightPosition = [0, -4, 0]; // Posizione originale della luce
-        
-        logger.log(`RIPRISTINO - Lampada a: [${models[name].position}] (TUE coordinate)`);
-        logger.log(`RIPRISTINO - LightPosition a: [${lightPosition}] (TUE coordinate)`);
-        logger.log(`RIPRISTINO - Distanza dal pavimento: ${Math.abs(lightPosition[1] - 0)} unità`);
-        
-        const lampLightColor = createColorTexture([1.0, 0.95, 0.8, 1.0], 1.5);
-        textures['lampLight'] = lampLightColor;
-        models[name].texture = 'lampLight';
-    } else if (name === 'switch' || name === 'lightSwitch') {
+    // Posizione del modello della lampada
+    models[name].position = [0, 0, 0];
+    models[name].rotation = [Math.PI / 2, 0, 0];
+    models[name].scale = [2.5, 2.5, 2.5];
+    models[name].isEmissive = true;
+    
+    // IMPORTANTE: La posizione della LUCE deve essere più realistica
+    // Con Y invertito, -4 significa 1 unità sotto il soffitto
+    lightPosition = [0, -3.5, 0]; // Spostiamo la luce un po' più in alto
+    
+    logger.log(`Lampada modello a: [${models[name].position}]`);
+    logger.log(`Posizione LUCE aggiustata a: [${lightPosition}] per ombre più naturali`);
+    
+    const lampLightColor = createColorTexture([1.0, 0.95, 0.8, 1.0], 1.5);
+    textures['lampLight'] = lampLightColor;
+    models[name].texture = 'lampLight';
+} else if (name === 'switch' || name === 'lightSwitch') {
         // MANTIENI: Solo l'interruttore ha le coordinate corrette
         const switchX = roomSize - 0.01; // Parete destra
         const switchY = -2.0; // Altezza media
@@ -5742,6 +5818,41 @@ function testMoveAwayFromLight() {
         logger.log('✅ Dovresti vedere ombre sul pavimento!');
     } else {
         logger.log('❌ Muoviti più lontano per vedere le ombre');
+    }
+}
+
+// Aggiungi questa funzione dopo le altre funzioni di debug
+function testShadowStrength() {
+    logger.log('=== TEST INTENSITÀ OMBRE ===');
+    
+    // Impostazioni bilanciate per vedere bene le ombre senza esagerare
+    renderOptions.shadows = true;
+    renderOptions.advancedRendering = true;
+    isLightOn = true;
+    isExternalLightOn = true; // Lascia un po' di luce esterna per realismo
+    
+    // Riduci l'intensità della luce esterna per vedere meglio le ombre
+    const extLightElement = document.getElementById('external-light-intensity');
+    if (extLightElement) {
+        extLightElement.value = 0.1;
+    }
+    
+    logger.log('Impostazioni bilanciate per test ombre:');
+    logger.log('- Ombre: ON');
+    logger.log('- Luce: ON'); 
+    logger.log('- Luce esterna: ON (ridotta)');
+    logger.log('- Advanced rendering: ON');
+    logger.log('');
+    logger.log('ISTRUZIONI PER VEDERE LE OMBRE:');
+    logger.log('1. Le ombre ora dovrebbero essere visibili su PAVIMENTO e MURI');
+    logger.log('2. Muoviti vicino agli oggetti per vedere le loro ombre proiettate');
+    logger.log('3. Premi Y di nuovo per tornare alle impostazioni normali');
+    
+    // Toggle per tornare indietro
+    window.shadowTestActive = !window.shadowTestActive;
+    if (!window.shadowTestActive) {
+        isExternalLightOn = true;
+        logger.log('Test ombre disattivato - impostazioni normali ripristinate');
     }
 }
 
