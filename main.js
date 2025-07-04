@@ -383,8 +383,8 @@ function render() {
     // Crea matrici vista e proiezione
     const viewMatrix = createViewMatrix();
     const aspect = canvas.width / canvas.height;
-    const fov = Math.PI / 4;
-    const projectionMatrix = m4.perspective(fov, aspect, 0.1, 100);
+    const fov = Math.PI / 2;
+    const projectionMatrix = m4.perspective(fov, aspect, 0.4, 100);
 
     // Renderizza skybox
     renderSkybox(viewMatrix, projectionMatrix);
@@ -517,18 +517,22 @@ function createLightSpaceMatrix() {
     // Posizione della luce corretta per il sistema Y invertito
     // La luce è a Y=-4, quindi è 1 unità sotto il soffitto (che è a Y=-5)
     
-    // Target della luce: centro della stanza ma più in basso
-    const lightTarget = [0, -3, 0]; // Guarda un po' più in alto rispetto al centro
+    // MIGLIORAMENTO: Target dinamico per catturare meglio le ombre
+    // Punta verso il basso per vedere meglio pavimento e oggetti
+    const lightTarget = [0, 0, 0]; // Centro della stanza a livello pavimento
     
     // Crea view matrix dalla luce
     const lightView = m4.lookAt(lightPosition, lightTarget, [0, 0, 1]);
     
-    // Proiezione ortografica più ampia per catturare tutte le ombre
-    const orthoSize = 20.0; // Aumentato per coprire tutta la stanza
+    // MIGLIORAMENTO: Proiezione ortografica ottimizzata per la stanza
+    const orthoSize = 15.0; // Copre tutta la stanza
+    const nearPlane = 0.1;
+    const farPlane = 30.0; // Aumentato per catturare tutto
+    
     const lightProjection = m4.orthographic(
         -orthoSize, orthoSize,  // left, right
         -orthoSize, orthoSize,  // bottom, top
-        0.1, 40.0              // near, far aumentato
+        nearPlane, farPlane     // near, far
     );
     
     const lightSpaceMatrix = m4.multiply(lightProjection, lightView);
