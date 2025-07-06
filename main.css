@@ -1,5 +1,14 @@
-/* Aggiunta di un font più adatto a un tema horror */
+/* ============================================================================
+   CASA INFESTATA - STYLESHEET PRINCIPALE
+   Progetto Computer Graphics A.A.2023/24
+   ============================================================================ */
+
+/* Font horror personalizzato per tema atmosferico */
 @import url('https://fonts.googleapis.com/css2?family=Creepster&display=swap');
+
+/* ============================================================================
+   RESET E CONFIGURAZIONE BASE
+   ============================================================================ */
 
 body { 
     margin: 0; 
@@ -9,6 +18,10 @@ body {
     color: #fff; 
     font-family: Arial, sans-serif; 
 }
+
+/* ============================================================================
+   MENU INIZIALE CON STILE HORROR
+   ============================================================================ */
 
 #start-menu { 
     position: absolute; 
@@ -28,14 +41,17 @@ body {
     background-repeat: no-repeat;
 }
 
+/* Titolo con effetto luminoso horror */
 #start-menu h1 {
     font-family: 'Creepster', cursive;
     font-size: 4em;
     color: #ff4d4d;
     text-shadow: 0 0 10px rgba(255, 77, 77, 0.7);
     margin-bottom: 30px;
+    animation: glow 2s ease-in-out infinite alternate;
 }
 
+/* Pulsante START con interattività */
 #start-button { 
     padding: 15px 40px; 
     font-size: 1.5em; 
@@ -54,30 +70,24 @@ body {
     box-shadow: 0 0 15px rgba(255, 77, 77, 0.7);
 }
 
+/* Animazione glow per effetto horror */
+@keyframes glow {
+    from { text-shadow: 0 0 20px rgba(255, 77, 77, 0.5); }
+    to { text-shadow: 0 0 30px rgba(255, 77, 77, 0.8); }
+}
+
+/* ============================================================================
+   CANVAS E INTERFACCIA DI GIOCO
+   ============================================================================ */
+
+/* Canvas WebGL a schermo intero */
 #gl-canvas {
     display: block;
     width: 100%;
     height: 100vh;
 }
 
-#instructions { 
-    position: absolute; 
-    bottom: 20px; 
-    left: 50%; 
-    transform: translateX(-50%); 
-    background-color: rgba(0, 0, 0, 0.7); 
-    padding: 10px; 
-    border-radius: 5px; 
-    border: 1px solid #ff4d4d;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0% { box-shadow: 0 0 0 0 rgba(255, 77, 77, 0.4); }
-    70% { box-shadow: 0 0 0 10px rgba(255, 77, 77, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(255, 77, 77, 0); }
-}
-
+/* Crosshair per puntamento FPS */
 #crosshair { 
     position: absolute; 
     top: 50%; 
@@ -94,6 +104,28 @@ body {
     z-index: 2;
 }
 
+/* Istruzioni interazione con animazione pulsante */
+#instructions { 
+    position: absolute; 
+    bottom: 20px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    background-color: rgba(0, 0, 0, 0.7); 
+    padding: 10px; 
+    border-radius: 5px; 
+    border: 1px solid #ff4d4d;
+    animation: pulse 2s infinite;
+    text-align: center;
+    font-weight: bold;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(255, 77, 77, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(255, 77, 77, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 77, 77, 0); }
+}
+
+/* Barra superiore con informazioni controlli */
 #top-bar { 
     position: absolute; 
     top: 10px; 
@@ -109,6 +141,10 @@ body {
     border: 1px solid #666;
     z-index: 5;
 }
+
+/* ============================================================================
+   PANNELLO DI CONTROLLO (REQUISITO PROGETTO)
+   ============================================================================ */
 
 #side-panel { 
     position: absolute; 
@@ -127,6 +163,12 @@ body {
     box-shadow: -5px 0 15px rgba(0, 0, 0, 0.5);
 }
 
+/* Pannello visibile quando attivato */
+#side-panel.visible { 
+    right: 0; 
+}
+
+/* Titolo pannello con stile horror */
 #side-panel h2 {
     font-family: 'Creepster', cursive;
     color: #ff4d4d;
@@ -136,10 +178,7 @@ body {
     letter-spacing: 1px;
 }
 
-#side-panel.visible { 
-    right: 0; 
-}
-
+/* Pulsanti controllo con hover effects */
 #side-panel button { 
     display: block; 
     width: 100%; 
@@ -150,6 +189,7 @@ body {
     border: 1px solid #666; 
     cursor: pointer; 
     transition: all 0.2s;
+    border-radius: 5px;
 }
 
 #side-panel button:hover {
@@ -158,6 +198,18 @@ body {
     transform: scale(1.02);
 }
 
+/* Pulsanti attivi con evidenziazione */
+#side-panel button.active {
+    background-color: #555;
+    border-color: #ff4d4d;
+    box-shadow: 0 0 5px rgba(255, 77, 77, 0.7);
+}
+
+/* ============================================================================
+   SISTEMA DEBUG E PERFORMANCE (ATTIVABILE)
+   ============================================================================ */
+
+/* Container log sistema con stile console */
 #log-container {
     position: absolute;
     bottom: 10px;
@@ -172,8 +224,10 @@ body {
     overflow-y: auto;
     z-index: 100;
     border: 1px solid #00ff00;
+    border-radius: 5px;
 }
 
+/* Coordinate camera per debug */
 #camera-coords {
     position: absolute;
     bottom: 10px;
@@ -186,6 +240,7 @@ body {
     z-index: 6;
 }
 
+/* Contatore FPS */
 #fps-counter {
     position: absolute;
     top: 10px;
@@ -198,67 +253,11 @@ body {
     z-index: 6;
 }
 
-/* Media queries per dispositivi mobili */
-@media (max-width: 768px) {
-    #start-menu h1 {
-        font-size: 3em;
-    }
-    
-    #top-bar {
-        width: 95%;
-        font-size: 0.9em;
-    }
-    
-    #side-panel {
-        width: 250px;
-    }
-    
-    #log-container {
-        width: 250px;
-    }
-}
+/* ============================================================================
+   CONTROLLI TOUCH MOBILE (REQUISITO PROGETTO)
+   ============================================================================ */
 
-/* Stile per i pulsanti touch su mobile */
-.touch-controls {
-    position: absolute;
-    bottom: 80px;
-    left: 0;
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 3;
-}
-
-.touch-button {
-    width: 60px;
-    height: 60px;
-    margin: 0 10px;
-    background-color: rgba(0, 0, 0, 0.5);
-    border: 1px solid #666;
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 24px;
-    color: white;
-    touch-action: manipulation;
-}
-
-/* Stile per la modalità spettatore */
-.spectator-mode-active #crosshair {
-    border: 2px solid #ff4d4d;
-    border-radius: 50%;
-}
-
-/* Evidenzia i pulsanti attivi nel pannello */
-#side-panel button.active {
-    background-color: #555;
-    border-color: #ff4d4d;
-    box-shadow: 0 0 5px rgba(255, 77, 77, 0.7);
-}
-
-/* Stili migliorati per i controlli touch */
+/* Container principale controlli mobile */
 .mobile-controls {
     position: fixed;
     bottom: 0;
@@ -274,7 +273,7 @@ body {
     display: block;
 }
 
-/* Pad direzionale sinistro */
+/* Pad direzionale per movimento WASD */
 .direction-pad {
     position: absolute;
     bottom: 20px;
@@ -284,7 +283,7 @@ body {
     pointer-events: all;
 }
 
-/* Base del pad direzionale */
+/* Base circolare del pad direzionale */
 .direction-pad::before {
     content: '';
     position: absolute;
@@ -299,7 +298,7 @@ body {
     box-shadow: 0 0 20px rgba(255, 77, 77, 0.3);
 }
 
-/* Pulsanti direzionali */
+/* Pulsanti direzionali individuali */
 .direction-btn {
     position: absolute;
     width: 45px;
@@ -317,7 +316,6 @@ body {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
     transition: all 0.1s ease;
     user-select: none;
-    -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent;
 }
 
@@ -327,16 +325,11 @@ body {
     box-shadow: 0 0 15px rgba(255, 77, 77, 0.8);
 }
 
-/* Posizionamento dei pulsanti direzionali */
+/* Posizionamento pulsanti WASD */
 .direction-btn.up {
     top: 0;
     left: 50%;
     transform: translateX(-50%);
-}
-
-.direction-btn.up::before {
-    content: '▲';
-    font-size: 16px;
 }
 
 .direction-btn.down {
@@ -345,20 +338,10 @@ body {
     transform: translateX(-50%);
 }
 
-.direction-btn.down::before {
-    content: '▼';
-    font-size: 16px;
-}
-
 .direction-btn.left {
     left: 0;
     top: 50%;
     transform: translateY(-50%);
-}
-
-.direction-btn.left::before {
-    content: '◀';
-    font-size: 16px;
 }
 
 .direction-btn.right {
@@ -367,12 +350,17 @@ body {
     transform: translateY(-50%);
 }
 
-.direction-btn.right::before {
-    content: '▶';
-    font-size: 16px;
-}
+/* Icone direzionali con Unicode */
+.direction-btn.up::before { content: '▲'; font-size: 16px; }
+.direction-btn.down::before { content: '▼'; font-size: 16px; }
+.direction-btn.left::before { content: '◀'; font-size: 16px; }
+.direction-btn.right::before { content: '▶'; font-size: 16px; }
 
-/* Controlli azione destri */
+/* ============================================================================
+   CONTROLLI AZIONE MOBILE
+   ============================================================================ */
+
+/* Container controlli azione (F, P) */
 .action-controls {
     position: absolute;
     bottom: 20px;
@@ -383,6 +371,7 @@ body {
     pointer-events: all;
 }
 
+/* Pulsanti azione base */
 .action-btn {
     width: 65px;
     height: 65px;
@@ -399,7 +388,6 @@ body {
     box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
     transition: all 0.1s ease;
     user-select: none;
-    -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent;
 }
 
@@ -409,7 +397,7 @@ body {
     box-shadow: 0 0 20px rgba(255, 77, 77, 0.8);
 }
 
-/* Pulsanti azione specifici */
+/* Pulsante luce con colore dorato */
 .action-btn.light {
     background: linear-gradient(135deg, rgba(255, 215, 0, 0.9) 0%, rgba(255, 165, 0, 0.9) 100%);
     border-color: #ffd700;
@@ -420,6 +408,7 @@ body {
     box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
 }
 
+/* Pulsante pannello con colore viola */
 .action-btn.panel {
     background: linear-gradient(135deg, rgba(138, 43, 226, 0.9) 0%, rgba(75, 0, 130, 0.9) 100%);
     border-color: #8a2be2;
@@ -430,7 +419,11 @@ body {
     box-shadow: 0 0 20px rgba(138, 43, 226, 0.8);
 }
 
-/* Controlli spettatore (nascosti di default) */
+/* ============================================================================
+   CONTROLLI SPETTATORE
+   ============================================================================ */
+
+/* Controlli Q/E per modalità spettatore */
 .spectator-controls {
     position: absolute;
     bottom: 80px;
@@ -461,7 +454,6 @@ body {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
     transition: all 0.1s ease;
     user-select: none;
-    -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent;
 }
 
@@ -471,7 +463,10 @@ body {
     box-shadow: 0 0 15px rgba(0, 191, 255, 0.8);
 }
 
-/* Camera control per mobile */
+/* ============================================================================
+   CONTROLLO CAMERA MOBILE
+   ============================================================================ */
+
 .camera-control {
     position: absolute;
     top: 20px;
@@ -489,7 +484,6 @@ body {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
     pointer-events: all;
     user-select: none;
-    -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent;
 }
 
@@ -503,7 +497,10 @@ body {
     box-shadow: 0 0 15px rgba(255, 77, 77, 0.8);
 }
 
-/* Indicatore di interazione mobile */
+/* ============================================================================
+   INDICATORI E HINT MOBILE
+   ============================================================================ */
+
 .mobile-interaction-hint {
     position: absolute;
     bottom: 45%;
@@ -534,7 +531,31 @@ body {
     }
 }
 
-/* Responsive adjustments */
+/* ============================================================================
+   RESPONSIVE DESIGN
+   ============================================================================ */
+
+/* Adattamenti per dispositivi mobili */
+@media (max-width: 768px) {
+    #start-menu h1 {
+        font-size: 3em;
+    }
+    
+    #top-bar {
+        width: 95%;
+        font-size: 0.9em;
+    }
+    
+    #side-panel {
+        width: 250px;
+    }
+    
+    #log-container {
+        width: 250px;
+    }
+}
+
+/* Adattamenti per schermi piccoli in altezza */
 @media (max-height: 600px) {
     .direction-pad {
         width: 120px;
@@ -562,6 +583,7 @@ body {
     }
 }
 
+/* Adattamenti per smartphone very small */
 @media (max-width: 480px) {
     .direction-pad {
         width: 110px;

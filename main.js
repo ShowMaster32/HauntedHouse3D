@@ -1,27 +1,44 @@
+// ============================================================================
+// CASA INFESTATA - Progetto Computer Graphics A.A.2023/24
+// Applicazione 3D Interattiva WebGL con Illuminazione Dinamica e Ombre
+// ============================================================================
 
-// Variabili per il sistema di ombre migliorato
-let shadowMapSize = 2048; // Risoluzione shadow map aumentata
-let shadowBias = 0.005;   // Bias dinamico per le ombre
-let shadowSamples = 16;   // Numero di campioni PCF
-let softShadows = false;  // Flag per ombre morbide avanzate
+// ============================================================================
+// VARIABILI GLOBALI E CONFIGURAZIONE SISTEMA OMBRE
+// ============================================================================
 
-// Funzione per aggiornata per gestire i controlli del movimento
+
+// Sistema di ombre migliorato per rendering realistico
+let shadowMapSize = 2048; // Risoluzione shadow map per qualità ombre
+let shadowBias = 0.005; // Bias dinamico per evitare shadow acne
+let shadowSamples = 16; // Numero campioni PCF per ombre morbide
+let softShadows = false; // Flag per ombre morbide avanzate
+
+// ============================================================================
+// FUNZIONI DI AGGIORNAMENTO CAMERA E CONTROLLI
+// ============================================================================
+
+/**
+ * Funzione principale per l'aggiornamento della camera
+ * Gestisce movimento WASD, modalità spettatore e collisioni
+ * @param {number} dt - Delta time per frame rate indipendente
+ */
 function updateCamera(dt) {
-    // Skip update if panel is open
+    // Salta aggiornamento se pannello aperto o gioco non iniziato
     if (isPanelOpen || !gameStarted) return;
 
-    // Velocità base
+    // Calcolo velocità basata su frame rate per movimento fluido
     const speed = playerSpeed * (dt || 0.016) * 60;
 
-    // Reset velocità orizzontale
+    // Reset velocità orizzontale per nuovo frame
     playerVelocity[0] = 0;
     playerVelocity[2] = 0;
 
-    // Ottieni i vettori di direzione
+    // Ottieni vettori direzione dalla rotazione camera
     const forward = getForwardVector();
     const right = getSideVector();
 
-    // Movimento avanti/indietro
+    // Gestione input movimento (standard WASD)
     if (keys['KeyW']) {
         playerVelocity[0] -= forward[0] * speed;
         playerVelocity[2] -= forward[2] * speed;
@@ -30,8 +47,6 @@ function updateCamera(dt) {
         playerVelocity[0] += forward[0] * speed;
         playerVelocity[2] += forward[2] * speed;
     }
-
-    // Movimento laterale
     if (keys['KeyA']) {
         playerVelocity[0] -= right[0] * speed;
         playerVelocity[2] -= right[2] * speed;
@@ -41,7 +56,7 @@ function updateCamera(dt) {
         playerVelocity[2] += right[2] * speed;
     }
 
-    // Modalità spettatore: movimento verticale
+    // Modalità spettatore: movimento verticale libero (Q/E)
     if (isSpectatorMode) {
         if (keys['KeyQ']) {
             playerVelocity[1] = speed; // Scendi
@@ -52,23 +67,26 @@ function updateCamera(dt) {
         }
     }
 
-    // Aggiorna la posizione della camera usando direttamente la velocità
+    // Applica movimento alla posizione camera
     camera.position[0] += playerVelocity[0];
     camera.position[1] += playerVelocity[1];
     camera.position[2] += playerVelocity[2];
 
-    // Collisioni con le pareti
+    // Sistema di collisioni con le pareti della stanza
     checkWallCollisions();
 }
 
-// Verifica collisioni con i muri
+/**
+ * Sistema di collision detection AABB per limitare movimento
+ * Previene che il giocatore esca dai confini della stanza
+ */
 function checkWallCollisions() {
-    // Se in modalità spettatore, ignora le collisioni
+    // Modalità spettatore ignora le collisioni
     if (isSpectatorMode) return;
 
     const playerRadius = 0.5;
 
-    // Limiti della stanza
+    // Calcolo limiti stanza con raggio giocatore
     const minX = -roomSize + playerRadius;
     const maxX = roomSize - playerRadius;
     const minZ = -roomSize + playerRadius;
@@ -78,7 +96,7 @@ function checkWallCollisions() {
     const maxY = camera.defaultHeight; // Pavimento
     const minY = -roomHeight + 0.5; // Soffitto
 
-    // Collisioni X
+    // Collisioni asse X (pareti laterali)
     if (camera.position[0] < minX) {
         camera.position[0] = minX;
         playerVelocity[0] = 0;
@@ -87,7 +105,7 @@ function checkWallCollisions() {
         playerVelocity[0] = 0;
     }
 
-    // Collisioni Z
+    // Collisioni asse Z (pareti frontali/posteriori)
     if (camera.position[2] < minZ) {
         camera.position[2] = minZ;
         playerVelocity[2] = 0;
@@ -96,12 +114,11 @@ function checkWallCollisions() {
         playerVelocity[2] = 0;
     }
 
-    // Collisioni Y (soffitto e pavimento)
+    // Collisioni asse Y (pavimento e soffitto)
     if (camera.position[1] < minY) {
         camera.position[1] = minY;
         playerVelocity[1] = 0;
     }
-
     if (camera.position[1] > maxY) {
         camera.position[1] = maxY;
         playerVelocity[1] = 0;
@@ -109,45 +126,50 @@ function checkWallCollisions() {
     }
 }
 
-// Funzione per gestire il movimento del mouse con inversione verticale corretta
+/**
+ * Gestione movimento mouse per controllo camera FPS
+ * Implementa sensibilità costante e limiti pitch
+ */
 function handleMouseMove(e) {
     if (!mouseLocked || isPanelOpen) return;
 
-    // Sensibilità costante
+    // Sensibilità calibrata per controllo preciso
     const sensitivity = 0.002;
 
-    // La rotazione orizzontale (intorno all'asse Y)
+    // Rotazione orizzontale (yaw) - movimento X mouse
     camera.rotation[1] += e.movementX * sensitivity;
 
-    // Rotazione verticale (intorno all'asse X) con inversione corretta
+    // Rotazione verticale (pitch) - movimento Y mouse
     camera.rotation[0] += e.movementY * sensitivity;
 
-    // Limita la rotazione verticale per evitare capovolgimenti
-    camera.rotation[0] = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, camera.rotation[0]));
+    // Limita pitch per evitare gimbal lock
+    camera.rotation[0] = Math.max(-Math.PI / 2 + 0.1,
+        Math.min(Math.PI / 2 - 0.1, camera.rotation[0]));
 }
 
-// Funzione aggiornata per creare la matrice di vista
+/**
+ * Creazione matrice vista per rendering 3D
+ * Converte rotazioni camera in matrice lookAt
+ */
 function createViewMatrix() {
-    // La direzione di vista deve essere coerente con le rotazioni
-    // Yaw (rotazione orizzontale) e Pitch (rotazione verticale)
-    const yaw = camera.rotation[1];
-    const pitch = camera.rotation[0];
+    const yaw = camera.rotation[1]; // Rotazione orizzontale
+    const pitch = camera.rotation[0]; // Rotazione verticale
 
-    // Calcola il punto di destinazione
+    // Calcola direzione vista da angoli Eulero
     const dirX = Math.sin(yaw) * Math.cos(pitch);
     const dirY = Math.sin(pitch);
     const dirZ = Math.cos(yaw) * Math.cos(pitch);
 
-    // Punto verso cui la camera sta guardando
+    // Punto target (dove la camera guarda)
     const lookX = camera.position[0] + dirX;
     const lookY = camera.position[1] + dirY;
     const lookZ = camera.position[2] + dirZ;
 
-    // Crea la matrice vista
+    // Costruisce matrice vista usando lookAt
     return m4.lookAt(
-        camera.position, // Posizione della camera
-        [lookX, lookY, lookZ], // Punto verso cui guarda
-        [0, 1, 0] // "Up" vector (sempre verticale)
+        camera.position, // Posizione camera
+        [lookX, lookY, lookZ], // Target
+        [0, 1, 0] // Up vector
     );
 }
 
@@ -312,7 +334,7 @@ function render() {
             logger.log('Ombre disabilitate a causa di errori WebGL');
         }
     }
-    
+
     // Clear canvas con colore più scuro per contrasto migliore
     gl.clearColor(0.05, 0.05, 0.1, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -367,12 +389,6 @@ function render() {
     const lightIntensity = isLightOn ? 2.0 : 0.0; // Ridotto da 4.0 a 2.5 per evitare sovraesposizione
     gl.uniform1f(gl.getUniformLocation(program, 'u_lightIntensity'), lightIntensity);
 
-    // DEBUG: Log periodico dell'intensità luce
-    if (frameCount % 120 === 0) { // Ogni 2 secondi circa (60 FPS)
-        logger.log(`Intensità luce BILANCIATA: ${lightIntensity}, Luce accesa: ${isLightOn}`);
-        logger.log(`Posizione luce: [${lightPosition}]`);
-    }
-
     // Opzioni di rendering
     gl.uniform1i(gl.getUniformLocation(program, 'u_shadows'), renderOptions.shadows);
     gl.uniform1i(gl.getUniformLocation(program, 'u_reflections'), renderOptions.reflections);
@@ -410,12 +426,12 @@ function render() {
 
     // PRIORITÀ: Renderizza prima la stanza (floor, ceiling, walls) per garantire che sia illuminata
     const roomElements = ['floor', 'ceiling', 'frontWall', 'backWall', 'leftWall', 'rightWall'];
-    
+
     for (const roomElement of roomElements) {
         const model = models[roomElement];
         if (model && model.vertices && model.vertices.length > 0) {
-            renderModel(model, u_modelLoc, u_normalMatrixLoc, u_isEmissiveLoc, 
-                       u_useTextureLoc, u_textureLoc);
+            renderModel(model, u_modelLoc, u_normalMatrixLoc, u_isEmissiveLoc,
+                u_useTextureLoc, u_textureLoc);
         }
     }
 
@@ -438,19 +454,13 @@ function render() {
             continue;
         }
 
-        renderModel(model, u_modelLoc, u_normalMatrixLoc, u_isEmissiveLoc, 
-                   u_useTextureLoc, u_textureLoc);
+        renderModel(model, u_modelLoc, u_normalMatrixLoc, u_isEmissiveLoc,
+            u_useTextureLoc, u_textureLoc);
     }
 
     // Renderizza oggetti trasparenti ordinati
-    renderTransparentObjects(transparentObjects, u_modelLoc, u_normalMatrixLoc, 
-                            u_isEmissiveLoc, u_useTextureLoc, u_textureLoc);
-
-                            if (renderOptions.shadows && isLightOn) {
-    console.log("SHADOWS ACTIVE - Frame:", frameCount);
-} else {
-    console.log("SHADOWS DISABLED - shadows:", renderOptions.shadows, "light:", isLightOn);
-}
+    renderTransparentObjects(transparentObjects, u_modelLoc, u_normalMatrixLoc,
+        u_isEmissiveLoc, u_useTextureLoc, u_textureLoc);
 }
 
 // Funzione per configurare le uniforms delle ombre migliorate
@@ -458,7 +468,7 @@ function setupImprovedShadowUniforms() {
     // Bias dinamico basato sulla distanza dalla luce
     const distanceToLight = m4.length(m4.subtractVectors(camera.position, lightPosition));
     const dynamicBias = Math.max(shadowBias, shadowBias * (distanceToLight / 20.0));
-    
+
     gl.uniform1f(gl.getUniformLocation(program, 'u_shadowBias'), dynamicBias);
     gl.uniform1i(gl.getUniformLocation(program, 'u_shadowSamples'), shadowSamples);
 }
@@ -467,27 +477,27 @@ function setupImprovedShadowUniforms() {
 function createLightSpaceMatrix() {
     // Posizione della luce corretta per il sistema Y invertito
     // La luce è a Y=-4, quindi è 1 unità sotto il soffitto (che è a Y=-5)
-    
+
     // MIGLIORAMENTO: Target dinamico per catturare meglio le ombre
     // Punta verso il basso per vedere meglio pavimento e oggetti
     const lightTarget = [0, 0, 0]; // Centro della stanza a livello pavimento
-    
+
     // Crea view matrix dalla luce
     const lightView = m4.lookAt(lightPosition, lightTarget, [0, 0, 1]);
-    
+
     // MIGLIORAMENTO: Proiezione ortografica ottimizzata per la stanza
     const orthoSize = 15.0; // Copre tutta la stanza
     const nearPlane = 0.1;
     const farPlane = 30.0; // Aumentato per catturare tutto
-    
+
     const lightProjection = m4.orthographic(
-        -orthoSize, orthoSize,  // left, right
-        -orthoSize, orthoSize,  // bottom, top
-        nearPlane, farPlane     // near, far
+        -orthoSize, orthoSize, // left, right
+        -orthoSize, orthoSize, // bottom, top
+        nearPlane, farPlane // near, far
     );
-    
+
     const lightSpaceMatrix = m4.multiply(lightProjection, lightView);
-    
+
     return lightSpaceMatrix;
 }
 
@@ -511,29 +521,29 @@ function initShadowMap() {
         // Crea texture per depth map - VERSIONE WebGL 1.0
         shadowTexture = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, shadowTexture);
-        
+
         // USA RGBA invece di DEPTH_COMPONENT per compatibilità WebGL 1.0
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 
-                      shadowMapSize, shadowMapSize, 0, 
-                      gl.RGBA, gl.UNSIGNED_BYTE, null);
-        
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA,
+            shadowMapSize, shadowMapSize, 0,
+            gl.RGBA, gl.UNSIGNED_BYTE, null);
+
         // Parametri texture ottimizzati
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        
+
         // Crea depth renderbuffer
         const depthBuffer = gl.createRenderbuffer();
         gl.bindRenderbuffer(gl.RENDERBUFFER, depthBuffer);
         gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, shadowMapSize, shadowMapSize);
-        
+
         // Collega texture e depth buffer al framebuffer
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, 
-                               gl.TEXTURE_2D, shadowTexture, 0);
-        gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, 
-                                  gl.RENDERBUFFER, depthBuffer);
-        
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+            gl.TEXTURE_2D, shadowTexture, 0);
+        gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT,
+            gl.RENDERBUFFER, depthBuffer);
+
         // Verifica completeness del framebuffer
         const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
         if (status !== gl.FRAMEBUFFER_COMPLETE) {
@@ -544,10 +554,10 @@ function initShadowMap() {
         } else {
             logger.log(`Shadow map inizializzata: ${shadowMapSize}x${shadowMapSize}`);
         }
-        
+
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.bindRenderbuffer(gl.RENDERBUFFER, null);
-        
+
     } catch (error) {
         logger.log(`Errore nell'inizializzazione shadow map: ${error.message}`);
         // Disabilita le ombre in caso di errore
@@ -564,78 +574,78 @@ function renderShadowMap() {
 
     try {
         gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFramebuffer);
-        
+
         if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
             logger.log('Shadow framebuffer non valido');
             renderOptions.shadows = false;
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             return;
         }
-        
+
         gl.viewport(0, 0, shadowMapSize, shadowMapSize);
         gl.clearColor(1.0, 1.0, 1.0, 1.0); // Bianco = lontano
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        
+
         gl.useProgram(shadowProgram);
-        
+
         const lightSpaceMatrix = createLightSpaceMatrix();
         const u_lightSpaceMatrixLoc = gl.getUniformLocation(shadowProgram, 'u_lightSpaceMatrix');
         const u_modelLoc = gl.getUniformLocation(shadowProgram, 'u_model');
-        
+
         if (u_lightSpaceMatrixLoc && u_modelLoc) {
             gl.uniformMatrix4fv(u_lightSpaceMatrixLoc, false, lightSpaceMatrix);
-            
+
             // RENDERIZZA PIÙ OGGETTI per vedere le ombre
             const shadowCasters = [
-            // Tutti gli elementi della stanza
-            'floor', 'ceiling', 'frontWall', 'backWall', 'leftWall', 'rightWall',
-            
-            // Tutti gli oggetti
-            'skull_0', 'skull_1', 'skull_2', 'skull_3', 'skull_4',
-            'doll', 'chair', 'chair_2', 'wheelie', 'clock', 'lamp',
-            'switch', 'fallbackSwitch', 'lightSwitch', 'switchIndicator',
-            'ceilingLight', 'lampFallback',
-            
-            // Finestre e cornici (potrebbero proiettare ombre interessanti)
-            'windowFrameTop_0', 'windowFrameBottom_0', 'windowFrameLeft_0', 'windowFrameRight_0',
-            'windowFrameTop_1', 'windowFrameBottom_1', 'windowFrameLeft_1', 'windowFrameRight_1',
-            'windowFrameTop_2', 'windowFrameBottom_2', 'windowFrameLeft_2', 'windowFrameRight_2',
-            'windowFrameTop_3', 'windowFrameBottom_3', 'windowFrameLeft_3', 'windowFrameRight_3',
-            
-            // Quadro autore
-            'authorPicture', 'authorPictureFrame'
-        ];
+                // Tutti gli elementi della stanza
+                'floor', 'ceiling', 'frontWall', 'backWall', 'leftWall', 'rightWall',
+
+                // Tutti gli oggetti
+                'skull_0', 'skull_1', 'skull_2', 'skull_3', 'skull_4',
+                'doll', 'chair', 'chair_2', 'wheelie', 'clock', 'lamp',
+                'switch', 'fallbackSwitch', 'lightSwitch', 'switchIndicator',
+                'ceilingLight', 'lampFallback',
+
+                // Finestre e cornici (potrebbero proiettare ombre interessanti)
+                'windowFrameTop_0', 'windowFrameBottom_0', 'windowFrameLeft_0', 'windowFrameRight_0',
+                'windowFrameTop_1', 'windowFrameBottom_1', 'windowFrameLeft_1', 'windowFrameRight_1',
+                'windowFrameTop_2', 'windowFrameBottom_2', 'windowFrameLeft_2', 'windowFrameRight_2',
+                'windowFrameTop_3', 'windowFrameBottom_3', 'windowFrameLeft_3', 'windowFrameRight_3',
+
+                // Quadro autore
+                'authorPicture', 'authorPictureFrame'
+            ];
 
             let objectsRendered = 0;
             for (const modelName of shadowCasters) {
                 if (models[modelName] && models[modelName].vertices) {
                     const model = models[modelName];
-                    
+
                     // Crea matrice modello completa
                     let modelMatrix = m4.identity();
-                    
+
                     if (model.position) {
-                        modelMatrix = m4.translate(modelMatrix, 
-                                                 model.position[0], 
-                                                 model.position[1], 
-                                                 model.position[2]);
+                        modelMatrix = m4.translate(modelMatrix,
+                            model.position[0],
+                            model.position[1],
+                            model.position[2]);
                     }
-                    
+
                     if (model.rotation) {
                         modelMatrix = m4.xRotate(modelMatrix, model.rotation[0]);
                         modelMatrix = m4.yRotate(modelMatrix, model.rotation[1]);
                         modelMatrix = m4.zRotate(modelMatrix, model.rotation[2]);
                     }
-                    
+
                     if (model.scale) {
-                        modelMatrix = m4.scale(modelMatrix, 
-                                             model.scale[0], 
-                                             model.scale[1], 
-                                             model.scale[2]);
+                        modelMatrix = m4.scale(modelMatrix,
+                            model.scale[0],
+                            model.scale[1],
+                            model.scale[2]);
                     }
-                    
+
                     gl.uniformMatrix4fv(u_modelLoc, false, modelMatrix);
-                    
+
                     try {
                         setBuffersForShadowModel(model);
                         gl.drawArrays(gl.TRIANGLES, 0, model.vertices.length / 3);
@@ -646,12 +656,8 @@ function renderShadowMap() {
                     objectsRendered++;
                 }
             }
-            
-            if (objectsRendered > 0) {
-                logger.log(`Shadow map: renderizzati ${objectsRendered} oggetti`);
-            }
         }
-        
+
     } catch (error) {
         logger.log(`Errore shadow map: ${error.message}`);
         renderOptions.shadows = false;
@@ -664,7 +670,7 @@ function renderShadowMap() {
 // Configura buffer per shadow rendering
 function setBuffersForShadowModel(model) {
     const positionLoc = gl.getAttribLocation(shadowProgram, 'a_position');
-    
+
     const positionBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(model.vertices), gl.STATIC_DRAW);
@@ -681,26 +687,26 @@ function renderModel(model, u_modelLoc, u_normalMatrixLoc, u_isEmissiveLoc, u_us
 
     // Crea matrice modello
     let modelMatrix = m4.identity();
-    
+
     // Applica trasformazioni del modello
     if (model.position) {
-        modelMatrix = m4.translate(modelMatrix, 
-                                 model.position[0], 
-                                 model.position[1], 
-                                 model.position[2]);
+        modelMatrix = m4.translate(modelMatrix,
+            model.position[0],
+            model.position[1],
+            model.position[2]);
     }
-    
+
     if (model.rotation) {
         modelMatrix = m4.xRotate(modelMatrix, model.rotation[0]);
         modelMatrix = m4.yRotate(modelMatrix, model.rotation[1]);
         modelMatrix = m4.zRotate(modelMatrix, model.rotation[2]);
     }
-    
+
     if (model.scale) {
-        modelMatrix = m4.scale(modelMatrix, 
-                             model.scale[0], 
-                             model.scale[1], 
-                             model.scale[2]);
+        modelMatrix = m4.scale(modelMatrix,
+            model.scale[0],
+            model.scale[1],
+            model.scale[2]);
     }
 
     // Calcola matrice normale
@@ -709,7 +715,7 @@ function renderModel(model, u_modelLoc, u_normalMatrixLoc, u_isEmissiveLoc, u_us
     // Imposta le uniform
     gl.uniformMatrix4fv(u_modelLoc, false, modelMatrix);
     gl.uniformMatrix4fv(u_normalMatrixLoc, false, normalMatrix);
-    
+
     // Flag emissivo
     const isEmissive = model.isEmissive || false;
     gl.uniform1i(u_isEmissiveLoc, isEmissive);
@@ -735,14 +741,14 @@ function renderModel(model, u_modelLoc, u_normalMatrixLoc, u_isEmissiveLoc, u_us
 function renderTransparentObjects(transparentObjects, u_modelLoc, u_normalMatrixLoc, u_isEmissiveLoc, u_useTextureLoc, u_textureLoc) {
     // Ordina gli oggetti trasparenti per distanza (dal più lontano al più vicino)
     transparentObjects.sort((a, b) => b.distanceToCamera - a.distanceToCamera);
-    
+
     // Abilita blending per trasparenza
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    
+
     // Disabilita depth write ma mantieni depth test
     gl.depthMask(false);
-    
+
     // Renderizza oggetti trasparenti ordinati
     for (const obj of transparentObjects) {
         const model = models[obj.name];
@@ -750,7 +756,7 @@ function renderTransparentObjects(transparentObjects, u_modelLoc, u_normalMatrix
             renderModel(model, u_modelLoc, u_normalMatrixLoc, u_isEmissiveLoc, u_useTextureLoc, u_textureLoc);
         }
     }
-    
+
     // Ripristina stato WebGL
     gl.disable(gl.BLEND);
     gl.depthMask(true);
@@ -955,7 +961,7 @@ function updateCrosshair() {
     // CORREZIONE: Usa la posizione CORRETTA dell'interruttore sulla parete DESTRA
     // Ma visto che hai l'asse invertito, devi invertire anche il controllo del crosshair
     const correctSwitchPosition = [-9.99, -2, 0]; // INVERTITO: ora è sulla sinistra visiva
-    
+
     // Reset dello stato
     isNearSwitch = false;
 
@@ -965,13 +971,6 @@ function updateCrosshair() {
     const dz = camera.position[2] - correctSwitchPosition[2];
     const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-    // Debug ogni volta che siamo vicini
-    if (distance < 6) {
-        logger.log(`CROSSHAIR DEBUG - Distanza dall'interruttore: ${distance.toFixed(2)}`);
-        logger.log(`CROSSHAIR DEBUG - Player: [${camera.position[0].toFixed(1)}, ${camera.position[1].toFixed(1)}, ${camera.position[2].toFixed(1)}]`);
-        logger.log(`CROSSHAIR DEBUG - Switch: [${correctSwitchPosition}]`);
-    }
-
     // Vicino all'interruttore?
     if (distance < 4.0) {
         // Mostra le istruzioni
@@ -980,7 +979,6 @@ function updateCrosshair() {
             instructions.style.visibility = 'visible';
             instructions.innerHTML = 'Premi <span style="color:#ff4d4d">F</span> per accendere la luce';
             isNearSwitch = true;
-            logger.log(`CROSSHAIR ATTIVATO - Distanza: ${distance.toFixed(2)}`);
         }
 
         // Cambia il crosshair
@@ -1425,39 +1423,39 @@ function createSimpleRoom() {
 
     // Pavimento (a Y=0) - CORREZIONE NORMALI
     models['floor'] = {
-    vertices: [
-        -roomSize, 0, -roomSize,
-        roomSize, 0, roomSize,
-        roomSize, 0, -roomSize,
-        -roomSize, 0, -roomSize,
-        -roomSize, 0, roomSize,
-        roomSize, 0, roomSize
-    ],
-    normals: [
-        0, 1, 0,  0, 1, 0,  0, 1, 0,
-        0, 1, 0,  0, 1, 0,  0, 1, 0
-    ],
-    texcoords: [
-        0, 0, 2, 2, 2, 0,
-        0, 0, 0, 2, 2, 2
-    ],
-    position: [0, -5, 0],
-    scale: [1, 1, 1],
-    texture: 'floor'
-};
+        vertices: [
+            -roomSize, 0, -roomSize,
+            roomSize, 0, roomSize,
+            roomSize, 0, -roomSize,
+            -roomSize, 0, -roomSize,
+            -roomSize, 0, roomSize,
+            roomSize, 0, roomSize
+        ],
+        normals: [
+            0, 1, 0, 0, 1, 0, 0, 1, 0,
+            0, 1, 0, 0, 1, 0, 0, 1, 0
+        ],
+        texcoords: [
+            0, 0, 2, 2, 2, 0,
+            0, 0, 0, 2, 2, 2
+        ],
+        position: [0, -5, 0],
+        scale: [1, 1, 1],
+        texture: 'floor'
+    };
 
     // Soffitto (a Y=-roomHeight) - CORREZIONE NORMALI
     models['ceiling'] = {
-    vertices: [
-        -roomSize, -roomHeight, -roomSize,
-        roomSize, -roomHeight, roomSize,
-        roomSize, -roomHeight, -roomSize,
-        -roomSize, -roomHeight, -roomSize,
-        -roomSize, -roomHeight, roomSize,
-        roomSize, -roomHeight, roomSize
-    ],
+        vertices: [
+            -roomSize, -roomHeight, -roomSize,
+            roomSize, -roomHeight, roomSize,
+            roomSize, -roomHeight, -roomSize,
+            -roomSize, -roomHeight, -roomSize,
+            -roomSize, -roomHeight, roomSize,
+            roomSize, -roomHeight, roomSize
+        ],
         normals: [
-            0, -1, 0,  // Normale verso il basso (verso la stanza)
+            0, -1, 0, // Normale verso il basso (verso la stanza)
             0, -1, 0,
             0, -1, 0,
             0, -1, 0,
@@ -1513,26 +1511,26 @@ function createSimpleRoom() {
 
 function createAuthorPicture() {
     logger.log("Creazione quadro con foto dell'autore...");
-    
+
     // Dimensioni del quadro
     const frameWidth = 1.5;
     const frameHeight = 2.0;
     const frameDepth = 0.05;
-    
+
     // Posizione: parete frontale, sinistra della finestra centrale
     const frameX = -3.5; // Sinistra della finestra (che è a X=0)
-    const frameY = -2.5;  // Altezza occhi
+    const frameY = -2.5; // Altezza occhi
     const frameZ = -roomSize + 0.02; // Sulla parete frontale, leggermente staccato
 
     // Vertici del quadro (rettangolo)
     const frameVertices = [
         // Faccia frontale del quadro
-        frameX - frameWidth/2, frameY + frameHeight/2, frameZ,
-        frameX + frameWidth/2, frameY + frameHeight/2, frameZ,
-        frameX + frameWidth/2, frameY - frameHeight/2, frameZ,
-        frameX - frameWidth/2, frameY + frameHeight/2, frameZ,
-        frameX + frameWidth/2, frameY - frameHeight/2, frameZ,
-        frameX - frameWidth/2, frameY - frameHeight/2, frameZ
+        frameX - frameWidth / 2, frameY + frameHeight / 2, frameZ,
+        frameX + frameWidth / 2, frameY + frameHeight / 2, frameZ,
+        frameX + frameWidth / 2, frameY - frameHeight / 2, frameZ,
+        frameX - frameWidth / 2, frameY + frameHeight / 2, frameZ,
+        frameX + frameWidth / 2, frameY - frameHeight / 2, frameZ,
+        frameX - frameWidth / 2, frameY - frameHeight / 2, frameZ
     ];
 
     // Normali (tutte verso l'interno della stanza)
@@ -1543,12 +1541,12 @@ function createAuthorPicture() {
 
     // Coordinate texture (importanti per mostrare correttamente la foto)
     const frameTexcoords = [
-        0, 0,  // In basso a sinistra
-        1, 0,  // In basso a destra  
-        1, 1,  // In alto a destra
-        0, 0,  // In basso a sinistra
-        1, 1,  // In alto a destra
-        0, 1   // In alto a sinistra
+        0, 0, // In basso a sinistra
+        1, 0, // In basso a destra  
+        1, 1, // In alto a destra
+        0, 0, // In basso a sinistra
+        1, 1, // In alto a destra
+        0, 1 // In alto a sinistra
     ];
 
     // Aggiungi il quadro ai modelli
@@ -3126,94 +3124,7 @@ function handleSpecialKeys(e) {
         if (isNearSwitch) {
             toggleLight();
         }
-    } else if (e.code === 'KeyL') {
-        logger.toggle();
-    } else if (e.code === 'KeyO') {
-        // NUOVO: Debug ombre completo
-        debugShadowSystem();
-        testShadowVisibility();
-        testMoveAwayFromLight();
-        
-        // FORZA test ombre immediate
-        isLightOn = true;
-        renderOptions.shadows = true;
-        logger.log('🔦 TASTO O - Debug ombre eseguito + TEST FORZATO');
-        logger.log('🎯 Ora dovresti vedere ombre scure su pavimento e pareti!');
-        logger.log('📍 Muoviti verso gli angoli della stanza per vedere le ombre più chiaramente');
-    } else if (e.code === 'KeyU') {
-        // NUOVO: Toggle rapido ombre per test
-        renderOptions.shadows = !renderOptions.shadows;
-        isLightOn = !isLightOn;
-        logger.log(`🔄 TASTO U - Toggle rapido: Luce ${isLightOn ? 'ON' : 'OFF'}, Ombre ${renderOptions.shadows ? 'ON' : 'OFF'}`);
-        if (isLightOn && renderOptions.shadows) {
-            logger.log('👁️ Dovresti vedere ombre degli oggetti su pavimento e pareti!');
-        }
-    } else if (e.code === 'KeyI') {
-        // NUOVO: Debug illuminazione completo
-        debugLightingSystem();
-        
-        if (isLightOn) {
-            logger.log('💡 Luce accesa - Testing illuminazione stanza');
-            
-            // Test intensità luce attuale
-            logger.log(`Intensità luce teorica: 4.0 (${isLightOn ? 'ON' : 'OFF'})`);
-            logger.log(`Posizione luce: [${lightPosition}]`);
-            logger.log(`Camera a: [${camera.position[0].toFixed(1)}, ${camera.position[1].toFixed(1)}, ${camera.position[2].toFixed(1)}]`);
-            
-            // Verifica distanze
-            const distanceToFloor = Math.abs(lightPosition[1] - 0);
-            const distanceToCeiling = Math.abs(lightPosition[1] - (-roomHeight));
-            logger.log(`Distanza luce-pavimento: ${distanceToFloor.toFixed(1)} (ideale < 5)`);
-            logger.log(`Distanza luce-soffitto: ${distanceToCeiling.toFixed(1)} (ideale 1-2)`);
-            
-            // Verifica che tutti gli elementi della stanza esistano
-            const roomElements = ['floor', 'ceiling', 'frontWall', 'backWall', 'leftWall', 'rightWall'];
-            let allRoomElementsExist = true;
-            
-            roomElements.forEach(element => {
-                if (!models[element]) {
-                    logger.log(`❌ MANCANTE: ${element}`);
-                    allRoomElementsExist = false;
-                } else {
-                    const vertexCount = models[element].vertices.length / 3;
-                    const normalCount = models[element].normals ? models[element].normals.length / 3 : 0;
-                    logger.log(`✅ OK: ${element} (${vertexCount} vertici, ${normalCount} normali)`);
-                    
-                    // Verifica prima normale
-                    if (models[element].normals && models[element].normals.length >= 3) {
-                        const firstNormal = [
-                            models[element].normals[0].toFixed(2),
-                            models[element].normals[1].toFixed(2),
-                            models[element].normals[2].toFixed(2)
-                        ];
-                        logger.log(`  └─ Prima normale: [${firstNormal}]`);
-                    }
-                }
-            });
-            
-            if (allRoomElementsExist) {
-                logger.log('✅ Tutti gli elementi della stanza sono presenti');
-                logger.log('🔧 Se non vedi illuminazione, verifica il fragment shader');
-            } else {
-                logger.log('❌ Alcuni elementi della stanza mancano! Riparazione automatica...');
-                verifyAndFixRoomModels();
-            }
-        } else {
-            logger.log('💡 Luce spenta - Premi F vicino all\'interruttore per accenderla');
-            logger.log(`Posizione interruttore: [${switchPosition}]`);
-            logger.log(`Distanza da interruttore: ${Math.sqrt(
-                Math.pow(camera.position[0] - switchPosition[0], 2) +
-                Math.pow(camera.position[1] - switchPosition[1], 2) +
-                Math.pow(camera.position[2] - switchPosition[2], 2)
-            ).toFixed(2)} (serve < 4.0)`);
-        }
-    } else if (e.code === 'KeyT') {
-        // NUOVO: Test coordinate system
-        testCoordinateSystem();
     }
-else if (e.code === 'KeyY') {
-    testShadowStrength();
-}
 }
 
 // Attiva/disattiva pannello
@@ -3269,7 +3180,7 @@ function flickerLight() {
 function startGame() {
     // NUOVO: Inizializza l'illuminazione corretta prima di avviare il gioco
     initializeProperLighting();
-    
+
     switchPosition = [-9.7, -2, 0];
 
     const instructions = ensureInstructionsExist();
@@ -3279,7 +3190,6 @@ function startGame() {
     // Forza un update del crosshair
     setTimeout(() => {
         const nearSwitch = updateCrosshair();
-        logger.log(`Forzato aggiornamento del crosshair all'avvio, vicino allo switch: ${nearSwitch}`);
     }, 1000);
 
     document.getElementById('start-menu').style.display = 'none';
@@ -3320,18 +3230,11 @@ function startGame() {
     // Forza un aggiornamento del crosshair
     setTimeout(() => {
         updateCrosshair();
-
-        // Debug - posizioni attuali
-        logger.log("--- Posizioni after startup ---");
-        logger.log(`Switch position: ${switchPosition}`);
-        if (models['switch']) logger.log(`Switch model: ${models['switch'].position}`);
-        if (models['fallbackSwitch']) logger.log(`Fallback model: ${models['fallbackSwitch'].position}`);
-        if (models['lightSwitch']) logger.log(`Light switch model: ${models['lightSwitch'].position}`);
     }, 1000);
 
     // Mostra controlli completi
     document.getElementById('game-controls').innerHTML =
-    'W: Avanti | S: Indietro | A: Sinistra | D: Destra | F: Luce | P: Pannello | SHIFT: Sprint | I: Debug Luce | O: Test Ombre | U: Toggle Ombre';
+        'W: Avanti | S: Indietro | A: Sinistra | D: Destra | F: Luce | P: Pannello | SHIFT: Sprint';
 
     // Aggiungi informazioni sul pannello di controllo
     const panelInfo = document.createElement('div');
@@ -3396,21 +3299,7 @@ function startGame() {
     gameStarted = true;
     requestAnimationFrame(gameLoop);
 
-    logger.log('Gioco avviato con illuminazione migliorata');
-    
-    // NUOVO: Log di verifica post-avvio
-    setTimeout(() => {
-        logger.log('=== VERIFICA POST-AVVIO ILLUMINAZIONE ===');
-        logger.log(`Luce attualmente a: [${lightPosition}]`);
-        logger.log(`isLightOn: ${isLightOn}`);
-        logger.log(`Game started: ${gameStarted}`);
-        
-        // Verifica elementi stanza
-        verifyAndFixRoomModels();
-        
-        // Testa l'illuminazione
-        debugLightingSystem();
-    }, 2000);
+    logger.log('Gioco avviato');
 }
 
 // Questa funzione aggiorna la posizione interattiva dello switch
@@ -3432,11 +3321,6 @@ function fixSwitchPosition() {
             const model = models[modelName];
             // Se c'è un modello dell'interruttore sulla parete sinistra
             if (model.position && model.position[0] < 0) {
-                logger.log(`CORREZIONE: Rimosso/spostato modello ${modelName} dalla parete sinistra`);
-                // Opzione 1: Rimuoverlo
-                // delete models[modelName];
-
-                // Opzione 2: Spostarlo nella posizione corretta
                 model.position = [correctX, correctY, correctZ];
 
                 // Se è un indicatore, posizionalo accanto
@@ -3446,35 +3330,7 @@ function fixSwitchPosition() {
             }
         }
     }
-
-    logger.log(`Posizione switch corretta fissata a: [${switchPosition}]`);
 }
-
-// Aggiungi questa funzione di debug
-function debugSwitchAndInstructions() {
-    const instructions = document.getElementById('instructions');
-    logger.log("--- Debug Switch e Instructions ---");
-    logger.log(`switchPosition: [${switchPosition}]`);
-
-    if (instructions) {
-        logger.log(`Elemento instructions trovato: ${instructions.outerHTML}`);
-        logger.log(`Stile visibility: ${instructions.style.visibility}`);
-        logger.log(`Posizione: ${instructions.style.position}, bottom: ${instructions.style.bottom}, left: ${instructions.style.left}`);
-    } else {
-        logger.log("ERRORE: Elemento instructions NON trovato!");
-    }
-
-    // Calcola e logga la distanza attuale dallo switch
-    const dx = camera.position[0] - switchPosition[0];
-    const dy = camera.position[1] - switchPosition[1];
-    const dz = camera.position[2] - switchPosition[2];
-    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    logger.log(`Distanza corrente dallo switch: ${distance.toFixed(2)}`);
-    logger.log(`isNearSwitch = ${isNearSwitch}`);
-}
-
-// Chiamala nel game loop o nella funzione startGame()
-setTimeout(debugSwitchAndInstructions, 2000);
 
 // Inizializzazione del pannello GUI avanzato
 function initGUI() {
@@ -3520,80 +3376,13 @@ function initGUI() {
         logger.log(`Luce esterna ${isExternalLightOn ? 'accesa' : 'spenta'}`);
     });
 
-    addBasicToggle(sidePanel, 'DEBUG Luce', false, function() {
-        logger.log(`=== DEBUG ILLUMINAZIONE ===`);
-        logger.log(`lightPosition: [${lightPosition}]`);
-        logger.log(`isLightOn: ${isLightOn}`);
-        logger.log(`renderOptions.shadows: ${renderOptions.shadows}`);
-        logger.log(`Camera position: [${camera.position}]`);
-        logger.log(`Distanza da luce: ${Math.sqrt(Math.pow(camera.position[0] - lightPosition[0], 2) + Math.pow(camera.position[1] - lightPosition[1], 2) + Math.pow(camera.position[2] - lightPosition[2], 2)).toFixed(2)}`);
-    });
-
     // SEZIONE: RENDERING
     addSection(sidePanel, 'Rendering');
-
-    // Sezione ombre avanzate
-    addSection(sidePanel, 'Ombre Avanzate');
-
-    addBasicToggle(sidePanel, 'Ombre Morbide', softShadows, function() {
-        softShadows = !softShadows;
-        //renderOptions.advancedRendering = softShadows;
-        logger.log(`Ombre morbide ${softShadows ? 'attivate' : 'disattivate'}`);
-    });
-
-    // Toggle per FORZARE ombre e luce
-    addBasicToggle(sidePanel, 'FORZA Ombre', true, function() {
-        renderOptions.shadows = true;
-        isLightOn = true;
-        logger.log('FORZATO: Ombre e luce attivate');
-    });
-
-    let shadowIntensityContainer = document.createElement('div');
-shadowIntensityContainer.style.padding = '10px 20px';
-shadowIntensityContainer.innerHTML = `
-    <label style="color: #ccc;">Intensità Ombre: <span id="shadow-intensity-value">80%</span></label>
-    <input type="range" id="shadow-intensity-slider" min="0" max="100" step="10" value="80" 
-        style="width: 100%; margin-top: 5px;">
-`;
-sidePanel.appendChild(shadowIntensityContainer);
-
-document.getElementById('shadow-intensity-slider').addEventListener('input', function() {
-    const intensity = parseInt(this.value);
-    document.getElementById('shadow-intensity-value').textContent = intensity + '%';
-    // Questa variabile verrà usata nel fragment shader
-    window.shadowIntensity = intensity / 100.0;
-    logger.log(`Intensità ombre impostata a: ${intensity}%`);
-});
-
-    // Slider per qualità ombre
-    let shadowQualityContainer = document.createElement('div'); // ← CAMBIATO: const → let
-    shadowQualityContainer.style.padding = '10px 20px';
-    shadowQualityContainer.innerHTML = `
-        <label style="color: #ccc;">Qualità Ombre: <span id="shadow-quality-value">${shadowSamples}</span></label>
-        <input type="range" id="shadow-quality-slider" min="4" max="32" step="4" value="${shadowSamples}" 
-            style="width: 100%; margin-top: 5px;">
-    `;
-    sidePanel.appendChild(shadowQualityContainer);
-
-    document.getElementById('shadow-quality-slider').addEventListener('input', function() {
-        shadowSamples = parseInt(this.value);
-        document.getElementById('shadow-quality-value').textContent = shadowSamples;
-        logger.log(`Qualità ombre impostata a: ${shadowSamples} campioni`);
-    });
 
     // Toggle per le ombre
     addBasicToggle(sidePanel, 'Ombre', renderOptions.shadows, function() {
         renderOptions.shadows = !renderOptions.shadows;
         logger.log(`Ombre ${renderOptions.shadows ? 'attivate' : 'disattivate'}`);
-    });
-
-    addBasicToggle(sidePanel, 'TEST Ombre', false, function() {
-        isLightOn = true;
-        renderOptions.shadows = true;
-        renderOptions.advancedRendering = true;
-        logger.log('🔦 TEST OMBRE: Luce e ombre forzatamente attivate per test');
-        logger.log('💡 Muoviti nella stanza per vedere le ombre su pavimento e pareti!');
-        logger.log(`📍 Posizione luce: [${lightPosition}] per ombre chiare`);
     });
 
     // Toggle per le riflessioni
@@ -3706,68 +3495,68 @@ function initShadowMapSafely() {
 
     try {
         logger.log('Tentativo inizializzazione shadow map semplificata...');
-        
+
         // VERSIONE SEMPLIFICATA: Usa una texture normale invece di depth texture
         shadowFramebuffer = gl.createFramebuffer();
         shadowTexture = gl.createTexture();
-        
+
         if (!shadowFramebuffer || !shadowTexture) {
             throw new Error('Impossibile creare framebuffer o texture');
         }
 
         gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFramebuffer);
         gl.bindTexture(gl.TEXTURE_2D, shadowTexture);
-        
+
         // Crea texture RGBA normale (senza problemi di compatibilità)
         const shadowMapData = new Uint8Array(shadowMapSize * shadowMapSize * 4);
         shadowMapData.fill(255); // Riempi di bianco
-        
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 
-                      shadowMapSize, shadowMapSize, 0, 
-                      gl.RGBA, gl.UNSIGNED_BYTE, shadowMapData);
-        
+
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA,
+            shadowMapSize, shadowMapSize, 0,
+            gl.RGBA, gl.UNSIGNED_BYTE, shadowMapData);
+
         // Parametri texture base
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        
+
         // Collega la texture al framebuffer
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, 
-                               gl.TEXTURE_2D, shadowTexture, 0);
-        
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+            gl.TEXTURE_2D, shadowTexture, 0);
+
         // Crea depth buffer separato
         const depthBuffer = gl.createRenderbuffer();
         if (depthBuffer) {
             gl.bindRenderbuffer(gl.RENDERBUFFER, depthBuffer);
-            gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, 
-                                 shadowMapSize, shadowMapSize);
-            gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, 
-                                     gl.RENDERBUFFER, depthBuffer);
+            gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16,
+                shadowMapSize, shadowMapSize);
+            gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT,
+                gl.RENDERBUFFER, depthBuffer);
         }
-        
+
         // Verifica status del framebuffer
         const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
         if (status !== gl.FRAMEBUFFER_COMPLETE) {
             throw new Error(`Framebuffer incompleto: ${status}`);
         }
-        
+
         // Ripristina binding
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.bindTexture(gl.TEXTURE_2D, null);
         gl.bindRenderbuffer(gl.RENDERBUFFER, null);
-        
+
         logger.log(`Shadow map semplificata inizializzata: ${shadowMapSize}x${shadowMapSize}`);
-        
+
     } catch (error) {
         logger.log(`Errore shadow map: ${error.message}`);
         logger.log('Disabilitazione ombre per compatibilità');
-        
+
         // Disabilita completamente le ombre
         renderOptions.shadows = false;
         shadowFramebuffer = null;
         shadowTexture = null;
-        
+
         // Cleanup eventuali risorse parziali
         if (shadowFramebuffer) {
             gl.deleteFramebuffer(shadowFramebuffer);
@@ -4143,89 +3932,87 @@ function toggleLight() {
                 }, 500);
             }, 100);
         }
-
-        logger.log(`Luce ${isLightOn ? 'accesa' : 'spenta'}`);
-    } else {
-        logger.log("Devi essere vicino all'interruttore per accendere/spegnere la luce");
     }
 }
 
 // Configurazione controlli touch
 function setupTouchControls() {
     // Rileva se siamo su mobile
-    const isMobile = 'ontouchstart' in window || 
-        navigator.maxTouchPoints > 0 || 
+    const isMobile = 'ontouchstart' in window ||
+        navigator.maxTouchPoints > 0 ||
         /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
     if (isMobile) {
         logger.log('Dispositivo mobile rilevato - Attivazione controlli touch avanzati');
-        
+
         // Mostra i controlli mobile
         const mobileControls = document.getElementById('mobile-controls');
         const cameraControl = document.getElementById('camera-control');
-        
+
         if (mobileControls) mobileControls.classList.add('active');
         if (cameraControl) cameraControl.style.display = 'flex';
 
         // Setup controlli direzionali
         setupDirectionalControls();
-        
+
         // Setup controlli azione
         setupActionControls();
-        
+
         // Setup controlli spettatore
         setupSpectatorControls();
-        
+
         // Setup controllo camera
         setupCameraControl();
-        
+
         // Setup indicatori di interazione
         setupMobileInteractionHints();
-        
+
         // Previeni comportamenti di scroll indesiderati
         document.addEventListener('touchmove', function(e) {
-            if (e.target.closest('.mobile-controls') || 
+            if (e.target.closest('.mobile-controls') ||
                 e.target.closest('.camera-control') ||
                 e.target.tagName === 'CANVAS') {
                 e.preventDefault();
             }
-        }, { passive: false });
+        }, {
+            passive: false
+        });
     }
 }
 
 // Setup controlli direzionali (WASD)
 function setupDirectionalControls() {
     const directionalButtons = document.querySelectorAll('.direction-btn');
-    
+
     directionalButtons.forEach(button => {
         const keyCode = button.dataset.key;
-        
+
         // Touch start - attiva movimento
         button.addEventListener('touchstart', (e) => {
             e.preventDefault();
             keys[keyCode] = true;
             button.classList.add('active');
-            
+
             // Feedback visivo e tattile
             if (navigator.vibrate) {
                 navigator.vibrate(50);
             }
         });
-        
+
         // Touch end - ferma movimento
         button.addEventListener('touchend', (e) => {
             e.preventDefault();
             keys[keyCode] = false;
             button.classList.remove('active');
         });
-        
+
         // Touch cancel - gestisci interruzioni
         button.addEventListener('touchcancel', (e) => {
             e.preventDefault();
             keys[keyCode] = false;
             button.classList.remove('active');
         });
-        
+
         // Previeni context menu
         button.addEventListener('contextmenu', (e) => {
             e.preventDefault();
@@ -4249,7 +4036,7 @@ function setupActionControls() {
             }
         });
     }
-    
+
     // Pulsante pannello (P)
     const panelButton = document.getElementById('touch-panel');
     if (panelButton) {
@@ -4266,22 +4053,22 @@ function setupActionControls() {
 // Setup controlli spettatore (Q, E)
 function setupSpectatorControls() {
     const spectatorButtons = document.querySelectorAll('.spectator-btn');
-    
+
     spectatorButtons.forEach(button => {
         const keyCode = button.dataset.key;
-        
+
         button.addEventListener('touchstart', (e) => {
             e.preventDefault();
             keys[keyCode] = true;
             button.classList.add('active');
         });
-        
+
         button.addEventListener('touchend', (e) => {
             e.preventDefault();
             keys[keyCode] = false;
             button.classList.remove('active');
         });
-        
+
         button.addEventListener('touchcancel', (e) => {
             e.preventDefault();
             keys[keyCode] = false;
@@ -4303,15 +4090,15 @@ function setupCameraControl() {
         cameraControl.addEventListener('touchstart', (e) => {
             e.preventDefault();
             lookMode = !lookMode;
-            
+
             cameraControl.classList.toggle('active', lookMode);
-            
+
             if (lookMode) {
                 showMobileMessage('Modalità Camera: Tocca e trascina sul canvas per guardare intorno', 3000);
             } else {
                 showMobileMessage('Modalità Camera disattivata', 1500);
             }
-            
+
             if (navigator.vibrate) {
                 navigator.vibrate(lookMode ? [50, 50, 50] : 100);
             }
@@ -4336,7 +4123,7 @@ function setupCameraControl() {
 
             // Sensibilità calibrata per mobile
             const sensitivity = 0.005;
-            
+
             const deltaX = touchX - lastTouchX;
             const deltaY = touchY - lastTouchY;
 
@@ -4345,8 +4132,8 @@ function setupCameraControl() {
             camera.rotation[0] += deltaY * sensitivity;
 
             // Limita rotazione verticale
-            camera.rotation[0] = Math.max(-Math.PI/2 + 0.1, 
-                                         Math.min(Math.PI/2 - 0.1, camera.rotation[0]));
+            camera.rotation[0] = Math.max(-Math.PI / 2 + 0.1,
+                Math.min(Math.PI / 2 - 0.1, camera.rotation[0]));
 
             lastTouchX = touchX;
             lastTouchY = touchY;
@@ -4367,13 +4154,13 @@ function setupCameraControl() {
 // Setup indicatori di interazione mobile
 function setupMobileInteractionHints() {
     const hintElement = document.getElementById('mobile-interaction-hint');
-    
+
     // Aggiorna la funzione updateCrosshair per mobile
     const originalUpdateCrosshair = updateCrosshair;
     updateCrosshair = function() {
         // Chiama la funzione originale
         originalUpdateCrosshair();
-        
+
         // Gestisci indicatori mobile
         if (hintElement) {
             if (isNearSwitch) {
@@ -4393,7 +4180,7 @@ function showMobileMessage(message, duration = 2000) {
     if (existingMsg) {
         existingMsg.remove();
     }
-    
+
     // Crea nuovo messaggio
     const msgElement = document.createElement('div');
     msgElement.id = 'temp-mobile-msg';
@@ -4414,9 +4201,9 @@ function showMobileMessage(message, duration = 2000) {
         pointer-events: none;
         animation: fadeInOut 0.3s ease;
     `;
-    
+
     document.body.appendChild(msgElement);
-    
+
     // Rimuovi dopo la durata specificata
     setTimeout(() => {
         if (msgElement.parentNode) {
@@ -4430,13 +4217,13 @@ function showMobileMessage(message, duration = 2000) {
 const originalToggleSpectatorMode = toggleSpectatorMode;
 toggleSpectatorMode = function() {
     originalToggleSpectatorMode();
-    
+
     // Mostra/nascondi controlli spettatore su mobile
     const spectatorControls = document.getElementById('spectator-controls');
     if (spectatorControls) {
         spectatorControls.classList.toggle('active', isSpectatorMode);
     }
-    
+
     // Mostra messaggio esplicativo su mobile
     if (isSpectatorMode) {
         showMobileMessage('Modalità Spettatore: Usa Q/E per salire/scendere', 3000);
@@ -4477,11 +4264,11 @@ function compileShader(gl, source, type) {
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
         const shaderType = type === gl.VERTEX_SHADER ? 'VERTEX' : 'FRAGMENT';
         const error = gl.getShaderInfoLog(shader);
-        
+
         // Log dettagliato per il debug
         logger.log(`ERRORE ${shaderType} SHADER:`);
         logger.log(error);
-        
+
         // Mostra le righe del codice sorgente per il debug
         const lines = source.split('\n');
         lines.forEach((line, index) => {
@@ -4490,17 +4277,17 @@ function compileShader(gl, source, type) {
                 logger.log(`${lineNum}: ${line}`);
             }
         });
-        
+
         gl.deleteShader(shader);
         return null;
     }
-    
+
     return shader;
 }
 
 // Inizializzazione degli shader
 function initShaders() {
-        try {
+    try {
         // Shader principali per gli oggetti
         const vertexShaderSource = document.getElementById('vertex-shader').textContent;
         const fragmentShaderSource = document.getElementById('fragment-shader').textContent;
@@ -4524,7 +4311,7 @@ function initShaders() {
             logger.log('Errore nel link del program: ' + gl.getProgramInfoLog(program));
             return false;
         }
-        
+
         // Shader per lo skybox
         const skyboxVertexShaderSource = document.getElementById('skybox-vertex-shader').textContent;
         const skyboxFragmentShaderSource = document.getElementById('skybox-fragment-shader').textContent;
@@ -4630,7 +4417,7 @@ function loadResources() {
     loadTexture('textures/wood.jpg', 'floor');
     loadTexture('textures/wood.jpg', 'ceiling');
     loadTexture('textures/glass.png', 'glass');
-    
+
     // Carica texture per la foto autore
     loadTexture('textures/author_photo.jpg', 'author_photo');
 
@@ -5018,20 +4805,17 @@ function positionModel(name) {
         dollPosition = [randomX, 0, randomZ]; // Questa rimane per l'interazione
         logger.log(`Bambola posizionata a: [${randomX}, -5, ${randomZ}] (modello), interazione: [${randomX}, 0, ${randomZ}]`);
     } else if (name === 'lamp') {
-    models[name].position = [0, -roomHeight + 0.5, 0]; // Attaccata al soffitto nel sistema originale
-    models[name].rotation = [Math.PI / 2, 0, 0];
-    models[name].scale = [2.5, 2.5, 2.5];
-    models[name].isEmissive = true;
-    
-    lightPosition = [0, 4, 0];
-    
-    logger.log(`Lampada modello a: [${models[name].position}]`);
-    logger.log(`Posizione LUCE a: [${lightPosition}] (sistema Y corretto)`);
-    
-    const lampLightColor = createColorTexture([1.0, 0.95, 0.8, 1.0], 1.5);
-    textures['lampLight'] = lampLightColor;
-    models[name].texture = 'lampLight';
-} else if (name === 'switch' || name === 'lightSwitch') {
+        models[name].position = [0, -roomHeight + 0.5, 0]; // Attaccata al soffitto nel sistema originale
+        models[name].rotation = [Math.PI / 2, 0, 0];
+        models[name].scale = [2.5, 2.5, 2.5];
+        models[name].isEmissive = true;
+
+        lightPosition = [0, 4, 0];
+
+        const lampLightColor = createColorTexture([1.0, 0.95, 0.8, 1.0], 1.5);
+        textures['lampLight'] = lampLightColor;
+        models[name].texture = 'lampLight';
+    } else if (name === 'switch' || name === 'lightSwitch') {
         // MANTIENI: Solo l'interruttore ha le coordinate corrette
         const switchX = roomSize - 0.01; // Parete destra
         const switchY = -2.0; // Altezza media
@@ -5045,8 +4829,6 @@ function positionModel(name) {
 
         // Aggiorna la posizione per l'interazione
         switchPosition = [switchX, switchY, switchZ];
-
-        logger.log(`MANTIENI - Switch sulla parete destra: [${switchPosition}]`);
     } else if (name === 'wheelie') {
         // RIPRISTINO: TUE coordinate originali
         models[name].position = [5, -6.7, 4]; // TUE coordinate originali
@@ -5494,211 +5276,53 @@ function createColorTexture(color, intensity = 1.0) {
     return texture;
 }
 
-// Funzione debug per verificare il sistema shadow
-function debugShadowSystem() {
-    logger.log('=== DEBUG SHADOW SYSTEM ===');
-    logger.log(`renderOptions.shadows: ${renderOptions.shadows}`);
-    logger.log(`renderOptions.advancedRendering: ${renderOptions.advancedRendering}`);
-    logger.log(`shadowFramebuffer: ${shadowFramebuffer ? 'OK' : 'NULL'}`);
-    logger.log(`shadowTexture: ${shadowTexture ? 'OK' : 'NULL'}`);
-    logger.log(`shadowProgram: ${shadowProgram ? 'OK' : 'NULL'}`);
-    logger.log(`lightPosition: [${lightPosition}]`);
-    logger.log(`isLightOn: ${isLightOn}`);
-    
-    // Test rendering shadow map
-    if (shadowFramebuffer) {
-        gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFramebuffer);
-        const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
-        logger.log(`Shadow framebuffer status: ${status === gl.FRAMEBUFFER_COMPLETE ? 'COMPLETE' : 'INCOMPLETE'}`);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    }
-}
-
-// Aggiungi dopo debugShadowSystem:
-function testShadowVisibility() {
-    logger.log('=== TEST VISIBILITÀ OMBRE ===');
-    logger.log(`Camera position: [${camera.position}]`);
-    logger.log(`Light position: [${lightPosition}]`);
-    
-    // Calcola se la camera dovrebbe vedere ombre
-    const dx = camera.position[0] - lightPosition[0];
-    const dz = camera.position[2] - lightPosition[2];
-    const distanceFromLight = Math.sqrt(dx*dx + dz*dz);
-    
-    logger.log(`Distanza dalla luce: ${distanceFromLight.toFixed(2)}`);
-    logger.log(`La camera dovrebbe vedere ombre: ${distanceFromLight > 2 ? 'SÌ' : 'NO'}`);
-    
-    // Test shadow map binding
-    if (shadowTexture) {
-        logger.log('Shadow texture è disponibile per il binding');
-    } else {
-        logger.log('ERRORE: Shadow texture non disponibile!');
-    }
-}
-
-// Aggiungi dopo testShadowVisibility:
-function testMoveAwayFromLight() {
-    logger.log('=== TEST MOVIMENTO OMBRE ===');
-    logger.log('ISTRUZIONI: Muoviti lontano dal centro (coordinate [0,Y,0])');
-    logger.log('Le ombre dovrebbero apparire quando sei a distanza > 3 dalla luce');
-    logger.log(`Posizione attuale: [${camera.position[0].toFixed(1)}, ${camera.position[1].toFixed(1)}, ${camera.position[2].toFixed(1)}]`);
-    logger.log(`Luce a: [${lightPosition}]`);
-    
-    const dx = camera.position[0] - lightPosition[0];
-    const dz = camera.position[2] - lightPosition[2];
-    const distance2D = Math.sqrt(dx*dx + dz*dz);
-    
-    logger.log(`Distanza orizzontale dalla luce: ${distance2D.toFixed(2)}`);
-    if (distance2D > 3) {
-        logger.log('✅ Dovresti vedere ombre sul pavimento!');
-    } else {
-        logger.log('❌ Muoviti più lontano per vedere le ombre');
-    }
-}
-
-// Aggiungi questa funzione dopo le altre funzioni di debug
-function testShadowStrength() {
-    logger.log('=== TEST INTENSITÀ OMBRE ===');
-    
-    // Impostazioni bilanciate per vedere bene le ombre senza esagerare
-    renderOptions.shadows = true;
-    renderOptions.advancedRendering = true;
-    isLightOn = true;
-    isExternalLightOn = true; // Lascia un po' di luce esterna per realismo
-    
-    // Riduci l'intensità della luce esterna per vedere meglio le ombre
-    const extLightElement = document.getElementById('external-light-intensity');
-    if (extLightElement) {
-        extLightElement.value = 0.1;
-    }
-    
-    logger.log('Impostazioni bilanciate per test ombre:');
-    logger.log('- Ombre: ON');
-    logger.log('- Luce: ON'); 
-    logger.log('- Luce esterna: ON (ridotta)');
-    logger.log('- Advanced rendering: ON');
-    logger.log('');
-    logger.log('ISTRUZIONI PER VEDERE LE OMBRE:');
-    logger.log('1. Le ombre ora dovrebbero essere visibili su PAVIMENTO e MURI');
-    logger.log('2. Muoviti vicino agli oggetti per vedere le loro ombre proiettate');
-    logger.log('3. Premi Y di nuovo per tornare alle impostazioni normali');
-    
-    // Toggle per tornare indietro
-    window.shadowTestActive = !window.shadowTestActive;
-    if (!window.shadowTestActive) {
-        isExternalLightOn = true;
-        logger.log('Test ombre disattivato - impostazioni normali ripristinate');
-    }
-}
-
-// NUOVE FUNZIONI DI DEBUG E CORREZIONI
-
-// Funzione per debug illuminazione migliorata
-function debugLightingSystem() {
-    logger.log('=== DEBUG SISTEMA ILLUMINAZIONE ===');
-    logger.log(`lightPosition: [${lightPosition}]`);
-    logger.log(`isLightOn: ${isLightOn}`);
-    logger.log(`camera.position: [${camera.position}]`);
-    
-    // Calcola distanza da diverse superfici
-    const distanceFromFloor = Math.abs(lightPosition[1] - 0);
-    const distanceFromCeiling = Math.abs(lightPosition[1] - (-roomHeight));
-    
-    logger.log(`Distanza luce-pavimento: ${distanceFromFloor.toFixed(2)}`);
-    logger.log(`Distanza luce-soffitto: ${distanceFromCeiling.toFixed(2)}`);
-    
-    // Verifica modelli stanza
-    const roomElements = ['floor', 'ceiling', 'frontWall', 'backWall', 'leftWall', 'rightWall'];
-    for (const element of roomElements) {
-        if (models[element]) {
-            logger.log(`✅ ${element}: ${models[element].vertices.length / 3} vertici, ${models[element].normals ? models[element].normals.length / 3 : 0} normali`);
-        } else {
-            logger.log(`❌ ${element}: MANCANTE`);
-        }
-    }
-}
-
 function initializeProperLighting() {
-    lightPosition = [0, 4, 0]; // DA: [0, -4, 0] A: [0, 4, 0]
-    
-    logger.log('=== ILLUMINAZIONE CON NUOVO SISTEMA Y ===');
-    logger.log(`roomHeight: ${roomHeight}`);
-    logger.log(`Soffitto a Y: ${roomHeight}`); // Ora -5
-    logger.log(`Pavimento a Y: 0`);
-    logger.log(`Luce a: [${lightPosition}] (sistema Y corretto)`);
-    
-    // Verifica che la lampada esista e sia posizionata con le TUE coordinate originali
+    lightPosition = [0, 4, 0];
+
     if (models['lamp']) {
-        // RIPRISTINO COMPLETO: TUA posizione lampada originale
-        models['lamp'].position = [0, 0, 0]; // TUA posizione originale era [0, 0, 0]
-        logger.log(`RIPRISTINO COMPLETO Lampada a: [${models['lamp'].position}] (TUE coordinate originali)`);
+        models['lamp'].position = [0, 0, 0];
     } else {
         // Crea una lampada fallback se non esiste
         createFallbackLamp();
     }
 }
 
-// Funzione per verificare e riparare i modelli della stanza
-function verifyAndFixRoomModels() {
-    logger.log('=== VERIFICA E RIPARAZIONE MODELLI STANZA ===');
-    
-    const roomElements = ['floor', 'ceiling', 'frontWall', 'backWall', 'leftWall', 'rightWall'];
-    let fixesApplied = 0;
-    
-    roomElements.forEach(elementName => {
-        const element = models[elementName];
-        
-        if (!element) {
-            logger.log(`❌ ${elementName} mancante - creazione in corso...`);
-            createMissingRoomElement(elementName);
-            fixesApplied++;
-        } else if (!element.normals || element.normals.length === 0) {
-            logger.log(`⚠️ ${elementName} senza normali - riparazione in corso...`);
-            fixRoomElementNormals(elementName);
-            fixesApplied++;
-        } else {
-            logger.log(`✅ ${elementName} OK`);
-        }
-    });
-    
-    logger.log(`Riparazione completata: ${fixesApplied} elementi corretti`);
-}
-
 // Helper per creare elementi stanza mancanti
 function createMissingRoomElement(elementName) {
     if (elementName === 'floor') {
         models['floor'] = {
-    vertices: [
-        -roomSize, 0, -roomSize,
-        roomSize, 0, roomSize,
-        roomSize, 0, -roomSize,
-        -roomSize, 0, -roomSize,
-        -roomSize, 0, roomSize,
-        roomSize, 0, roomSize
-    ],
-    normals: [
-        0, 1, 0,  // Normale verso l'alto (verso la camera)
-        0, 1, 0,
-        0, 1, 0,
-        0, 1, 0,
-        0, 1, 0,
-        0, 1, 0
-    ],
+            vertices: [
+                -roomSize, 0, -roomSize,
+                roomSize, 0, roomSize,
+                roomSize, 0, -roomSize,
+                -roomSize, 0, -roomSize,
+                -roomSize, 0, roomSize,
+                roomSize, 0, roomSize
+            ],
+            normals: [
+                0, 1, 0,
+                0, 1, 0,
+                0, 1, 0,
+                0, 1, 0,
+                0, 1, 0,
+                0, 1, 0
+            ],
             texcoords: [0, 0, 2, 0, 2, 2, 0, 0, 2, 2, 0, 2],
-            position: [0, 0, 0], scale: [1, 1, 1], texture: 'floor'
+            position: [0, 0, 0],
+            scale: [1, 1, 1],
+            texture: 'floor'
         };
     }
-    // Aggiungi altri elementi se necessario...
 }
 
 // Helper per riparare normali
 function fixRoomElementNormals(elementName) {
     const element = models[elementName];
     if (!element || !element.vertices) return;
-    
+
     const vertexCount = element.vertices.length / 3;
     element.normals = [];
-    
+
     // Assegna normali appropriate
     if (elementName === 'floor') {
         for (let i = 0; i < vertexCount; i++) {
@@ -5709,30 +5333,4 @@ function fixRoomElementNormals(elementName) {
             element.normals.push(0, -1, 0); // Verso il basso
         }
     }
-}
-
-// FUNZIONE TEST COORDINATE - Aggiungi alla fine di main.js
-function testCoordinateSystem() {
-    logger.log('=== TEST SISTEMA COORDINATE ===');
-    logger.log(`roomHeight: ${roomHeight}`);
-    logger.log(`roomSize: ${roomSize}`);
-    logger.log('');
-    logger.log('LIMITI STANZA:');
-    logger.log(`Pavimento: Y = 0`);
-    logger.log(`Soffitto: Y = ${-roomHeight}`);
-    logger.log(`Parete Sinistra: X = ${-roomSize}`);
-    logger.log(`Parete Destra: X = ${roomSize}`);
-    logger.log(`Parete Frontale: Z = ${-roomSize}`);
-    logger.log(`Parete Posteriore: Z = ${roomSize}`);
-    logger.log('');
-    logger.log('POSIZIONI ATTUALI:');
-    logger.log(`Camera: [${camera.position[0].toFixed(1)}, ${camera.position[1].toFixed(1)}, ${camera.position[2].toFixed(1)}]`);
-    logger.log(`Luce: [${lightPosition}]`);
-    if (models['lamp']) {
-        logger.log(`Lampada: [${models['lamp'].position}]`);
-    }
-    if (models['switch']) {
-        logger.log(`Switch: [${models['switch'].position}]`);
-    }
-    logger.log(`Switch interazione: [${switchPosition}]`);
 }
