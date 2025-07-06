@@ -364,7 +364,7 @@ function render() {
     const u_lightSpaceMatrixLoc = gl.getUniformLocation(program, 'u_lightSpaceMatrix');
 
     // CORREZIONE: Imposta intensità luce BILANCIATA per illuminare tutta la stanza
-    const lightIntensity = isLightOn ? 2.5 : 0.0; // Ridotto da 4.0 a 2.5 per evitare sovraesposizione
+    const lightIntensity = isLightOn ? 2.0 : 0.0; // Ridotto da 4.0 a 2.5 per evitare sovraesposizione
     gl.uniform1f(gl.getUniformLocation(program, 'u_lightIntensity'), lightIntensity);
 
     // DEBUG: Log periodico dell'intensità luce

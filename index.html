@@ -252,8 +252,15 @@ void main() {
         // Diffuse lighting
         float dotNL = max(dot(normal, lightDir), 0.0);
 
-if (abs(normal.y) > 0.7) {
-    dotNL = max(dotNL, 0.3); // Minimo 30% di illuminazione per superfici orizzontali
+       if (normal.y < -0.7) {
+    // Solo per il soffitto: calcola illuminazione basata sulla distanza dalla luce
+    float distanceToLight = length(u_lightPos - v_position);
+    float maxDistance = 12.0; // Distanza massima nella stanza
+    float lightFalloff = 1.0 - clamp(distanceToLight / maxDistance, 0.0, 1.0);
+    
+    // Illuminazione graduata: dal 40% sotto la lampada al 5% negli angoli
+    float ceilingLight = mix(0.05, 0.4, lightFalloff);
+    dotNL = max(dotNL, ceilingLight);
 }
 
         diffuse = dotNL * vec3(1.0, 0.95, 0.85) * color.rgb * baseIntensity * attenuation;
