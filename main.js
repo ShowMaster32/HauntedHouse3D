@@ -1425,41 +1425,37 @@ function createSimpleRoom() {
 
     // Pavimento (a Y=0) - CORREZIONE NORMALI
     models['floor'] = {
-        vertices: [
-            -roomSize, 0, -roomSize,
-            roomSize, 0, -roomSize,
-            roomSize, 0, roomSize,
-            -roomSize, 0, -roomSize,
-            roomSize, 0, roomSize,
-            -roomSize, 0, roomSize
-        ],
-        normals: [
-            0, 1, 0,  // Normale verso l'alto (verso la luce)
-            0, 1, 0,
-            0, 1, 0,
-            0, 1, 0,
-            0, 1, 0,
-            0, 1, 0
-        ],
-        texcoords: [
-            0, 0, 2, 0, 2, 2,  // Aumenta ripetizione texture
-            0, 0, 2, 2, 0, 2
-        ],
-        position: [0, 0, 0],
-        scale: [1, 1, 1],
-        texture: 'floor'
-    };
+    vertices: [
+        -roomSize, 0, -roomSize,
+        roomSize, 0, roomSize,
+        roomSize, 0, -roomSize,
+        -roomSize, 0, -roomSize,
+        -roomSize, 0, roomSize,
+        roomSize, 0, roomSize
+    ],
+    normals: [
+        0, 1, 0,  0, 1, 0,  0, 1, 0,
+        0, 1, 0,  0, 1, 0,  0, 1, 0
+    ],
+    texcoords: [
+        0, 0, 2, 2, 2, 0,
+        0, 0, 0, 2, 2, 2
+    ],
+    position: [0, -5, 0],
+    scale: [1, 1, 1],
+    texture: 'floor'
+};
 
     // Soffitto (a Y=-roomHeight) - CORREZIONE NORMALI
     models['ceiling'] = {
-        vertices: [
-            -roomSize, -roomHeight, -roomSize,
-            roomSize, -roomHeight, roomSize,
-            roomSize, -roomHeight, -roomSize,
-            -roomSize, -roomHeight, -roomSize,
-            -roomSize, -roomHeight, roomSize,
-            roomSize, -roomHeight, roomSize
-        ],
+    vertices: [
+        -roomSize, -roomHeight, -roomSize,
+        roomSize, -roomHeight, roomSize,
+        roomSize, -roomHeight, -roomSize,
+        -roomSize, -roomHeight, -roomSize,
+        -roomSize, -roomHeight, roomSize,
+        roomSize, -roomHeight, roomSize
+    ],
         normals: [
             0, -1, 0,  // Normale verso il basso (verso la stanza)
             0, -1, 0,
@@ -1472,7 +1468,7 @@ function createSimpleRoom() {
             0, 0, 2, 2, 2, 0,
             0, 0, 0, 2, 2, 2
         ],
-        position: [0, 0, 0],
+        position: [0, 5, 0],
         scale: [1, 1, 1],
         texture: 'ceiling'
     };
@@ -5022,18 +5018,15 @@ function positionModel(name) {
         dollPosition = [randomX, 0, randomZ]; // Questa rimane per l'interazione
         logger.log(`Bambola posizionata a: [${randomX}, -5, ${randomZ}] (modello), interazione: [${randomX}, 0, ${randomZ}]`);
     } else if (name === 'lamp') {
-    // Posizione del modello della lampada
-    models[name].position = [0, 0, 0];
+    models[name].position = [0, -roomHeight + 0.5, 0]; // Attaccata al soffitto nel sistema originale
     models[name].rotation = [Math.PI / 2, 0, 0];
     models[name].scale = [2.5, 2.5, 2.5];
     models[name].isEmissive = true;
     
-    // IMPORTANTE: La posizione della LUCE deve essere più realistica
-    // Con Y invertito, -4 significa 1 unità sotto il soffitto
-    lightPosition = [0, -3.5, 0]; // Spostiamo la luce un po' più in alto
+    lightPosition = [0, 4, 0];
     
     logger.log(`Lampada modello a: [${models[name].position}]`);
-    logger.log(`Posizione LUCE aggiustata a: [${lightPosition}] per ombre più naturali`);
+    logger.log(`Posizione LUCE a: [${lightPosition}] (sistema Y corretto)`);
     
     const lampLightColor = createColorTexture([1.0, 0.95, 0.8, 1.0], 1.5);
     textures['lampLight'] = lampLightColor;
@@ -5625,18 +5618,14 @@ function debugLightingSystem() {
     }
 }
 
-// Inizializzazione luce migliorata
 function initializeProperLighting() {
-    // RIPRISTINO COMPLETO: TUE coordinate originali esatte
-    lightPosition = [0, -4, 0]; // TUA posizione luce originale
+    lightPosition = [0, 4, 0]; // DA: [0, -4, 0] A: [0, 4, 0]
     
-    logger.log('=== INIZIALIZZAZIONE ILLUMINAZIONE RIPRISTINATA COMPLETA ===');
+    logger.log('=== ILLUMINAZIONE CON NUOVO SISTEMA Y ===');
     logger.log(`roomHeight: ${roomHeight}`);
-    logger.log(`Soffitto a Y: ${-roomHeight}`);
+    logger.log(`Soffitto a Y: ${roomHeight}`); // Ora -5
     logger.log(`Pavimento a Y: 0`);
-    logger.log(`RIPRISTINO COMPLETO Luce a: [${lightPosition}] (TUE coordinate originali)`);
-    logger.log(`RIPRISTINO COMPLETO Distanza luce-pavimento: ${Math.abs(lightPosition[1] - 0)} unità`);
-    logger.log(`RIPRISTINO COMPLETO Distanza luce-soffitto: ${Math.abs(lightPosition[1] - (-roomHeight))} unità`);
+    logger.log(`Luce a: [${lightPosition}] (sistema Y corretto)`);
     
     // Verifica che la lampada esista e sia posizionata con le TUE coordinate originali
     if (models['lamp']) {
@@ -5679,11 +5668,22 @@ function verifyAndFixRoomModels() {
 function createMissingRoomElement(elementName) {
     if (elementName === 'floor') {
         models['floor'] = {
-            vertices: [
-                -roomSize, 0, -roomSize, roomSize, 0, -roomSize, roomSize, 0, roomSize,
-                -roomSize, 0, -roomSize, roomSize, 0, roomSize, -roomSize, 0, roomSize
-            ],
-            normals: [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0],
+    vertices: [
+        -roomSize, 0, -roomSize,
+        roomSize, 0, roomSize,
+        roomSize, 0, -roomSize,
+        -roomSize, 0, -roomSize,
+        -roomSize, 0, roomSize,
+        roomSize, 0, roomSize
+    ],
+    normals: [
+        0, 1, 0,  // Normale verso l'alto (verso la camera)
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0
+    ],
             texcoords: [0, 0, 2, 0, 2, 2, 0, 0, 2, 2, 0, 2],
             position: [0, 0, 0], scale: [1, 1, 1], texture: 'floor'
         };

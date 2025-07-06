@@ -251,12 +251,24 @@ void main() {
         
         // Diffuse lighting
         float dotNL = max(dot(normal, lightDir), 0.0);
+
+if (abs(normal.y) > 0.7) {
+    dotNL = max(dotNL, 0.3); // Minimo 30% di illuminazione per superfici orizzontali
+}
+
         diffuse = dotNL * vec3(1.0, 0.95, 0.85) * color.rgb * baseIntensity * attenuation;
         
         // Boost per superfici orizzontali
         if (abs(normal.y) > 0.7) {
-            diffuse *= 2.5;
-        }
+    // Per il pavimento (normale verso +Y) forza illuminazione
+    if (normal.y > 0.0) {
+        diffuse *= 4.0; // Boost maggiore per il pavimento
+    }
+    // Per il soffitto (normale verso -Y) forza illuminazione  
+    else {
+        diffuse *= 3.0; // Boost per il soffitto
+    }
+}
         
         // Specular lighting
         if (u_reflections && dotNL > 0.0) {
