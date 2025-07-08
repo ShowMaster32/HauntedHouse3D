@@ -357,7 +357,7 @@ function render() {
     const viewMatrix = createViewMatrix();
     const aspect = canvas.width / canvas.height;
     const fov = Math.PI / 2;
-    const projectionMatrix = m4.perspective(fov, aspect, 0.4, 100);
+    const projectionMatrix = m4.perspective(fov, aspect, 0.4, 1000);
 
     // Renderizza skybox
     renderSkybox(viewMatrix, projectionMatrix);
@@ -385,8 +385,11 @@ function render() {
     const u_normalMatrixLoc = gl.getUniformLocation(program, 'u_normalMatrix');
     const u_lightSpaceMatrixLoc = gl.getUniformLocation(program, 'u_lightSpaceMatrix');
 
-    // CORREZIONE: Imposta intensità luce BILANCIATA per illuminare tutta la stanza
-    const lightIntensity = isLightOn ? 2.0 : 0.0; // Ridotto da 4.0 a 2.5 per evitare sovraesposizione
+    // Effetto vignette horror
+    const uResolutionLocation = gl.getUniformLocation(program, "u_resolution");
+    gl.uniform2f(uResolutionLocation, canvas.width, canvas.height);
+
+    const lightIntensity = isLightOn ? 2.0 : 0.0;
     gl.uniform1f(gl.getUniformLocation(program, 'u_lightIntensity'), lightIntensity);
 
     // Opzioni di rendering
@@ -397,7 +400,7 @@ function render() {
     gl.uniform1i(gl.getUniformLocation(program, 'u_advancedRendering'), renderOptions.advancedRendering);
 
     // CORREZIONE: Luce esterna più intensa
-    const externalColor = isExternalLightOn ? [0.7, 0.8, 0.9] : [0.1, 0.1, 0.15]; // Colori meno intensi
+    const externalColor = isExternalLightOn ? [0.7, 0.8, 0.9] : [0.1, 0.1, 0.15];
     const externalIntensity = isExternalLightOn ? 0.2 : 0.05;
     gl.uniform3fv(gl.getUniformLocation(program, 'u_externalLightColor'), externalColor);
     gl.uniform1f(gl.getUniformLocation(program, 'u_externalLightIntensity'), externalIntensity);
@@ -475,20 +478,13 @@ function setupImprovedShadowUniforms() {
 
 // Funzione per creare la matrice light space migliorata
 function createLightSpaceMatrix() {
-    // Posizione della luce corretta per il sistema Y invertito
-    // La luce è a Y=-4, quindi è 1 unità sotto il soffitto (che è a Y=-5)
-
-    // MIGLIORAMENTO: Target dinamico per catturare meglio le ombre
-    // Punta verso il basso per vedere meglio pavimento e oggetti
-    const lightTarget = [0, 0, 0]; // Centro della stanza a livello pavimento
+    const lightTarget = [0, 0, 0];
 
     // Crea view matrix dalla luce
     const lightView = m4.lookAt(lightPosition, lightTarget, [0, 0, 1]);
-
-    // MIGLIORAMENTO: Proiezione ortografica ottimizzata per la stanza
-    const orthoSize = 15.0; // Copre tutta la stanza
+    const orthoSize = 15.0;
     const nearPlane = 0.1;
-    const farPlane = 30.0; // Aumentato per catturare tutto
+    const farPlane = 30.0;
 
     const lightProjection = m4.orthographic(
         -orthoSize, orthoSize, // left, right
@@ -817,7 +813,7 @@ function createGlassMaterial() {
 function renderSkybox(viewMatrix, projectionMatrix) {
     // Verifica che il programma e texture dello skybox esistano
     if (!textures['skybox'] || !models['skybox'] || !skyboxProgram) {
-        return; // Esci silenziosamente se mancano componenti
+        return;
     }
 
     // Usa il programma shader per lo skybox
@@ -958,9 +954,7 @@ function getSideVector() {
 }
 
 function updateCrosshair() {
-    // CORREZIONE: Usa la posizione CORRETTA dell'interruttore sulla parete DESTRA
-    // Ma visto che hai l'asse invertito, devi invertire anche il controllo del crosshair
-    const correctSwitchPosition = [-9.99, -2, 0]; // INVERTITO: ora è sulla sinistra visiva
+    const correctSwitchPosition = [-9.99, -2, 0];
 
     // Reset dello stato
     isNearSwitch = false;
@@ -1024,392 +1018,6 @@ function checkDollProximity() {
             logger.log('Suono bambola attivato dalla vicinanza');
         }
     }
-}
-
-// Nel caso si usi createSwitch():
-function createSwitch() {
-    // Se il modello OBJ è già stato caricato, non creare il fallback
-    if (models['switch']) {
-        logger.log("Modello switch OBJ già caricato, fallback non necessario");
-        return;
-    }
-
-    // Dimensioni dell'interruttore
-    const switchSize = 0.4;
-
-    // Vertici per un semplice parallelepipedo
-    const switchVertices = [
-        // Fronte
-        -switchSize, -switchSize, switchSize,
-        switchSize, -switchSize, switchSize,
-        switchSize, switchSize, switchSize,
-        -switchSize, -switchSize, switchSize,
-        switchSize, switchSize, switchSize,
-        -switchSize, switchSize, switchSize,
-
-        // Retro
-        -switchSize, -switchSize, -switchSize,
-        -switchSize, switchSize, -switchSize,
-        switchSize, switchSize, -switchSize,
-        -switchSize, -switchSize, -switchSize,
-        switchSize, switchSize, -switchSize,
-        switchSize, -switchSize, -switchSize,
-
-        // Alto
-        -switchSize, switchSize, -switchSize,
-        -switchSize, switchSize, switchSize,
-        switchSize, switchSize, switchSize,
-        -switchSize, switchSize, -switchSize,
-        switchSize, switchSize, switchSize,
-        switchSize, switchSize, -switchSize,
-
-        // Basso
-        -switchSize, -switchSize, -switchSize,
-        switchSize, -switchSize, -switchSize,
-        switchSize, -switchSize, switchSize,
-        -switchSize, -switchSize, -switchSize,
-        switchSize, -switchSize, switchSize,
-        -switchSize, -switchSize, switchSize,
-
-        // Destra
-        switchSize, -switchSize, -switchSize,
-        switchSize, switchSize, -switchSize,
-        switchSize, switchSize, switchSize,
-        switchSize, -switchSize, -switchSize,
-        switchSize, switchSize, switchSize,
-        switchSize, -switchSize, switchSize,
-
-        // Sinistra
-        -switchSize, -switchSize, -switchSize,
-        -switchSize, -switchSize, switchSize,
-        -switchSize, switchSize, switchSize,
-        -switchSize, -switchSize, -switchSize,
-        -switchSize, switchSize, switchSize,
-        -switchSize, switchSize, -switchSize
-    ];
-
-    // Normali standard per un cubo
-    const switchNormals = [
-        // Fronte
-        0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
-        // Retro
-        0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1,
-        // Alto
-        0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0,
-        // Basso
-        0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0,
-        // Destra
-        1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0,
-        // Sinistra
-        -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0
-    ];
-
-    // Coordinate texture di base
-    const switchTexcoords = [];
-    for (let i = 0; i < 6; i++) {
-        switchTexcoords.push(
-            0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1
-        );
-    }
-
-    // Usa la nuova texture bianca ruvida
-    textures['switchColor'] = textures['switch_white'] || createColorTexture([1.0, 1.0, 1.0, 1.0]);
-
-    // Posiziona l'interruttore sulla parete DESTRA
-    const switchX = roomSize - 0.3; // Vicino alla parete destra
-    const switchY = -2.0; // Altezza degli occhi
-    const switchZ = 0; // Centro della stanza lungo Z
-
-    // Aggiungi l'interruttore ai modelli
-    models['fallbackSwitch'] = {
-        vertices: switchVertices,
-        normals: switchNormals,
-        texcoords: switchTexcoords,
-        position: [switchX, switchY, switchZ],
-        rotation: [0, -Math.PI / 2, 0], // Rivolto verso l'interno
-        scale: [1, 1, 1],
-        texture: 'switchColor',
-        isEmissive: true
-    };
-
-    // Crea l'indicatore arancione accanto all'interruttore principale
-    const indicatorLight = createColorTexture([1.0, 0.5, 0.0, 1.0]); // Arancione
-    textures['indicatorLight'] = indicatorLight;
-
-    // Aggiungi l'indicatore ACCANTO all'interruttore
-    models['switchIndicator'] = {
-        vertices: switchVertices,
-        normals: switchNormals,
-        texcoords: switchTexcoords,
-        position: [switchX, switchY, switchZ - 0.8], // Accanto all'interruttore
-        rotation: [0, 0, 0],
-        scale: [0.7, 0.7, 0.7], // Più piccolo dell'interruttore principale
-        texture: 'indicatorLight',
-        isEmissive: true
-    };
-
-    // Aggiorna anche la posizione per l'interazione
-    switchPosition = [switchX, switchY, switchZ];
-
-    logger.log(`Interruttore fallback posizionato a: [${switchPosition}]`);
-    logger.log(`Indicatore arancione posizionato a: [${switchX}, ${switchY}, ${switchZ - 0.8}]`);
-}
-
-// Funzione per creare una lampada fallback se lamp.obj non si carica
-function createFallbackLamp() {
-    // Verifica se la lampada è già stata caricata
-    if (models['lamp']) {
-        return;
-    }
-
-    logger.log("Creazione lampada fallback...");
-
-    // Crea una texture luminosa per la lampada
-    const lampLightColor = createColorTexture([1.0, 0.95, 0.8, 1.0]); // Bianco caldo
-    textures['lampLight'] = lampLightColor;
-
-    // Crea un modello semplice di lampada (semisfera)
-    const segments = 16;
-    const rings = 8;
-    const radius = 0.5;
-
-    const vertices = [];
-    const normals = [];
-    const texcoords = [];
-
-    // Crea una semisfera rivolta verso il basso
-    for (let ring = 0; ring <= rings; ring++) {
-        const phi = (ring / rings) * Math.PI / 2; // Solo metà sfera (0 a PI/2)
-        const cosPhi = Math.cos(phi);
-        const sinPhi = Math.sin(phi);
-
-        for (let segment = 0; segment <= segments; segment++) {
-            const theta = (segment / segments) * 2 * Math.PI;
-            const cosTheta = Math.cos(theta);
-            const sinTheta = Math.sin(theta);
-
-            // Vertice sulla semisfera
-            const x = cosTheta * sinPhi * radius;
-            const y = cosPhi * radius; // Y verso l'alto
-            const z = sinTheta * sinPhi * radius;
-
-            vertices.push(x, -y, z); // Negativo Y per puntare verso il basso
-
-            // Normale (verso l'esterno)
-            normals.push(x / radius, -y / radius, z / radius);
-
-            // Coordinate texture
-            texcoords.push(segment / segments, ring / rings);
-        }
-    }
-
-    // Crea indici per i triangoli
-    const indices = [];
-    for (let ring = 0; ring < rings; ring++) {
-        for (let segment = 0; segment < segments; segment++) {
-            // Indici dei 4 vertici del quad
-            const a = ring * (segments + 1) + segment;
-            const b = ring * (segments + 1) + segment + 1;
-            const c = (ring + 1) * (segments + 1) + segment;
-            const d = (ring + 1) * (segments + 1) + segment + 1;
-
-            // Due triangoli per formare un quad
-            indices.push(a, c, b);
-            indices.push(b, c, d);
-        }
-    }
-
-    // Converti indici in vertici, normali e texture coords
-    const indexedVertices = [];
-    const indexedNormals = [];
-    const indexedTexcoords = [];
-
-    for (let i = 0; i < indices.length; i++) {
-        const index = indices[i];
-        indexedVertices.push(
-            vertices[index * 3],
-            vertices[index * 3 + 1],
-            vertices[index * 3 + 2]
-        );
-        indexedNormals.push(
-            normals[index * 3],
-            normals[index * 3 + 1],
-            normals[index * 3 + 2]
-        );
-        indexedTexcoords.push(
-            texcoords[index * 2],
-            texcoords[index * 2 + 1]
-        );
-    }
-
-    // Aggiungi la lampada ai modelli
-    models['lampFallback'] = {
-        vertices: indexedVertices,
-        normals: indexedNormals,
-        texcoords: indexedTexcoords,
-        position: [0, -roomHeight + 0.1, 0], // Attaccata al soffitto
-        rotation: [Math.PI, 0, 0], // Ruota di 180° attorno all'asse X
-        scale: [1, 1, 1],
-        texture: 'lampLight',
-        isEmissive: true
-    };
-
-    logger.log(`Lampada fallback creata e posizionata sul soffitto a [0, ${-roomHeight + 0.1}, 0]`);
-}
-
-// Funzione per aggiungere la luce al soffitto
-function addCeilingLight() {
-    // Verifica se la lampada è già stata caricata
-    if (models['lamp']) {
-        logger.log('Lampada già caricata, non è necessario creare un backup');
-        return;
-    }
-
-    // Crea un modello semplice per la lampada (un cilindro)
-    const segments = 12;
-    const radius = 0.5;
-    const height = 0.8;
-
-    const lampVertices = [];
-    const lampNormals = [];
-    const lampTexcoords = [];
-
-    // Crea la parte superiore (attaccata al soffitto)
-    for (let i = 0; i < segments; i++) {
-        const angle1 = (i / segments) * Math.PI * 2;
-        const angle2 = ((i + 1) / segments) * Math.PI * 2;
-
-        const x1 = Math.cos(angle1) * radius;
-        const z1 = Math.sin(angle1) * radius;
-        const x2 = Math.cos(angle2) * radius;
-        const z2 = Math.sin(angle2) * radius;
-
-        // Aggiungi un triangolo (dal centro alla circonferenza)
-        lampVertices.push(
-            0, 0, 0, // Centro superiore
-            x1, 0, z1, // Punto 1 sulla circonferenza
-            x2, 0, z2 // Punto 2 sulla circonferenza
-        );
-
-        // Normali verso l'alto
-        lampNormals.push(
-            0, 1, 0,
-            0, 1, 0,
-            0, 1, 0
-        );
-
-        // Coordinate texture
-        lampTexcoords.push(
-            0.5, 0.5,
-            0.5 + x1 / (2 * radius), 0.5 + z1 / (2 * radius),
-            0.5 + x2 / (2 * radius), 0.5 + z2 / (2 * radius)
-        );
-    }
-
-    // Crea la parte laterale
-    for (let i = 0; i < segments; i++) {
-        const angle1 = (i / segments) * Math.PI * 2;
-        const angle2 = ((i + 1) / segments) * Math.PI * 2;
-
-        const x1 = Math.cos(angle1) * radius;
-        const z1 = Math.sin(angle1) * radius;
-        const x2 = Math.cos(angle2) * radius;
-        const z2 = Math.sin(angle2) * radius;
-
-        // Aggiungi due triangoli per formare un quad
-        lampVertices.push(
-            x1, 0, z1, // Punto 1 in alto
-            x1, height, z1, // Punto 1 in basso
-            x2, 0, z2, // Punto 2 in alto
-
-            x2, 0, z2, // Punto 2 in alto
-            x1, height, z1, // Punto 1 in basso
-            x2, height, z2 // Punto 2 in basso
-        );
-
-        // Calcola le normali verso l'esterno
-        const nx1 = x1 / radius;
-        const nz1 = z1 / radius;
-        const nx2 = x2 / radius;
-        const nz2 = z2 / radius;
-
-        lampNormals.push(
-            nx1, 0, nz1,
-            nx1, 0, nz1,
-            nx2, 0, nz2,
-
-            nx2, 0, nz2,
-            nx1, 0, nz1,
-            nx2, 0, nz2
-        );
-
-        // Coordinate texture
-        const u1 = i / segments;
-        const u2 = (i + 1) / segments;
-
-        lampTexcoords.push(
-            u1, 0,
-            u1, 1,
-            u2, 0,
-
-            u2, 0,
-            u1, 1,
-            u2, 1
-        );
-    }
-
-    // Crea la parte inferiore (diffusore luce)
-    for (let i = 0; i < segments; i++) {
-        const angle1 = (i / segments) * Math.PI * 2;
-        const angle2 = ((i + 1) / segments) * Math.PI * 2;
-
-        const x1 = Math.cos(angle1) * radius;
-        const z1 = Math.sin(angle1) * radius;
-        const x2 = Math.cos(angle2) * radius;
-        const z2 = Math.sin(angle2) * radius;
-
-        // Aggiungi un triangolo (dalla circonferenza al centro)
-        lampVertices.push(
-            x1, height, z1, // Punto 1 sulla circonferenza
-            0, height, 0, // Centro inferiore
-            x2, height, z2 // Punto 2 sulla circonferenza
-        );
-
-        // Normali verso il basso
-        lampNormals.push(
-            0, -1, 0,
-            0, -1, 0,
-            0, -1, 0
-        );
-
-        // Coordinate texture
-        lampTexcoords.push(
-            0.5 + x1 / (2 * radius), 0.5 + z1 / (2 * radius),
-            0.5, 0.5,
-            0.5 + x2 / (2 * radius), 0.5 + z2 / (2 * radius)
-        );
-    }
-
-    // Crea una texture luminosa per la lampada
-    const lampLightColor = createColorTexture([1.0, 0.95, 0.8, 1.0]); // Bianco caldo
-    textures['lampLight'] = lampLightColor;
-
-    // Aggiungi la lampada ai modelli
-    models['ceilingLight'] = {
-        vertices: lampVertices,
-        normals: lampNormals,
-        texcoords: lampTexcoords,
-        position: [0, -roomHeight + 0.1, 0], // Attaccata al soffitto
-        rotation: [0, 0, 0],
-        scale: [1, 1, 1],
-        texture: 'lampLight',
-        isEmissive: true // Questo oggetto emette luce
-    };
-
-    // Imposta la posizione della luce per l'illuminazione
-    lightPosition = [0, -roomHeight + 1.0, 0]; // 1 metro sotto il soffitto
-
-    logger.log('Lampada di backup creata e posizionata sul soffitto');
 }
 
 // Crea una stanza semplice con aperture per le finestre
@@ -1554,10 +1162,10 @@ function createAuthorPicture() {
         vertices: frameVertices,
         normals: frameNormals,
         texcoords: frameTexcoords,
-        position: [0, 0, 0], // Già posizionato nei vertici
+        position: [0, 0, 0],
         rotation: [0, 0, 0],
         scale: [1, 1, 1],
-        texture: 'author_photo' // FOTO DELL'AUTORE - REQUISITO OBBLIGATORIO
+        texture: 'author_photo'
     };
 
     logger.log(`Quadro con foto dell'autore creato in posizione [${frameX}, ${frameY}, ${frameZ}]`);
@@ -1738,13 +1346,11 @@ function createWallWithHoles(wallName, wallType, windows) {
         let u, v;
 
         if (wallType === 'front' || wallType === 'back') {
-            // Per le pareti frontali/posteriori, usa X e Y
-            u = (vertices[i] + roomSize) / (2 * roomSize); // Normalizza X da -roomSize a roomSize
-            v = -vertices[i + 1] / roomHeight; // Normalizza Y (invertito perché Y è negativo)
+            u = (vertices[i] + roomSize) / (2 * roomSize);
+            v = -vertices[i + 1] / roomHeight;
         } else {
-            // Per le pareti laterali, usa Z e Y
-            u = (vertices[i + 2] + roomSize) / (2 * roomSize); // Normalizza Z da -roomSize a roomSize
-            v = -vertices[i + 1] / roomHeight; // Normalizza Y (invertito)
+            u = (vertices[i + 2] + roomSize) / (2 * roomSize);
+            v = -vertices[i + 1] / roomHeight;
         }
 
         texcoords.push(u, v);
@@ -3770,24 +3376,18 @@ function addSlider(parent, label, initialValue, min, max, step, onChange) {
 
 // Funzione migliorata per l'animazione dell'interruttore
 function animateSwitchButton() {
-    // Questa funzione verrà chiamata nel gameLoop per animare costantemente l'interruttore
-
     // Verifica che l'interruttore esista
-    if (!models['fallbackSwitch'] && !models['switch']) {
+    if (!models['switch']) {
         return;
     }
 
-    // Determina quale modello usare (fallback o caricato da OBJ)
-    const switchModel = models['switch'] || models['fallbackSwitch'];
-    const indicatorModel = models['switchIndicator'];
-
-    // Tempo attuale per l'animazione
-    const time = Date.now() * 0.001; // Converte in secondi
+    const switchModel = models['switch'];
+    const time = Date.now() * 0.001;
 
     // Animazione per quando il giocatore è vicino all'interruttore
     if (isNearSwitch) {
         // Pulsazione dell'interruttore (scaling)
-        const pulseScale = 1.0 + Math.sin(time * 4) * 0.05; // Ridotta l'intensità da 0.1 a 0.05
+        const pulseScale = 1.0 + Math.sin(time * 4) * 0.05;
 
         // Applica la scala mantenendo le proporzioni originali
         if (switchModel.originalScale) {
@@ -3797,7 +3397,6 @@ function animateSwitchButton() {
                 switchModel.originalScale[2] * pulseScale
             ];
         } else {
-            // Se non abbiamo la scala originale, memorizzala
             switchModel.originalScale = [...switchModel.scale];
             switchModel.scale = [
                 switchModel.scale[0] * pulseScale,
@@ -3806,25 +3405,7 @@ function animateSwitchButton() {
             ];
         }
 
-        // Animazione dell'indicatore (se esiste)
-        if (indicatorModel) {
-            // Fai lampeggiare l'indicatore
-            const blinkIntensity = (Math.sin(time * 8) * 0.5 + 0.5);
-
-            // Crea un colore che lampeggia tra arancione e rosso
-            const indicatorColor = createColorTexture([
-                1.0, // R - Rosso sempre al massimo
-                0.5 * blinkIntensity, // G - Verde varia per ottenere tonalità arancione/rosse
-                0.0, // B - Blu sempre a 0
-                1.0 // A - Alpha sempre al massimo
-            ]);
-
-            // Aggiorna la texture solo se siamo vicini all'interruttore
-            textures['indicatorLight'] = indicatorColor;
-            indicatorModel.texture = 'indicatorLight';
-        }
-
-        // Aggiunta di un effetto visivo che indica che l'interruttore può essere usato
+        // Effetto visivo per indicare che l'interruttore può essere usato
         if (!document.getElementById('switch-glow')) {
             const switchGlow = document.createElement('div');
             switchGlow.id = 'switch-glow';
@@ -3866,18 +3447,7 @@ function animateSwitchButton() {
         if (switchGlow) {
             document.body.removeChild(switchGlow);
         }
-
-        // Animazione leggera anche quando non siamo vicini
-        if (indicatorModel) {
-            // Leggera pulsazione dell'indicatore
-            const gentlePulse = (Math.sin(time * 2) * 0.2 + 0.8);
-            indicatorModel.scale = [gentlePulse * 0.7, gentlePulse * 0.7, gentlePulse * 0.7];
-        }
     }
-
-    // Modificato: NON cambiare la rotazione quando la luce è accesa/spenta
-    // Lasciamo l'interruttore con la sua rotazione originale
-    // In questo modo non apparirà storto quando cambia lo stato della luce
 }
 
 // Aggiornata la funzione toggleLight per migliorare il feedback visivo
@@ -4417,8 +3987,6 @@ function loadResources() {
     loadTexture('textures/wood.jpg', 'floor');
     loadTexture('textures/wood.jpg', 'ceiling');
     loadTexture('textures/glass.png', 'glass');
-
-    // Carica texture per la foto autore
     loadTexture('textures/author_photo.jpg', 'author_photo');
 
     // Crea la texture bianca ruvida per l'interruttore
@@ -4431,13 +3999,11 @@ function loadResources() {
     loadTexture('textures/DiffuseMap_LOD0.png', 'doll_texture');
     loadTexture('textures/Doll_Doll_BaseColor.png', 'doll_base_texture');
 
-    // Carica texture della skybox e altre texture
+    // Carica texture della skybox
     loadSkyboxTextures();
 
-    // Assicurati che le texture dell'interruttore originali siano comunque caricate
-    loadTexture('textures/switch/Albedo.png', 'switch_albedo', () => {
-        logger.log('Texture interruttore (Albedo) caricata con successo');
-    });
+    // Texture dell'interruttore
+    loadTexture('textures/switch/Albedo.png', 'switch_albedo');
     loadTexture('textures/switch/normal.png', 'switch_normal');
     loadTexture('textures/switch/roughness.png', 'switch_roughness');
 
@@ -4446,28 +4012,17 @@ function loadResources() {
     loadOBJModel('models/kurumaisu.unity_1.obj', 'models/kurumaisu.unity_1.mtl', 'chair');
     loadOBJModel('models/UnsavedScene_1.obj', 'models/UnsavedScene_1.mtl', 'wheelie');
     loadOBJModel('models/doll.obj', 'models/doll.mtl', 'doll');
-
-    // Carica l'interruttore con callback di completamento
-    loadOBJModel('models/light_switch.obj', 'models/light_switch.mtl', 'switch',
-        function() {
-            logger.log('Modello interruttore caricato con successo');
-            // Assegna esplicitamente la texture dopo il caricamento
-            if (models['switch']) {
-                models['switch'].texture = 'switch_white';
-                logger.log('Texture bianca ruvida assegnata al modello switch');
-            }
+    loadOBJModel('models/light_switch.obj', 'models/light_switch.mtl', 'switch', function() {
+        logger.log('Modello interruttore caricato con successo');
+        if (models['switch']) {
+            models['switch'].texture = 'switch_white';
+            logger.log('Texture bianca ruvida assegnata al modello switch');
         }
-    );
-
+    });
     loadOBJModel('models/lamp.obj', 'models/lamp.mtl', 'lamp');
     loadOBJModel('models/pendent-clock.obj', 'models/pendent-clock.mtl', 'clock');
 
-    // Crea l'interruttore fallback DOPO aver tentato di caricare l'OBJ
-    // Il controllo interno verificherà se è necessario
-    setTimeout(function() {
-        createSwitch();
-    }, 1000); // Attendi 1 secondo per dare tempo agli OBJ di caricarsi
-
+    // Inizializza shadow map dopo un breve delay
     setTimeout(function() {
         initShadowMap();
     }, 500);
@@ -4619,14 +4174,12 @@ function createSkybox() {
 }
 
 // Carica modello OBJ
-function loadOBJModel(objUrl, mtlUrl, name, successCallback, errorCallback) {
+function loadOBJModel(objUrl, mtlUrl, name, successCallback) {
     logger.log(`Caricamento modello: ${name}`);
 
     // Controlla se i percorsi sono definiti
     if (!objUrl) {
         logger.log(`ERRORE: Percorso OBJ non specificato per ${name}`);
-        if (errorCallback) errorCallback();
-        else createFallbackModel(name);
         return;
     }
 
@@ -4639,8 +4192,6 @@ function loadOBJModel(objUrl, mtlUrl, name, successCallback, errorCallback) {
                 // Verifica che objData non sia vuoto
                 if (!objData || objData.trim() === "") {
                     logger.log(`ERRORE: File OBJ vuoto per ${name}`);
-                    if (errorCallback) errorCallback();
-                    else createFallbackModel(name);
                     return;
                 }
 
@@ -4650,8 +4201,6 @@ function loadOBJModel(objUrl, mtlUrl, name, successCallback, errorCallback) {
                 // Verifica che il modello abbia vertici validi
                 if (!model || !model.vertices || model.vertices.length === 0) {
                     logger.log(`ERRORE: Il modello ${name} non ha vertici validi`);
-                    if (errorCallback) errorCallback();
-                    else createFallbackModel(name);
                     return;
                 }
 
@@ -4675,14 +4224,10 @@ function loadOBJModel(objUrl, mtlUrl, name, successCallback, errorCallback) {
                 if (successCallback) successCallback();
             } catch (error) {
                 logger.log(`Errore durante il parsing di ${name}: ${error.message}`);
-                if (errorCallback) errorCallback();
-                else createFallbackModel(name);
             }
         },
         error: function(jqXHR, textStatus, errorThrown) {
             logger.log(`Errore durante il caricamento di ${name}: ${textStatus} - ${errorThrown}`);
-            if (errorCallback) errorCallback();
-            else createFallbackModel(name);
         }
     });
 }
@@ -4796,7 +4341,7 @@ function positionModel(name) {
         // RIPRISTINO: TUE coordinate originali
         const randomX = (Math.random() * 2 - 1) * (roomSize * 0.6);
         const randomZ = (Math.random() * 2 - 1) * (roomSize * 0.6);
-        models[name].position = [randomX, -5, randomZ]; // TUA Y originale = -5
+        models[name].position = [randomX, -5, randomZ];
         models[name].rotation = [0, Math.random() * Math.PI * 2, 0];
         models[name].scale = [0.9, 0.9, 0.9];
         models[name].texture = 'doll_base_texture';
@@ -4805,7 +4350,7 @@ function positionModel(name) {
         dollPosition = [randomX, 0, randomZ]; // Questa rimane per l'interazione
         logger.log(`Bambola posizionata a: [${randomX}, -5, ${randomZ}] (modello), interazione: [${randomX}, 0, ${randomZ}]`);
     } else if (name === 'lamp') {
-        models[name].position = [0, -roomHeight + 0.5, 0]; // Attaccata al soffitto nel sistema originale
+        models[name].position = [0, -0.01, 0];
         models[name].rotation = [Math.PI / 2, 0, 0];
         models[name].scale = [2.5, 2.5, 2.5];
         models[name].isEmissive = true;
@@ -4816,13 +4361,12 @@ function positionModel(name) {
         textures['lampLight'] = lampLightColor;
         models[name].texture = 'lampLight';
     } else if (name === 'switch' || name === 'lightSwitch') {
-        // MANTIENI: Solo l'interruttore ha le coordinate corrette
         const switchX = roomSize - 0.01; // Parete destra
         const switchY = -2.0; // Altezza media
         const switchZ = 0; // Centro della stanza lungo Z
 
         models[name].position = [switchX, switchY, switchZ];
-        models[name].rotation = [0, -Math.PI / 2, 0]; // Rivolto verso l'interno
+        models[name].rotation = [0, -Math.PI / 2, 0];
         models[name].scale = [4.95, 4.95, 4.95];
         models[name].isEmissive = true;
         models[name].texture = 'switch_white';
@@ -4830,14 +4374,13 @@ function positionModel(name) {
         // Aggiorna la posizione per l'interazione
         switchPosition = [switchX, switchY, switchZ];
     } else if (name === 'wheelie') {
-        // RIPRISTINO: TUE coordinate originali
-        models[name].position = [5, -6.7, 4]; // TUE coordinate originali
+        models[name].position = [5, -6.7, 4];
         models[name].rotation = [0, 0, 0];
         models[name].scale = [0.15, 0.15, 0.15];
         models[name].texture = 'wood_texture';
     } else if (name === 'clock') {
         // RIPRISTINO: TUE coordinate originali
-        models[name].position = [4, -5.5, -roomSize + 0.8]; // TUE coordinate originali
+        models[name].position = [4, -5.5, -roomSize + 0.8];
         models[name].rotation = [0, -Math.PI / 2, 0];
         models[name].scale = [0.6, 0.6, 0.6];
         models[name].texture = 'clock_texture';
@@ -5079,107 +4622,6 @@ function generateTexcoords(vertices, texcoordsOut) {
     }
 }
 
-// Funzione per creare un modello fallback
-function createFallbackModel(name) {
-    // Crea un cubo semplice come modello di fallback
-    const size = 0.5;
-    models[name] = {
-        vertices: [
-            // Faccia frontale
-            -size, -size, -size,
-            size, -size, -size,
-            size, size, -size,
-            -size, -size, -size,
-            size, size, -size,
-            -size, size, -size,
-
-            // Faccia posteriore
-            -size, -size, size,
-            -size, size, size,
-            size, size, size,
-            -size, -size, size,
-            size, size, size,
-            size, -size, size,
-
-            // Faccia superiore
-            -size, size, -size,
-            size, size, -size,
-            size, size, size,
-            -size, size, -size,
-            size, size, size,
-            -size, size, size,
-
-            // Faccia inferiore
-            -size, -size, -size,
-            -size, -size, size,
-            size, -size, size,
-            -size, -size, -size,
-            size, -size, size,
-            size, -size, -size,
-
-            // Faccia destra
-            size, -size, -size,
-            size, -size, size,
-            size, size, size,
-            size, -size, -size,
-            size, size, size,
-            size, size, -size,
-
-            // Faccia sinistra
-            -size, -size, -size,
-            -size, size, -size,
-            -size, size, size,
-            -size, -size, -size,
-            -size, size, size,
-            -size, -size, size
-        ],
-        normals: [
-            // Faccia frontale (normale: 0, 0, -1)
-            0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1,
-
-            // Faccia posteriore (normale: 0, 0, 1)
-            0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
-
-            // Faccia superiore (normale: 0, 1, 0)
-            0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0,
-
-            // Faccia inferiore (normale: 0, -1, 0)
-            0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0,
-
-            // Faccia destra (normale: 1, 0, 0)
-            1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0,
-
-            // Faccia sinistra (normale: -1, 0, 0)
-            -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0
-        ],
-        texcoords: [
-            // Faccia frontale
-            0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1,
-
-            // Faccia posteriore
-            1, 0, 1, 1, 0, 1, 1, 0, 0, 1, 0, 0,
-
-            // Faccia superiore
-            0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0,
-
-            // Faccia inferiore
-            1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0,
-
-            // Faccia destra
-            1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1,
-
-            // Faccia sinistra
-            0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1
-        ],
-        position: [0, 1, 0], // Posizione di default
-        rotation: [0, 0, 0],
-        scale: [1, 1, 1],
-        texture: 'wall'
-    };
-
-    logger.log(`Creato modello fallback per ${name}`);
-}
-
 // Funzione per attivare/disattivare la modalità spettatore
 function toggleSpectatorMode() {
     isSpectatorMode = !isSpectatorMode;
@@ -5276,15 +4718,9 @@ function createColorTexture(color, intensity = 1.0) {
     return texture;
 }
 
+// Imposto la posizione della luce
 function initializeProperLighting() {
     lightPosition = [0, 4, 0];
-
-    if (models['lamp']) {
-        models['lamp'].position = [0, 0, 0];
-    } else {
-        // Crea una lampada fallback se non esiste
-        createFallbackLamp();
-    }
 }
 
 // Helper per creare elementi stanza mancanti
