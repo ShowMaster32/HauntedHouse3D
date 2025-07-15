@@ -346,11 +346,9 @@ function render() {
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
 
-    // Renderizza shadow map meno frequentemente
-    if (renderOptions.shadows && isLightOn) {
-        if (frameCount % 8 === 0) { // Era 5, ora 8 = migliori performance
-            renderShadowMap();
-        }
+    // Renderizza shadow map OGNI frame quando le ombre sono attive
+    if (renderOptions.shadows && isLightOn && shadowFramebuffer) {
+        renderShadowMap();
     }
 
     // Crea matrici vista e proiezione
@@ -408,14 +406,14 @@ function render() {
     const lightIntensity = isLightOn ? 2.0 : 0.0;
     gl.uniform1f(uniforms.u_lightIntensity, lightIntensity);
 
-    // Opzioni di rendering
-    gl.uniform1i(uniforms.u_shadows, renderOptions.shadows);
+    // Opzioni di rendering - FORZA le ombre quando attive
+    gl.uniform1i(uniforms.u_shadows, renderOptions.shadows && isLightOn ? 1 : 0);
     gl.uniform1i(uniforms.u_reflections, renderOptions.reflections);
     gl.uniform1i(uniforms.u_lightOn, isLightOn);
     gl.uniform1i(uniforms.u_externalLightOn, isExternalLightOn);
     gl.uniform1i(uniforms.u_advancedRendering, renderOptions.advancedRendering);
 
-    // CORREZIONE: Luce esterna più intensa
+    // Luce esterna più intensa
     const externalColor = isExternalLightOn ? [0.7, 0.8, 0.9] : [0.1, 0.1, 0.15];
     const externalIntensity = isExternalLightOn ? 0.2 : 0.05;
     gl.uniform3fv(uniforms.u_externalLightColor, externalColor);
@@ -433,11 +431,16 @@ function render() {
     const lightSpaceMatrix = createLightSpaceMatrix();
     gl.uniformMatrix4fv(uniforms.u_lightSpaceMatrix, false, lightSpaceMatrix);
 
-    // Shadow map texture
-    if (renderOptions.shadows && shadowFramebuffer) {
+    // Shadow map texture - SEMPRE attiva quando le ombre sono abilitate
+    if (renderOptions.shadows && shadowTexture) {
         gl.activeTexture(gl.TEXTURE1);
         gl.bindTexture(gl.TEXTURE_2D, shadowTexture);
         gl.uniform1i(uniforms.u_shadowMap, 1);
+        
+        // Debug: verifica che la texture sia bound correttamente
+        if (frameCount % 600 === 0) {
+            logger.log('Shadow map texture bound alla slot 1');
+        }
     }
 
     // Arrays per oggetti trasparenti
@@ -482,6 +485,52 @@ function render() {
         uniforms.u_isEmissive, uniforms.u_useTexture, uniforms.u_texture);
 }
 
+// Aggiungi questa funzione dopo la funzione render()
+function testShadowSystem() {
+    if (renderOptions.shadows && isLightOn) {
+        logger.log('Sistema ombre attivo:');
+        logger.log(`- Shadow framebuffer: ${shadowFramebuffer ? 'OK' : 'ERRORE'}`);
+        logger.log(`- Shadow texture: ${shadowTexture ? 'OK' : 'ERRORE'}`);
+        logger.log(`- Shadow program: ${shadowProgram ? 'OK' : 'ERRORE'}`);
+        logger.log(`- Luce posizione: [${lightPosition.join(', ')}]`);
+        
+        // Test di oggetti specifici
+        if (models['doll']) {
+            logger.log(`- Bambola posizione: [${models['doll'].position.join(', ')}]`);
+        }
+        if (models['skull_0']) {
+            logger.log(`- Teschio 0 posizione: [${models['skull_0'].position.join(', ')}]`);
+        }
+        if (models['chair']) {
+            logger.log(`- Sedia posizione: [${models['chair'].position.join(', ')}]`);
+        }
+    } else {
+        logger.log('Sistema ombre NON attivo');
+        logger.log(`- renderOptions.shadows: ${renderOptions.shadows}`);
+        logger.log(`- isLightOn: ${isLightOn}`);
+    }
+}
+
+// Aggiungi questa funzione di debug per la shadow map
+function debugShadowMap() {
+    if (!shadowTexture) {
+        logger.log('Shadow texture non esistente');
+        return;
+    }
+    
+    try {
+        // Leggi alcuni pixel dalla shadow map per verificare se contiene dati
+        gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFramebuffer);
+        const pixels = new Uint8Array(4); // RGBA
+        gl.readPixels(shadowMapSize/2, shadowMapSize/2, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        
+        logger.log(`Shadow map center pixel: R=${pixels[0]}, G=${pixels[1]}, B=${pixels[2]}, A=${pixels[3]}`);
+    } catch (error) {
+        logger.log(`Errore lettura shadow map: ${error.message}`);
+    }
+}
+
 // Funzione per configurare le uniforms delle ombre migliorate
 function setupImprovedShadowUniforms() {
     // Bias dinamico basato sulla distanza dalla luce
@@ -492,15 +541,17 @@ function setupImprovedShadowUniforms() {
     gl.uniform1i(gl.getUniformLocation(program, 'u_shadowSamples'), shadowSamples);
 }
 
-// Funzione per creare la matrice light space migliorata
+// Funzione per creare la matrice light space ottimizzata per le ombre degli oggetti
 function createLightSpaceMatrix() {
-    const lightTarget = [0, 0, 0];
+    const lightTarget = [0, 0, 0]; // La luce guarda al centro della stanza
 
     // Crea view matrix dalla luce
     const lightView = m4.lookAt(lightPosition, lightTarget, [0, 0, 1]);
-    const orthoSize = 15.0;
+    
+    // Dimensioni ortografiche maggiori per catturare tutti gli oggetti
+    const orthoSize = 20.0; // Aumentato da 15.0 per catturare meglio gli oggetti
     const nearPlane = 0.1;
-    const farPlane = 30.0;
+    const farPlane = 40.0; // Aumentato per catturare oggetti lontani
 
     const lightProjection = m4.orthographic(
         -orthoSize, orthoSize, // left, right
@@ -578,7 +629,7 @@ function initShadowMap() {
     }
 }
 
-// Renderizza shadow map con più oggetti per vedere le ombre
+// Renderizza shadow map con TUTTI gli oggetti per vedere le ombre
 function renderShadowMap() {
     if (!renderOptions.shadows || !shadowFramebuffer || !shadowProgram) {
         return;
@@ -595,8 +646,14 @@ function renderShadowMap() {
         }
 
         gl.viewport(0, 0, shadowMapSize, shadowMapSize);
-        gl.clearColor(1.0, 1.0, 1.0, 1.0); // Bianco = lontano
+        
+        // IMPORTANTE: Clear con valore che rappresenta distanza massima
+        gl.clearColor(1.0, 1.0, 1.0, 1.0);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        
+        // Abilita depth test per la shadow map
+        gl.enable(gl.DEPTH_TEST);
+        gl.depthFunc(gl.LESS);
 
         gl.useProgram(shadowProgram);
 
@@ -607,33 +664,19 @@ function renderShadowMap() {
         if (u_lightSpaceMatrixLoc && u_modelLoc) {
             gl.uniformMatrix4fv(u_lightSpaceMatrixLoc, false, lightSpaceMatrix);
 
-            // RENDERIZZA PIÙ OGGETTI per vedere le ombre
+            let objectsRendered = 0;
+
+            // Lista specifica di oggetti che DEVONO proiettare ombre visibili
             const shadowCasters = [
-                // Tutti gli elementi della stanza
-                'floor', 'ceiling', 'frontWall', 'backWall', 'leftWall', 'rightWall',
-
-                // Tutti gli oggetti
                 'skull_0', 'skull_1', 'skull_2', 'skull_3', 'skull_4',
-                'doll', 'chair', 'chair_2', 'wheelie', 'clock', 'lamp',
-                'switch', 'fallbackSwitch', 'lightSwitch', 'switchIndicator',
-                'ceilingLight', 'lampFallback',
-
-                // Finestre e cornici (potrebbero proiettare ombre interessanti)
-                'windowFrameTop_0', 'windowFrameBottom_0', 'windowFrameLeft_0', 'windowFrameRight_0',
-                'windowFrameTop_1', 'windowFrameBottom_1', 'windowFrameLeft_1', 'windowFrameRight_1',
-                'windowFrameTop_2', 'windowFrameBottom_2', 'windowFrameLeft_2', 'windowFrameRight_2',
-                'windowFrameTop_3', 'windowFrameBottom_3', 'windowFrameLeft_3', 'windowFrameRight_3',
-
-                // Quadro autore
-                'authorPicture', 'authorPictureFrame'
+                'doll', 'chair', 'chair_2', 'wheelie', 'clock', 'lamp'
             ];
 
-            let objectsRendered = 0;
+            // Prima renderizza gli oggetti principali
             for (const modelName of shadowCasters) {
-                if (models[modelName] && models[modelName].vertices) {
+                if (models[modelName] && models[modelName].vertices && models[modelName].vertices.length > 0) {
                     const model = models[modelName];
-
-                    // Crea matrice modello completa
+                    
                     let modelMatrix = m4.identity();
 
                     if (model.position) {
@@ -662,11 +705,24 @@ function renderShadowMap() {
                         setBuffersForShadowModel(model);
                         gl.drawArrays(gl.TRIANGLES, 0, model.vertices.length / 3);
                         objectsRendered++;
+                        
+                        // Log per oggetti importanti
+                        if (['doll', 'skull_0', 'chair'].includes(modelName) && frameCount % 300 === 0) {
+                            logger.log(`Oggetto ${modelName} renderizzato in shadow map a posizione [${model.position}]`);
+                        }
                     } catch (drawError) {
-                        // Ignora errori singoli
+                        logger.log(`Errore rendering shadow per ${modelName}: ${drawError.message}`);
                     }
-                    objectsRendered++;
                 }
+            }
+
+            if (frameCount % 240 === 0) {
+                logger.log(`Shadow map: ${objectsRendered} oggetti renderizzati`);
+            }
+            
+            // Debug: verifica contenuto shadow map ogni 60 frame
+            if (frameCount % 1800 === 0) { // Ogni 30 secondi a 60fps
+                debugShadowMap();
             }
         }
 

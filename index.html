@@ -167,7 +167,7 @@ varying vec2 v_texcoord;
 varying float v_isEmissive;
 varying vec4 v_fragPosLightSpace;
 
-// Funzione PCF migliorata per ombre più visibili
+// Funzione PCF migliorata per ombre più visibili degli oggetti
 float calculateShadowPCF(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir) {
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
     projCoords = projCoords * 0.5 + 0.5;
@@ -180,24 +180,22 @@ float calculateShadowPCF(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir) {
     
     float currentDepth = projCoords.z;
     
-    // Bias dinamico basato sull'angolo tra normale e luce
-    float bias = max(0.005 * (1.0 - dot(normal, lightDir)), 0.001);
-    
-    // Bias speciale per superfici orizzontali (pavimento)
-    if (abs(normal.y) > 0.9) {
-        bias = 0.002; // Bias ridotto per il pavimento
-    }
+    // Bias più aggressivo per rendere le ombre visibili
+    float bias = 0.01;
     
     float shadow = 0.0;
     vec2 texelSize = vec2(1.0 / 2048.0);
     
-    // PCF 5x5 per ombre più morbide sul pavimento
+    // PCF semplificato ma efficace
     int samples = 0;
-    for(int x = -2; x <= 2; ++x) {
-        for(int y = -2; y <= 2; ++y) {
-            vec4 rgbaDepth = texture2D(u_shadowMap, projCoords.xy + vec2(x, y) * texelSize);
-            float pcfDepth = rgbaDepth.r;
-            if ((currentDepth - bias) > pcfDepth) {
+    for(int x = -1; x <= 1; ++x) {
+        for(int y = -1; y <= 1; ++y) {
+            // Leggi il valore di profondità dalla shadow map
+            vec4 shadowMapColor = texture2D(u_shadowMap, projCoords.xy + vec2(x, y) * texelSize);
+            float shadowDepth = shadowMapColor.r; // Usiamo il canale rosso
+            
+            // Confronta con la profondità corrente
+            if (currentDepth - bias > shadowDepth) {
                 shadow += 1.0;
             }
             samples++;
@@ -205,8 +203,8 @@ float calculateShadowPCF(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir) {
     }
     shadow /= float(samples);
     
-    // Intensifica le ombre
-    shadow = clamp(shadow * 1.2, 0.0, 1.0);
+    // Ombre più forti e visibili
+    shadow = clamp(shadow * 2.0, 0.0, 1.0);
     
     return shadow;
 }
@@ -364,23 +362,15 @@ void main() {
     
     <!-- Shadow Fragment Shader -->
     <script id="shadow-fragment-shader" type="x-shader/x-fragment">
-        precision mediump float;
+    precision highp float;
+    
+    void main() {
+        // Scrivi la profondità in modo semplice e diretto
+        float depth = gl_FragCoord.z;
         
-        void main() {
-            // Scrivi la profondità nel canale RGBA per WebGL 1.0
-            // Pack depth value in RGBA
-            float depth = gl_FragCoord.z;
-            
-            // Pack float in RGBA (tecnica per WebGL 1.0)
-            vec4 rgba = vec4(
-                fract(depth * 255.0),
-                fract(depth * 255.0 * 255.0),
-                fract(depth * 255.0 * 255.0 * 255.0),
-                1.0
-            );
-            
-            gl_FragColor = rgba;
-        }
+        // Converti profondità in colore (per WebGL 1.0)
+        gl_FragColor = vec4(depth, depth, depth, 1.0);
+    }
     </script>
     
     <!-- Skybox Vertex Shader -->
