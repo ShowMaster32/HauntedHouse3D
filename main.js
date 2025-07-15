@@ -325,13 +325,14 @@ function handleTouchEnd(e) {
 
 // Render scene
 function render() {
-    // Controllo errori WebGL prima del rendering
-    const glError = gl.getError();
-    if (glError !== gl.NO_ERROR && glError !== gl.CONTEXT_LOST_WEBGL) {
-        // Se ci sono troppi errori, disabilita le ombre
-        if (renderOptions.shadows) {
-            renderOptions.shadows = false;
-            logger.log('Ombre disabilitate a causa di errori WebGL');
+    // Controllo errori WebGL solo occasionalmente
+    if (frameCount % 30 === 0) {
+        const glError = gl.getError();
+        if (glError !== gl.NO_ERROR && glError !== gl.CONTEXT_LOST_WEBGL) {
+            if (renderOptions.shadows) {
+                renderOptions.shadows = false;
+                logger.log('Ombre disabilitate a causa di errori WebGL');
+            }
         }
     }
 
@@ -345,10 +346,9 @@ function render() {
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
 
-    // Renderizza shadow map se le ombre sono abilitate
+    // Renderizza shadow map meno frequentemente
     if (renderOptions.shadows && isLightOn) {
-        // Renderizza solo ogni 5 frame per performance
-        if (frameCount % 5 === 0) {
+        if (frameCount % 8 === 0) { // Era 5, ora 8 = migliori performance
             renderShadowMap();
         }
     }
@@ -359,7 +359,6 @@ function render() {
     const fov = Math.PI / 2;
     const projectionMatrix = m4.perspective(fov, aspect, 0.4, 1000);
 
-    // Renderizza skybox
     renderSkybox(viewMatrix, projectionMatrix);
 
     // Usa il programma principale per la scena
@@ -370,58 +369,75 @@ function render() {
         return;
     }
 
+    // CACHING UNIFORM LOCATIONS (creato solo una volta)
+    if (!gl.cachedUniforms) {
+        logger.log('Creazione cache uniform locations (una volta sola)');
+        gl.cachedUniforms = {
+            u_model: gl.getUniformLocation(program, 'u_model'),
+            u_view: gl.getUniformLocation(program, 'u_view'),
+            u_projection: gl.getUniformLocation(program, 'u_projection'),
+            u_lightPos: gl.getUniformLocation(program, 'u_lightPos'),
+            u_viewPos: gl.getUniformLocation(program, 'u_viewPos'),
+            u_useTexture: gl.getUniformLocation(program, 'u_useTexture'),
+            u_texture: gl.getUniformLocation(program, 'u_texture'),
+            u_isEmissive: gl.getUniformLocation(program, 'u_isEmissive'),
+            u_normalMatrix: gl.getUniformLocation(program, 'u_normalMatrix'),
+            u_lightSpaceMatrix: gl.getUniformLocation(program, 'u_lightSpaceMatrix'),
+            u_resolution: gl.getUniformLocation(program, 'u_resolution'),
+            u_lightIntensity: gl.getUniformLocation(program, 'u_lightIntensity'),
+            u_shadows: gl.getUniformLocation(program, 'u_shadows'),
+            u_reflections: gl.getUniformLocation(program, 'u_reflections'),
+            u_lightOn: gl.getUniformLocation(program, 'u_lightOn'),
+            u_externalLightOn: gl.getUniformLocation(program, 'u_externalLightOn'),
+            u_advancedRendering: gl.getUniformLocation(program, 'u_advancedRendering'),
+            u_externalLightColor: gl.getUniformLocation(program, 'u_externalLightColor'),
+            u_externalLightIntensity: gl.getUniformLocation(program, 'u_externalLightIntensity'),
+            u_shadowMap: gl.getUniformLocation(program, 'u_shadowMap')
+        };
+    }
+
+    // USA LE UNIFORM CACHED (molto più veloce)
+    const uniforms = gl.cachedUniforms;
+
     // Configura uniforms per le ombre migliorate
     setupImprovedShadowUniforms();
 
-    // Ottieni locazioni uniform
-    const u_modelLoc = gl.getUniformLocation(program, 'u_model');
-    const u_viewLoc = gl.getUniformLocation(program, 'u_view');
-    const u_projectionLoc = gl.getUniformLocation(program, 'u_projection');
-    const u_lightPosLoc = gl.getUniformLocation(program, 'u_lightPos');
-    const u_viewPosLoc = gl.getUniformLocation(program, 'u_viewPos');
-    const u_useTextureLoc = gl.getUniformLocation(program, 'u_useTexture');
-    const u_textureLoc = gl.getUniformLocation(program, 'u_texture');
-    const u_isEmissiveLoc = gl.getUniformLocation(program, 'u_isEmissive');
-    const u_normalMatrixLoc = gl.getUniformLocation(program, 'u_normalMatrix');
-    const u_lightSpaceMatrixLoc = gl.getUniformLocation(program, 'u_lightSpaceMatrix');
-
     // Effetto vignette horror
-    const uResolutionLocation = gl.getUniformLocation(program, "u_resolution");
-    gl.uniform2f(uResolutionLocation, canvas.width, canvas.height);
+    gl.uniform2f(uniforms.u_resolution, canvas.width, canvas.height);
 
     const lightIntensity = isLightOn ? 2.0 : 0.0;
-    gl.uniform1f(gl.getUniformLocation(program, 'u_lightIntensity'), lightIntensity);
+    gl.uniform1f(uniforms.u_lightIntensity, lightIntensity);
 
     // Opzioni di rendering
-    gl.uniform1i(gl.getUniformLocation(program, 'u_shadows'), renderOptions.shadows);
-    gl.uniform1i(gl.getUniformLocation(program, 'u_reflections'), renderOptions.reflections);
-    gl.uniform1i(gl.getUniformLocation(program, 'u_lightOn'), isLightOn);
-    gl.uniform1i(gl.getUniformLocation(program, 'u_externalLightOn'), isExternalLightOn);
-    gl.uniform1i(gl.getUniformLocation(program, 'u_advancedRendering'), renderOptions.advancedRendering);
+    gl.uniform1i(uniforms.u_shadows, renderOptions.shadows);
+    gl.uniform1i(uniforms.u_reflections, renderOptions.reflections);
+    gl.uniform1i(uniforms.u_lightOn, isLightOn);
+    gl.uniform1i(uniforms.u_externalLightOn, isExternalLightOn);
+    gl.uniform1i(uniforms.u_advancedRendering, renderOptions.advancedRendering);
 
     // CORREZIONE: Luce esterna più intensa
     const externalColor = isExternalLightOn ? [0.7, 0.8, 0.9] : [0.1, 0.1, 0.15];
     const externalIntensity = isExternalLightOn ? 0.2 : 0.05;
-    gl.uniform3fv(gl.getUniformLocation(program, 'u_externalLightColor'), externalColor);
-    gl.uniform1f(gl.getUniformLocation(program, 'u_externalLightIntensity'), externalIntensity);
+    gl.uniform3fv(uniforms.u_externalLightColor, externalColor);
+    gl.uniform1f(uniforms.u_externalLightIntensity, externalIntensity);
 
     // Posizioni luce e camera
-    gl.uniform3fv(u_lightPosLoc, lightPosition);
-    gl.uniform3fv(u_viewPosLoc, camera.position);
+    gl.uniform3fv(uniforms.u_lightPos, lightPosition);
+    gl.uniform3fv(uniforms.u_viewPos, camera.position);
 
     // Matrici
-    gl.uniformMatrix4fv(u_viewLoc, false, viewMatrix);
-    gl.uniformMatrix4fv(u_projectionLoc, false, projectionMatrix);
+    gl.uniformMatrix4fv(uniforms.u_view, false, viewMatrix);
+    gl.uniformMatrix4fv(uniforms.u_projection, false, projectionMatrix);
 
     // Matrice light space per le ombre
     const lightSpaceMatrix = createLightSpaceMatrix();
-    gl.uniformMatrix4fv(u_lightSpaceMatrixLoc, false, lightSpaceMatrix);
+    gl.uniformMatrix4fv(uniforms.u_lightSpaceMatrix, false, lightSpaceMatrix);
 
     // Shadow map texture
     if (renderOptions.shadows && shadowFramebuffer) {
         gl.activeTexture(gl.TEXTURE1);
         gl.bindTexture(gl.TEXTURE_2D, shadowTexture);
-        gl.uniform1i(gl.getUniformLocation(program, 'u_shadowMap'), 1);
+        gl.uniform1i(uniforms.u_shadowMap, 1);
     }
 
     // Arrays per oggetti trasparenti
@@ -433,8 +449,8 @@ function render() {
     for (const roomElement of roomElements) {
         const model = models[roomElement];
         if (model && model.vertices && model.vertices.length > 0) {
-            renderModel(model, u_modelLoc, u_normalMatrixLoc, u_isEmissiveLoc,
-                u_useTextureLoc, u_textureLoc);
+            renderModel(model, uniforms.u_model, uniforms.u_normalMatrix, uniforms.u_isEmissive,
+                uniforms.u_useTexture, uniforms.u_texture);
         }
     }
 
@@ -457,13 +473,13 @@ function render() {
             continue;
         }
 
-        renderModel(model, u_modelLoc, u_normalMatrixLoc, u_isEmissiveLoc,
-            u_useTextureLoc, u_textureLoc);
+        renderModel(model, uniforms.u_model, uniforms.u_normalMatrix, uniforms.u_isEmissive,
+            uniforms.u_useTexture, uniforms.u_texture);
     }
 
     // Renderizza oggetti trasparenti ordinati
-    renderTransparentObjects(transparentObjects, u_modelLoc, u_normalMatrixLoc,
-        u_isEmissiveLoc, u_useTextureLoc, u_textureLoc);
+    renderTransparentObjects(transparentObjects, uniforms.u_model, uniforms.u_normalMatrix,
+        uniforms.u_isEmissive, uniforms.u_useTexture, uniforms.u_texture);
 }
 
 // Funzione per configurare le uniforms delle ombre migliorate
@@ -862,8 +878,51 @@ function renderSkybox(viewMatrix, projectionMatrix) {
 function setBuffersForModel(model) {
     // Verifica che il modello abbia vertici validi
     if (!model.vertices || model.vertices.length === 0) {
-        logger.log("ERRORE: Modello senza vertici");
         return;
+    }
+
+    if (!model.buffersCreated) {
+        logger.log(`Creazione buffer per modello (una volta sola)`);
+        
+        // Crea buffer permanenti per questo modello
+        model.positionBuffer = gl.createBuffer();
+        model.normalBuffer = gl.createBuffer();
+        model.texcoordBuffer = gl.createBuffer();
+        
+        // Setup position buffer
+        gl.bindBuffer(gl.ARRAY_BUFFER, model.positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(model.vertices), gl.STATIC_DRAW);
+        
+        // Setup normal buffer
+        let normals;
+        if (model.normals && model.normals.length === model.vertices.length) {
+            normals = model.normals;
+        } else {
+            // Crea normali di default
+            normals = [];
+            for (let i = 0; i < model.vertices.length / 3; i++) {
+                normals.push(0, 1, 0); // Normale default verso l'alto
+            }
+        }
+        gl.bindBuffer(gl.ARRAY_BUFFER, model.normalBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
+        
+        // Setup texcoord buffer
+        let texcoords;
+        if (model.texcoords && model.texcoords.length === (model.vertices.length / 3) * 2) {
+            texcoords = model.texcoords;
+        } else {
+            // Crea coordinate texture di default
+            texcoords = [];
+            for (let i = 0; i < model.vertices.length / 3; i++) {
+                texcoords.push(0, 0); // Coordinate UV di default
+            }
+        }
+        gl.bindBuffer(gl.ARRAY_BUFFER, model.texcoordBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(texcoords), gl.STATIC_DRAW);
+        
+        // Marca come creato
+        model.buffersCreated = true;
     }
 
     // Ottieni le locazioni degli attributi dello shader
@@ -871,54 +930,20 @@ function setBuffersForModel(model) {
     const normalLoc = gl.getAttribLocation(program, 'a_normal');
     const texcoordLoc = gl.getAttribLocation(program, 'a_texcoord');
 
-    // Crea e configura il buffer per i vertici
-    const positionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(model.vertices), gl.STATIC_DRAW);
+    // Usa buffer position cached
+    gl.bindBuffer(gl.ARRAY_BUFFER, model.positionBuffer);
     gl.enableVertexAttribArray(positionLoc);
     gl.vertexAttribPointer(positionLoc, 3, gl.FLOAT, false, 0, 0);
 
-    // Gestione delle normali
-    if (model.normals && model.normals.length === model.vertices.length) {
-        // Se il modello ha normali valide della lunghezza corretta, usale
-        const normalBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(model.normals), gl.STATIC_DRAW);
-        gl.enableVertexAttribArray(normalLoc);
-        gl.vertexAttribPointer(normalLoc, 3, gl.FLOAT, false, 0, 0);
-    } else {
-        // Altrimenti crea normali di default (verso l'alto)
-        const defaultNormals = [];
-        for (let i = 0; i < model.vertices.length / 3; i++) {
-            defaultNormals.push(0, 1, 0); // Normale default verso l'alto
-        }
-        const normalBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(defaultNormals), gl.STATIC_DRAW);
-        gl.enableVertexAttribArray(normalLoc);
-        gl.vertexAttribPointer(normalLoc, 3, gl.FLOAT, false, 0, 0);
-    }
+    // Usa buffer normal cached
+    gl.bindBuffer(gl.ARRAY_BUFFER, model.normalBuffer);
+    gl.enableVertexAttribArray(normalLoc);
+    gl.vertexAttribPointer(normalLoc, 3, gl.FLOAT, false, 0, 0);
 
-    // Gestione delle coordinate texture
-    if (model.texcoords && model.texcoords.length === (model.vertices.length / 3) * 2) {
-        // Se il modello ha coordinate texture valide della lunghezza corretta, usale
-        const texcoordBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(model.texcoords), gl.STATIC_DRAW);
-        gl.enableVertexAttribArray(texcoordLoc);
-        gl.vertexAttribPointer(texcoordLoc, 2, gl.FLOAT, false, 0, 0);
-    } else {
-        // Altrimenti crea coordinate texture di default
-        const defaultTexcoords = [];
-        for (let i = 0; i < model.vertices.length / 3; i++) {
-            defaultTexcoords.push(0, 0); // Coordinate UV di default (0,0)
-        }
-        const texcoordBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(defaultTexcoords), gl.STATIC_DRAW);
-        gl.enableVertexAttribArray(texcoordLoc);
-        gl.vertexAttribPointer(texcoordLoc, 2, gl.FLOAT, false, 0, 0);
-    }
+    // Usa buffer texcoord cached
+    gl.bindBuffer(gl.ARRAY_BUFFER, model.texcoordBuffer);
+    gl.enableVertexAttribArray(texcoordLoc);
+    gl.vertexAttribPointer(texcoordLoc, 2, gl.FLOAT, false, 0, 0);
 }
 
 // Funzione per ottenere il vettore "avanti" dalla rotazione della camera
@@ -2675,9 +2700,6 @@ function gameLoop(time) {
     // Aggiorna
     update(deltaTime);
 
-    // Aggiorna esplicitamente il crosshair ogni frame
-    updateCrosshair();
-
     // Anima l'interruttore
     animateSwitchButton();
 
@@ -2712,14 +2734,20 @@ function update(dt) {
     // Update camera based on input
     updateCamera(dt);
 
-    // Aggiorna il crosshair
-    updateCrosshair();
+    // Aggiorna crosshair ogni 3 frame
+    if (frameCount % 3 === 0) {
+        updateCrosshair();
+    }
 
-    // Mostra le coordinate della camera
-    updateCameraCoordinates();
+    // Coordinate camera solo se attive e ogni 5 frame
+    if (showCameraCoordinates && frameCount % 5 === 0) {
+        updateCameraCoordinates();
+    }
 
-    // Controlla la vicinanza alla bambola
-    checkDollProximity();
+    // Vicinanza bambola ogni 10 frame
+    if (frameCount % 10 === 0) {
+        checkDollProximity();
+    }
 }
 
 // Gestione tasti speciali
