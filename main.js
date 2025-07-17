@@ -30,22 +30,35 @@ function updateCamera(dt) {
     // Calcolo velocità basata su frame rate per movimento fluido
     const speed = playerSpeed * (dt || 0.016) * 60;
 
-    // Reset velocità orizzontale per nuovo frame
+    // Reset velocità per nuovo frame
     playerVelocity[0] = 0;
     playerVelocity[2] = 0;
 
-    // Ottieni vettori direzione dalla rotazione camera
-    const forward = getForwardVector();
-    const right = getSideVector();
+    // Calcola vettori direzione basati solo su yaw (rotazione orizzontale)
+    const yaw = camera.rotation[1];
+    
+    // Vettore forward basato solo sulla rotazione orizzontale
+    const forward = [
+        Math.sin(yaw),
+        0,
+        -Math.cos(yaw)
+    ];
+    
+    // Vettore right perpendicolare a forward
+    const right = [
+        Math.cos(yaw),
+        0,
+        Math.sin(yaw)
+    ];
 
     // Gestione input movimento (standard WASD)
     if (keys['KeyW']) {
-        playerVelocity[0] -= forward[0] * speed;
-        playerVelocity[2] -= forward[2] * speed;
-    }
-    if (keys['KeyS']) {
         playerVelocity[0] += forward[0] * speed;
         playerVelocity[2] += forward[2] * speed;
+    }
+    if (keys['KeyS']) {
+        playerVelocity[0] -= forward[0] * speed;
+        playerVelocity[2] -= forward[2] * speed;
     }
     if (keys['KeyA']) {
         playerVelocity[0] -= right[0] * speed;
@@ -59,9 +72,9 @@ function updateCamera(dt) {
     // Modalità spettatore: movimento verticale libero (Q/E)
     if (isSpectatorMode) {
         if (keys['KeyQ']) {
-            playerVelocity[1] = speed; // Scendi
+            playerVelocity[1] = speed; // Scendi (Y aumenta)
         } else if (keys['KeyE']) {
-            playerVelocity[1] = -speed; // Sali
+            playerVelocity[1] = -speed; // Sali (Y diminuisce)
         } else {
             playerVelocity[1] = 0;
         }
@@ -92,9 +105,9 @@ function checkWallCollisions() {
     const minZ = -roomSize + playerRadius;
     const maxZ = roomSize - playerRadius;
 
-    // Limiti verticali (pavimento e soffitto)
-    const maxY = camera.defaultHeight; // Pavimento
-    const minY = -roomHeight + 0.5; // Soffitto
+    // Limiti verticali con Y INVERTITO
+    const minY = -roomHeight + 0.5; // Soffitto (Y = -5)
+    const maxY = -0.5; // Vicino al pavimento (Y = 0)
 
     // Collisioni asse X (pareti laterali)
     if (camera.position[0] < minX) {
@@ -114,7 +127,7 @@ function checkWallCollisions() {
         playerVelocity[2] = 0;
     }
 
-    // Collisioni asse Y (pavimento e soffitto)
+    // Collisioni asse Y
     if (camera.position[1] < minY) {
         camera.position[1] = minY;
         playerVelocity[1] = 0;
@@ -149,28 +162,24 @@ function handleMouseMove(e) {
 
 /**
  * Creazione matrice vista per rendering 3D
- * Converte rotazioni camera in matrice lookAt
+ * Usa un sistema FPS standard con rotazione prima della traslazione
  */
 function createViewMatrix() {
-    const yaw = camera.rotation[1]; // Rotazione orizzontale
-    const pitch = camera.rotation[0]; // Rotazione verticale
-
-    // Calcola direzione vista da angoli Eulero
-    const dirX = Math.sin(yaw) * Math.cos(pitch);
-    const dirY = Math.sin(pitch);
-    const dirZ = Math.cos(yaw) * Math.cos(pitch);
-
-    // Punto target (dove la camera guarda)
-    const lookX = camera.position[0] + dirX;
-    const lookY = camera.position[1] + dirY;
-    const lookZ = camera.position[2] + dirZ;
-
-    // Costruisce matrice vista usando lookAt
-    return m4.lookAt(
-        camera.position, // Posizione camera
-        [lookX, lookY, lookZ], // Target
-        [0, 1, 0] // Up vector
+    // Crea matrice identità
+    let viewMatrix = m4.identity();
+    
+    // Prima applica le rotazioni (nell'ordine corretto per FPS)
+    viewMatrix = m4.xRotate(viewMatrix, camera.rotation[0]); // Pitch
+    viewMatrix = m4.yRotate(viewMatrix, camera.rotation[1]); // Yaw
+    
+    // Poi trasla nella posizione opposta della camera
+    viewMatrix = m4.translate(viewMatrix, 
+        -camera.position[0], 
+        -camera.position[1], 
+        -camera.position[2]
     );
+    
+    return viewMatrix;
 }
 
 // Funzione per verificare e riparare l'elemento instructions
@@ -2471,12 +2480,12 @@ let keys = {};
 
 // Camera e player
 let camera = {
-    position: [0, 1.7, 5],
-    rotation: [0, Math.PI],
+    position: [0, -1.7, 5],
+    rotation: [0, 0, 0], // [pitch, yaw, roll] - Guarda verso la parete frontale
     speed: 0.1,
-    defaultHeight: 1.7,
-    originalPosition: [0, 1.7, 5],
-    originalRotation: [0, Math.PI]
+    defaultHeight: -1.7,
+    originalPosition: [0, -1.7, 5],
+    originalRotation: [0, 0, 0]
 };
 
 // Dimensioni stanza
@@ -3714,7 +3723,7 @@ function setupCameraControl() {
             const deltaY = touchY - lastTouchY;
 
             // Aggiorna rotazione camera
-            camera.rotation[1] -= deltaX * sensitivity;
+            camera.rotation[1] += deltaX * sensitivity;
             camera.rotation[0] += deltaY * sensitivity;
 
             // Limita rotazione verticale
