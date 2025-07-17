@@ -976,7 +976,7 @@ function getSideVector() {
 }
 
 function updateCrosshair() {
-    const correctSwitchPosition = [-9.99, -2, 0];
+    const correctSwitchPosition = [9.99, -2, 0];
 
     // Reset dello stato
     isNearSwitch = false;
