@@ -2482,7 +2482,7 @@ let keys = {};
 let camera = {
     position: [0, -1.7, 5],
     rotation: [0, 0, 0], // [pitch, yaw, roll] - Guarda verso la parete frontale
-    speed: 0.1,
+    speed: 0.05,
     defaultHeight: -1.7,
     originalPosition: [0, -1.7, 5],
     originalRotation: [0, 0, 0]
@@ -2500,7 +2500,7 @@ let dollPosition = [0, 0, 0];
 let switchPosition = [-roomSize + 0.1, 1.5, 0];
 
 // Variabili movimento
-let playerSpeed = 0.15;
+let playerSpeed = 0.05;
 let playerVelocity = [0, 0, 0];
 let playerDirection = [0, 0, 0];
 let playerOnFloor = true;
@@ -4657,7 +4657,7 @@ function toggleSpectatorMode() {
         camera.originalRotation = [...camera.rotation];
 
         // Aumenta la velocità
-        camera.speed = 0.3;
+        camera.speed = 0.2;
 
         // Mostra le istruzioni per la modalità spettatore
         const spectatorInstructions = document.createElement('div');
@@ -4677,7 +4677,7 @@ function toggleSpectatorMode() {
         logger.log('Modalità spettatore attivata (collisioni disabilitate, usa Q per scendere ed E per salire)');
     } else {
         // Ripristina velocità normale
-        camera.speed = 0.1;
+        camera.speed = 0.05;
 
         // Ritorna alla posizione originale
         camera.position = [...camera.originalPosition];
@@ -4702,9 +4702,9 @@ function toggleSprint(active) {
 
     // Modifica la velocità del giocatore in base allo stato dello sprint
     if (isSprinting) {
-        playerSpeed = 0.3; // Velocità di sprint
+        playerSpeed = 0.1; // Velocità di sprint
     } else {
-        playerSpeed = 0.15; // Velocità normale
+        playerSpeed = 0.05; // Velocità normale
     }
 
     logger.log(`Sprint ${isSprinting ? 'attivato' : 'disattivato'}`);
