@@ -97,7 +97,8 @@ function checkWallCollisions() {
     // Modalità spettatore ignora le collisioni
     if (isSpectatorMode) return;
 
-    const playerRadius = 0.5;
+    // FIX: Raggio giocatore aumentato per evitare di andare troppo vicino ai muri
+    const playerRadius = 0.8; // Aumentato da 0.5 a 0.8
 
     // Calcolo limiti stanza con raggio giocatore
     const minX = -roomSize + playerRadius;
@@ -364,7 +365,10 @@ function render() {
     const viewMatrix = createViewMatrix();
     const aspect = canvas.width / canvas.height;
     const fov = Math.PI / 2;
-    const projectionMatrix = m4.perspective(fov, aspect, 0.4, 1000);
+    
+    // Near plane più vicino per evitare clipping
+    // distanza minima dalla camera oltre la quale gli oggetti sono visibili
+    const projectionMatrix = m4.perspective(fov, aspect, 0.05, 1000);
 
     renderSkybox(viewMatrix, projectionMatrix);
 
