@@ -72,9 +72,9 @@ function updateCamera(dt) {
     // Modalità spettatore: movimento verticale libero (Q/E)
     if (isSpectatorMode) {
         if (keys['KeyQ']) {
-            playerVelocity[1] = speed; // Scendi (Y aumenta)
+            playerVelocity[1] = -speed; // Scendi (Y aumenta)
         } else if (keys['KeyE']) {
-            playerVelocity[1] = -speed; // Sali (Y diminuisce)
+            playerVelocity[1] = speed; // Sali (Y diminuisce)
         } else {
             playerVelocity[1] = 0;
         }
