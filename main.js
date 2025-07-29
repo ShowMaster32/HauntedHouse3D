@@ -449,11 +449,6 @@ function render() {
         gl.activeTexture(gl.TEXTURE1);
         gl.bindTexture(gl.TEXTURE_2D, shadowTexture);
         gl.uniform1i(uniforms.u_shadowMap, 1);
-        
-        // Debug: verifica che la texture sia bound correttamente
-        if (frameCount % 600 === 0) {
-            logger.log('Shadow map texture bound alla slot 1');
-        }
     }
 
     // Arrays per oggetti trasparenti
@@ -882,9 +877,7 @@ function setBuffersForModel(model) {
         return;
     }
 
-    if (!model.buffersCreated) {
-        logger.log(`Creazione buffer per modello (una volta sola)`);
-        
+    if (!model.buffersCreated) {        
         // Crea buffer permanenti per questo modello
         model.positionBuffer = gl.createBuffer();
         model.normalBuffer = gl.createBuffer();
@@ -3542,14 +3535,11 @@ function setupTouchControls() {
         /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
     if (isMobile) {
-        logger.log('Dispositivo mobile rilevato - Attivazione controlli touch avanzati');
+        logger.log('Dispositivo mobile rilevato - Attivazione controlli touch migliorati');
 
         // Mostra i controlli mobile
         const mobileControls = document.getElementById('mobile-controls');
-        const cameraControl = document.getElementById('camera-control');
-
         if (mobileControls) mobileControls.classList.add('active');
-        if (cameraControl) cameraControl.style.display = 'flex';
 
         // Setup controlli direzionali
         setupDirectionalControls();
@@ -3560,23 +3550,90 @@ function setupTouchControls() {
         // Setup controlli spettatore
         setupSpectatorControls();
 
-        // Setup controllo camera
-        setupCameraControl();
+        // Setup controllo camera SEMPRE ATTIVO
+        setupAlwaysActiveCameraControl();
 
         // Setup indicatori di interazione
         setupMobileInteractionHints();
 
         // Previeni comportamenti di scroll indesiderati
         document.addEventListener('touchmove', function(e) {
-            if (e.target.closest('.mobile-controls') ||
-                e.target.closest('.camera-control') ||
-                e.target.tagName === 'CANVAS') {
+            // Permetti il movimento camera sempre
+            if (e.target.tagName === 'CANVAS') {
+                e.preventDefault();
+            }
+            // Blocca scroll solo per i controlli mobile specifici
+            if (e.target.closest('.mobile-controls') && !e.target.tagName === 'CANVAS') {
                 e.preventDefault();
             }
         }, {
             passive: false
         });
+
+        // Previeni zoom accidentale con doppio tap
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', function (event) {
+            const now = (new Date()).getTime();
+            if (now - lastTouchEnd <= 300) {
+                event.preventDefault();
+            }
+            lastTouchEnd = now;
+        }, false);
     }
+}
+
+// Setup controllo camera sempre attivo su mobile
+function setupAlwaysActiveCameraControl() {
+    let lastTouchX = 0;
+    let lastTouchY = 0;
+    let isLooking = false;
+
+    // Gestione touch sul canvas per la rotazione camera
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (e.touches.length === 1) {
+            isLooking = true;
+            lastTouchX = e.touches[0].clientX;
+            lastTouchY = e.touches[0].clientY;
+        }
+    });
+
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (isLooking && e.touches.length === 1) {
+            const touchX = e.touches[0].clientX;
+            const touchY = e.touches[0].clientY;
+
+            // Sensibilità calibrata per mobile
+            const sensitivity = 0.003;
+
+            const deltaX = touchX - lastTouchX;
+            const deltaY = touchY - lastTouchY;
+
+            // Aggiorna rotazione camera
+            camera.rotation[1] += deltaX * sensitivity;
+            camera.rotation[0] += deltaY * sensitivity;
+
+            // Limita rotazione verticale
+            camera.rotation[0] = Math.max(-Math.PI / 2 + 0.1,
+                Math.min(Math.PI / 2 - 0.1, camera.rotation[0]));
+
+            lastTouchX = touchX;
+            lastTouchY = touchY;
+        }
+    });
+
+    canvas.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        isLooking = false;
+    });
+
+    canvas.addEventListener('touchcancel', (e) => {
+        e.preventDefault();
+        isLooking = false;
+    });
+
+    logger.log('Controllo camera sempre attivo configurato');
 }
 
 // Setup controlli direzionali (WASD)
@@ -3589,27 +3646,40 @@ function setupDirectionalControls() {
         // Touch start - attiva movimento
         button.addEventListener('touchstart', (e) => {
             e.preventDefault();
+            e.stopPropagation(); // Previeni interferenza con il canvas
             keys[keyCode] = true;
             button.classList.add('active');
 
             // Feedback visivo e tattile
             if (navigator.vibrate) {
-                navigator.vibrate(50);
+                navigator.vibrate(30);
             }
+            
+            logger.log(`Movimento ${keyCode} attivato`);
         });
 
         // Touch end - ferma movimento
         button.addEventListener('touchend', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             keys[keyCode] = false;
             button.classList.remove('active');
+            
+            logger.log(`Movimento ${keyCode} fermato`);
         });
 
         // Touch cancel - gestisci interruzioni
         button.addEventListener('touchcancel', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             keys[keyCode] = false;
             button.classList.remove('active');
+        });
+
+        // Previeni drag
+        button.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
         });
 
         // Previeni context menu
@@ -3617,6 +3687,8 @@ function setupDirectionalControls() {
             e.preventDefault();
         });
     });
+
+    logger.log('Controlli direzionali configurati con stop propagation');
 }
 
 // Setup controlli azione (F, P, etc.)
@@ -3626,13 +3698,34 @@ function setupActionControls() {
     if (lightButton) {
         lightButton.addEventListener('touchstart', (e) => {
             e.preventDefault();
+            e.stopPropagation();
+            
             if (isNearSwitch) {
                 toggleLight();
-                // Feedback visivo più intenso per azioni importanti
+                showMobileMessage('Interruttore attivato!', 1000);
+                // Feedback tattile più intenso per azioni importanti
                 if (navigator.vibrate) {
                     navigator.vibrate([100, 50, 100]);
                 }
+            } else {
+                showMobileMessage('Avvicinati all\'interruttore', 1500);
+                if (navigator.vibrate) {
+                    navigator.vibrate(200);
+                }
             }
+            
+            logger.log('Pulsante luce premuto su mobile');
+        });
+
+        // Previeni eventi multipli
+        lightButton.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
+        lightButton.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
         });
     }
 
@@ -3641,10 +3734,26 @@ function setupActionControls() {
     if (panelButton) {
         panelButton.addEventListener('touchstart', (e) => {
             e.preventDefault();
+            e.stopPropagation();
+            
             togglePanel();
+            showMobileMessage(isPanelOpen ? 'Pannello aperto' : 'Pannello chiuso', 1000);
+            
             if (navigator.vibrate) {
                 navigator.vibrate(75);
             }
+            
+            logger.log('Pulsante pannello premuto su mobile');
+        });
+
+        panelButton.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
+        panelButton.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
         });
     }
 }
@@ -3658,22 +3767,44 @@ function setupSpectatorControls() {
 
         button.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            keys[keyCode] = true;
-            button.classList.add('active');
+            e.stopPropagation();
+            
+            if (isSpectatorMode) {
+                keys[keyCode] = true;
+                button.classList.add('active');
+                
+                const action = keyCode === 'KeyQ' ? 'scendi' : 'sali';
+                logger.log(`Spettatore: ${action} attivato`);
+                
+                if (navigator.vibrate) {
+                    navigator.vibrate(40);
+                }
+            } else {
+                showMobileMessage('Attiva modalità spettatore dal pannello', 2000);
+            }
         });
 
         button.addEventListener('touchend', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             keys[keyCode] = false;
             button.classList.remove('active');
         });
 
         button.addEventListener('touchcancel', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             keys[keyCode] = false;
             button.classList.remove('active');
         });
+
+        button.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
     });
+
+    logger.log('Controlli spettatore configurati');
 }
 
 // Setup controllo camera
@@ -3770,6 +3901,8 @@ function setupMobileInteractionHints() {
             }
         }
     };
+
+    logger.log('Indicatori interazione mobile configurati');
 }
 
 // Funzione per mostrare messaggi mobile temporanei
@@ -3789,7 +3922,7 @@ function showMobileMessage(message, duration = 2000) {
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        background: rgba(0, 0, 0, 0.8);
+        background: rgba(0, 0, 0, 0.9);
         color: #ff4d4d;
         padding: 15px 25px;
         border-radius: 10px;
@@ -3799,6 +3932,8 @@ function showMobileMessage(message, duration = 2000) {
         z-index: 10000;
         pointer-events: none;
         animation: fadeInOut 0.3s ease;
+        font-size: 16px;
+        box-shadow: 0 0 20px rgba(255, 77, 77, 0.5);
     `;
 
     document.body.appendChild(msgElement);
@@ -4694,6 +4829,19 @@ function toggleSpectatorMode() {
         }
 
         logger.log('Modalità spettatore disattivata');
+    }
+
+    // Mostra/nascondi controlli spettatore su mobile
+    const spectatorControls = document.getElementById('spectator-controls');
+    if (spectatorControls) {
+        spectatorControls.classList.toggle('active', isSpectatorMode);
+    }
+
+    // Mostra messaggio esplicativo su mobile
+    if (isSpectatorMode) {
+        showMobileMessage('Modalità Spettatore: Usa Q/E per salire/scendere', 3000);
+    } else {
+        showMobileMessage('Modalità Normale ripristinata', 1500);
     }
 }
 

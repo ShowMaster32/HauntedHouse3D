@@ -3,7 +3,7 @@
 <head>
     <title>Progetto CG A.A.2023/2024</title>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="main.css">
 </head>
 <body>
@@ -42,7 +42,7 @@
     <div id="log-container" style="display: none;"></div>
     <div id="camera-coords" style="display: none;"></div>
 
-    <!-- Controlli touch per dispositivi mobili (nascosti di default) -->
+    <!-- Controlli touch per dispositivi mobili -->
     <div class="mobile-controls" id="mobile-controls">
         <!-- Pad direzionale (sinistra) -->
         <div class="direction-pad">
@@ -60,17 +60,7 @@
             </div>
         </div>
 
-        <!-- Controlli azione (destra) -->
-        <div class="action-controls">
-            <div class="action-btn light" id="touch-light" data-key="KeyF">
-                <span>F</span>
-            </div>
-            <div class="action-btn panel" id="touch-panel" data-key="KeyP">
-                <span>P</span>
-            </div>
-        </div>
-
-        <!-- Controlli spettatore (mostrati solo in modalità spettatore) -->
+        <!-- Controlli spettatore (sopra i controlli principali) -->
         <div class="spectator-controls" id="spectator-controls">
             <div class="spectator-btn" id="touch-descend" data-key="KeyQ">
                 <span>Q</span>
@@ -79,11 +69,16 @@
                 <span>E</span>
             </div>
         </div>
-    </div>
 
-    <!-- Controllo camera mobile -->
-    <div class="camera-control" id="camera-control">
-        <span>👁️</span>
+        <!-- Controlli azione principali (destra) -->
+        <div class="action-controls">
+            <div class="action-btn light" id="touch-light" data-key="KeyF">
+                <span>F</span>
+            </div>
+            <div class="action-btn panel" id="touch-panel" data-key="KeyP">
+                <span>P</span>
+            </div>
+        </div>
     </div>
 
     <!-- Indicatore interazione mobile -->

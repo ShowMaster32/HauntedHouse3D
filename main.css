@@ -85,6 +85,7 @@ body {
     display: block;
     width: 100%;
     height: 100vh;
+    touch-action: none; /* Permette controllo camera sempre */
 }
 
 /* Crosshair per puntamento FPS */
@@ -254,7 +255,7 @@ body {
 }
 
 /* ============================================================================
-   CONTROLLI TOUCH MOBILE (REQUISITO PROGETTO)
+   CONTROLLI TOUCH MOBILE MIGLIORATI (REQUISITO PROGETTO)
    ============================================================================ */
 
 /* Container principale controlli mobile */
@@ -357,16 +358,31 @@ body {
 .direction-btn.right::before { content: '▶'; font-size: 16px; }
 
 /* ============================================================================
-   CONTROLLI AZIONE MOBILE
+   CONTROLLI AZIONE MOBILE RIORGANIZZATI
    ============================================================================ */
 
-/* Container controlli azione (F, P) */
+/* Container controlli azione superiori (Q, E per spettatore) */
+.spectator-controls {
+    position: absolute;
+    bottom: 160px;
+    right: 20px;
+    display: none;
+    flex-direction: row;
+    gap: 80px;
+    pointer-events: all;
+}
+
+.spectator-controls.active {
+    display: flex;
+}
+
+/* Container controlli azione principali (F, P) */
 .action-controls {
     position: absolute;
     bottom: 20px;
     right: 20px;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     gap: 15px;
     pointer-events: all;
 }
@@ -419,25 +435,7 @@ body {
     box-shadow: 0 0 20px rgba(138, 43, 226, 0.8);
 }
 
-/* ============================================================================
-   CONTROLLI SPETTATORE
-   ============================================================================ */
-
-/* Controlli Q/E per modalità spettatore */
-.spectator-controls {
-    position: absolute;
-    bottom: 80px;
-    right: 20px;
-    display: none;
-    flex-direction: row;
-    gap: 15px;
-    pointer-events: all;
-}
-
-.spectator-controls.active {
-    display: flex;
-}
-
+/* Pulsanti spettatore con colore blu */
 .spectator-btn {
     width: 55px;
     height: 55px;
@@ -461,40 +459,6 @@ body {
     transform: scale(0.9);
     background: linear-gradient(135deg, rgba(0, 191, 255, 0.8) 0%, rgba(0, 100, 200, 0.9) 100%);
     box-shadow: 0 0 15px rgba(0, 191, 255, 0.8);
-}
-
-/* ============================================================================
-   CONTROLLO CAMERA MOBILE
-   ============================================================================ */
-
-.camera-control {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    width: 60px;
-    height: 60px;
-    background: linear-gradient(135deg, rgba(40, 40, 40, 0.9) 0%, rgba(20, 20, 20, 0.9) 100%);
-    border: 2px solid #ff4d4d;
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    color: white;
-    font-size: 24px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-    pointer-events: all;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
-}
-
-.camera-control:active {
-    transform: scale(0.95);
-    background: linear-gradient(135deg, rgba(255, 77, 77, 0.8) 0%, rgba(200, 40, 40, 0.9) 100%);
-}
-
-.camera-control.active {
-    background: linear-gradient(135deg, rgba(255, 77, 77, 0.8) 0%, rgba(200, 40, 40, 0.9) 100%);
-    box-shadow: 0 0 15px rgba(255, 77, 77, 0.8);
 }
 
 /* ============================================================================
@@ -553,6 +517,11 @@ body {
     #log-container {
         width: 250px;
     }
+
+    /* Canvas deve occupare tutto lo spazio su mobile */
+    #gl-canvas {
+        touch-action: pan-x pan-y;
+    }
 }
 
 /* Adattamenti per schermi piccoli in altezza */
@@ -581,6 +550,11 @@ body {
         height: 55px;
         font-size: 16px;
     }
+
+    .spectator-controls {
+        bottom: 120px;
+        gap: 60px;
+    }
 }
 
 /* Adattamenti per smartphone very small */
@@ -600,5 +574,9 @@ body {
         width: 50px;
         height: 50px;
         font-size: 14px;
+    }
+
+    .spectator-controls {
+        gap: 40px;
     }
 }
