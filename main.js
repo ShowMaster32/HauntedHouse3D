@@ -3591,7 +3591,9 @@ function setupAlwaysActiveCameraControl() {
     // Gestione touch sul canvas per la rotazione camera
     canvas.addEventListener('touchstart', (e) => {
         e.preventDefault();
-        if (e.touches.length === 1) {
+        // CORREZIONE: Rimuovo il controllo del numero di tocchi
+        // Uso sempre il primo tocco disponibile, indipendentemente da quanti ce ne sono
+        if (e.touches.length > 0) {
             isLooking = true;
             lastTouchX = e.touches[0].clientX;
             lastTouchY = e.touches[0].clientY;
@@ -3600,7 +3602,9 @@ function setupAlwaysActiveCameraControl() {
 
     canvas.addEventListener('touchmove', (e) => {
         e.preventDefault();
-        if (isLooking && e.touches.length === 1) {
+        // CORREZIONE: Rimuovo il controllo del numero di tocchi
+        // La camera può ruotare anche se l'utente sta premendo WASD
+        if (isLooking && e.touches.length > 0) {
             const touchX = e.touches[0].clientX;
             const touchY = e.touches[0].clientY;
 
@@ -3625,7 +3629,14 @@ function setupAlwaysActiveCameraControl() {
 
     canvas.addEventListener('touchend', (e) => {
         e.preventDefault();
-        isLooking = false;
+        // CORREZIONE: Ferma la rotazione solo quando non ci sono più tocchi sul canvas
+        if (e.touches.length === 0) {
+            isLooking = false;
+        } else if (e.touches.length > 0) {
+            // Se ci sono ancora tocchi, aggiorna la posizione di riferimento
+            lastTouchX = e.touches[0].clientX;
+            lastTouchY = e.touches[0].clientY;
+        }
     });
 
     canvas.addEventListener('touchcancel', (e) => {
@@ -3633,7 +3644,7 @@ function setupAlwaysActiveCameraControl() {
         isLooking = false;
     });
 
-    logger.log('Controllo camera sempre attivo configurato');
+    logger.log('Controllo camera sempre attivo configurato - VERSIONE CORRETTA');
 }
 
 // Setup controlli direzionali (WASD)
