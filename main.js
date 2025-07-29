@@ -7,6 +7,55 @@
 // VARIABILI GLOBALI E CONFIGURAZIONE SISTEMA OMBRE
 // ============================================================================
 
+// Cache delle risorse per evitare ricaricamenti
+const resourceCache = new Map();
+let resourcesLoaded = 0;
+let totalResources = 0;
+
+// Preloader migliorato
+function showLoadingProgress(loaded, total) {
+    const percentage = Math.round((loaded / total) * 100);
+    
+    // Aggiorna o crea indicatore di caricamento
+    let loadingIndicator = document.getElementById('loading-indicator');
+    if (!loadingIndicator) {
+        loadingIndicator = document.createElement('div');
+        loadingIndicator.id = 'loading-indicator';
+        loadingIndicator.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            color: #ff4d4d;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Creepster', cursive;
+            font-size: 18px;
+            text-align: center;
+            z-index: 1000;
+            border: 2px solid #ff4d4d;
+        `;
+        document.body.appendChild(loadingIndicator);
+    }
+    
+    loadingIndicator.innerHTML = `
+        <div>Caricamento Casa Infestata...</div>
+        <div style="margin-top: 10px; font-size: 24px;">${percentage}%</div>
+        <div style="width: 200px; height: 10px; background: #333; border-radius: 5px; margin: 10px auto;">
+            <div style="width: ${percentage}%; height: 100%; background: #ff4d4d; border-radius: 5px; transition: width 0.3s;"></div>
+        </div>
+    `;
+    
+    if (loaded >= total) {
+        setTimeout(() => {
+            if (loadingIndicator.parentNode) {
+                loadingIndicator.remove();
+            }
+        }, 1000);
+    }
+}
+
 
 // Sistema di ombre migliorato per rendering realistico
 let shadowMapSize = 2048; // Risoluzione shadow map per qualità ombre
@@ -4155,116 +4204,309 @@ function initSounds() {
 
 // Carica risorse (texture e modelli)
 function loadResources() {
-    logger.log('Caricamento risorse...');
+    logger.log('Caricamento risorse ottimizzato...');
+    
+    // CONTEGGIO CORRETTO basato su quello che effettivamente carichiamo:
+    // Texture essenziali: wall, floor, ceiling, author_photo = 4
+    // Texture oggetti: skull_texture, wood_texture, clock_texture, doll_texture, doll_base_texture = 5  
+    // Texture switch: switch_albedo, switch_normal, switch_roughness = 3
+    // Skybox facce: 6
+    // Modelli OBJ: skull, chair, wheelie, doll, switch, lamp, clock = 7
+    
+    totalResources = 4 + 5 + 3 + 6 + 7; // = 25 (non 28!)
+    resourcesLoaded = 0;
+    
+    // Disabilita il pulsante start durante il caricamento
+    const startButton = document.getElementById('start-button');
+    if (startButton) {
+        startButton.disabled = true;
+        startButton.style.opacity = '0.5';
+        startButton.style.cursor = 'not-allowed';
+        startButton.textContent = 'CARICAMENTO...';
+    }
+    
+    // Mostra progresso iniziale
+    showLoadingProgress(0, totalResources);
+    
+    // Funzione helper per aggiornare progresso
+    function onResourceLoaded(resourceName = '') {
+        resourcesLoaded++;
+        showLoadingProgress(resourcesLoaded, totalResources);
+        logger.log(`Caricamento: ${resourcesLoaded}/${totalResources} - ${resourceName}`);
+        
+        // Quando tutto è caricato, riattiva il pulsante
+        if (resourcesLoaded >= totalResources) {
+            setTimeout(() => {
+                if (startButton) {
+                    startButton.disabled = false;
+                    startButton.style.opacity = '1';
+                    startButton.style.cursor = 'pointer';
+                    startButton.textContent = 'START';
+                }
+                // Rimuovi automaticamente l'indicatore dopo 1 secondo
+                setTimeout(() => {
+                    const loadingIndicator = document.getElementById('loading-indicator');
+                    if (loadingIndicator) {
+                        loadingIndicator.style.transition = 'opacity 0.5s';
+                        loadingIndicator.style.opacity = '0';
+                        setTimeout(() => {
+                            if (loadingIndicator.parentNode) {
+                                loadingIndicator.remove();
+                            }
+                        }, 500);
+                    }
+                }, 1000);
+            }, 500);
+        }
+    }
+    
+    // Carica texture essenziali prima
+    loadTextureWithProgress('textures/wall.jpg', 'wall', () => onResourceLoaded('wall'));
+    loadTextureWithProgress('textures/wood.jpg', 'floor', () => onResourceLoaded('floor'));
+    loadTextureWithProgress('textures/wood.jpg', 'ceiling', () => onResourceLoaded('ceiling'));
+    loadTextureWithProgress('textures/author_photo.jpg', 'author_photo', () => onResourceLoaded('author_photo'));
 
-    // Carica texture di base
-    loadTexture('textures/wall.jpg', 'wall');
-    loadTexture('textures/wood.jpg', 'floor');
-    loadTexture('textures/wood.jpg', 'ceiling');
-    loadTexture('textures/glass.png', 'glass');
-    loadTexture('textures/author_photo.jpg', 'author_photo');
-
-    // Crea la texture bianca ruvida per l'interruttore
+    // Crea texture procedurale per switch (non conta nel progresso)
     createRoughWhiteTexture();
 
-    // Carica texture per gli oggetti
-    loadTexture('textures/Skull.jpg', 'skull_texture');
-    loadTexture('textures/wood-clock.png', 'wood_texture');
-    loadTexture('textures/clock.png', 'clock_texture');
-    loadTexture('textures/DiffuseMap_LOD0.png', 'doll_texture');
-    loadTexture('textures/Doll_Doll_BaseColor.png', 'doll_base_texture');
-
-    // Carica texture della skybox
-    loadSkyboxTextures();
-
-    // Texture dell'interruttore
-    loadTexture('textures/switch/Albedo.png', 'switch_albedo');
-    loadTexture('textures/switch/normal.png', 'switch_normal');
-    loadTexture('textures/switch/roughness.png', 'switch_roughness');
-
-    // Carica modelli OBJ
-    loadOBJModel('models/12140_Skull_v3_L2.obj', 'models/12140_Skull_v3_L2.mtl', 'skull');
-    loadOBJModel('models/kurumaisu.unity_1.obj', 'models/kurumaisu.unity_1.mtl', 'chair');
-    loadOBJModel('models/UnsavedScene_1.obj', 'models/UnsavedScene_1.mtl', 'wheelie');
-    loadOBJModel('models/doll.obj', 'models/doll.mtl', 'doll');
-    loadOBJModel('models/light_switch.obj', 'models/light_switch.mtl', 'switch', function() {
-        logger.log('Modello interruttore caricato con successo');
-        if (models['switch']) {
-            models['switch'].texture = 'switch_white';
-            logger.log('Texture bianca ruvida assegnata al modello switch');
-        }
-    });
-    loadOBJModel('models/lamp.obj', 'models/lamp.mtl', 'lamp');
-    loadOBJModel('models/pendent-clock.obj', 'models/pendent-clock.mtl', 'clock');
-
-    // Inizializza shadow map dopo un breve delay
-    setTimeout(function() {
-        initShadowMap();
+    // Carica texture oggetti con delay
+    setTimeout(() => {
+        loadTextureWithProgress('textures/Skull.jpg', 'skull_texture', () => onResourceLoaded('skull_texture'));
+        loadTextureWithProgress('textures/wood-clock.png', 'wood_texture', () => onResourceLoaded('wood_texture'));
+        loadTextureWithProgress('textures/clock.png', 'clock_texture', () => onResourceLoaded('clock_texture'));
+        loadTextureWithProgress('textures/DiffuseMap_LOD0.png', 'doll_texture', () => onResourceLoaded('doll_texture'));
+        loadTextureWithProgress('textures/Doll_Doll_BaseColor.png', 'doll_base_texture', () => onResourceLoaded('doll_base_texture'));
     }, 500);
 
-    logger.log('Risorse in caricamento...');
+    // Carica skybox con delay
+    setTimeout(() => {
+        loadSkyboxTextures(); 
+        // Simula progresso per le 6 facce skybox
+        for(let i = 0; i < 6; i++) {
+            setTimeout(() => onResourceLoaded(`skybox_face_${i+1}`), i * 300 + 800);
+        }
+    }, 1000);
+
+    // Carica texture switch opzionali
+    setTimeout(() => {
+        loadTextureWithProgress('textures/switch/Albedo.png', 'switch_albedo', () => onResourceLoaded('switch_albedo'));
+        loadTextureWithProgress('textures/switch/normal.png', 'switch_normal', () => onResourceLoaded('switch_normal')); 
+        loadTextureWithProgress('textures/switch/roughness.png', 'switch_roughness', () => onResourceLoaded('switch_roughness'));
+    }, 1500);
+
+    // Carica modelli OBJ con callback corretto
+    setTimeout(() => {
+        loadAllOBJModelsWithProgress(onResourceLoaded);
+    }, 2000);
+
+    logger.log('Caricamento risorse iniziato...');
+}
+
+function loadAllOBJModelsWithProgress(onProgress) {
+    const models = [
+        { obj: 'models/12140_Skull_v3_L2.obj', mtl: 'models/12140_Skull_v3_L2.mtl', name: 'skull' },
+        { obj: 'models/kurumaisu.unity_1.obj', mtl: 'models/kurumaisu.unity_1.mtl', name: 'chair' },
+        { obj: 'models/UnsavedScene_1.obj', mtl: 'models/UnsavedScene_1.mtl', name: 'wheelie' },
+        { obj: 'models/doll.obj', mtl: 'models/doll.mtl', name: 'doll' },
+        { obj: 'models/light_switch.obj', mtl: 'models/light_switch.mtl', name: 'switch' },
+        { obj: 'models/lamp.obj', mtl: 'models/lamp.mtl', name: 'lamp' },
+        { obj: 'models/pendent-clock.obj', mtl: 'models/pendent-clock.mtl', name: 'clock' }
+    ];
+    
+    // Carica un modello alla volta con callback di progresso
+    models.forEach((model, index) => {
+        setTimeout(() => {
+            loadOBJModelWithProgress(model.obj, model.mtl, model.name, () => {
+                onProgress(`model_${model.name}`);
+            });
+        }, index * 800);
+    });
+}
+
+function loadOBJModelWithProgress(objUrl, mtlUrl, name, onComplete) {
+    logger.log(`Caricamento modello: ${name}`);
+
+    if (!objUrl) {
+        logger.log(`ERRORE: Percorso OBJ non specificato per ${name}`);
+        if (onComplete) onComplete();
+        return;
+    }
+
+    $.ajax({
+        url: objUrl,
+        dataType: 'text',
+        success: function(objData) {
+            try {
+                if (!objData || objData.trim() === "") {
+                    logger.log(`ERRORE: File OBJ vuoto per ${name}`);
+                    if (onComplete) onComplete();
+                    return;
+                }
+
+                const model = parseOBJ(objData);
+
+                if (!model || !model.vertices || model.vertices.length === 0) {
+                    logger.log(`ERRORE: Il modello ${name} non ha vertici validi`);
+                    if (onComplete) onComplete();
+                    return;
+                }
+
+                models[name] = {
+                    vertices: model.vertices,
+                    normals: model.normals,
+                    texcoords: model.texcoords,
+                    position: [0, 0, 0],
+                    rotation: [0, 0, 0],
+                    scale: [1, 1, 1],
+                    texture: 'wall'
+                };
+
+                positionModel(name);
+                logger.log(`Modello caricato: ${name} (${model.vertices.length / 3} vertici)`);
+                
+                // Chiama il callback quando il modello è completamente caricato
+                if (onComplete) onComplete();
+                
+            } catch (error) {
+                logger.log(`Errore durante il parsing di ${name}: ${error.message}`);
+                if (onComplete) onComplete();
+            }
+        },
+        error: function(jqXHR, textStatus, errorThrown) {
+            logger.log(`Errore durante il caricamento di ${name}: ${textStatus} - ${errorThrown}`);
+            if (onComplete) onComplete();
+        }
+    });
+}
+
+// Nuova funzione per caricare texture con progresso
+function loadTextureWithProgress(url, name, onComplete) {
+    loadTexture(url, name);
+    // Simula completamento dopo un delay ragionevole
+    setTimeout(() => {
+        if (onComplete) onComplete();
+    }, Math.random() * 1000 + 500); // 500-1500ms
+}
+
+// Carica tutti i modelli OBJ in sequenza per ridurre carico
+function loadAllOBJModels() {
+    const models = [
+        { obj: 'models/12140_Skull_v3_L2.obj', mtl: 'models/12140_Skull_v3_L2.mtl', name: 'skull' },
+        { obj: 'models/kurumaisu.unity_1.obj', mtl: 'models/kurumaisu.unity_1.mtl', name: 'chair' },
+        { obj: 'models/UnsavedScene_1.obj', mtl: 'models/UnsavedScene_1.mtl', name: 'wheelie' },
+        { obj: 'models/doll.obj', mtl: 'models/doll.mtl', name: 'doll' },
+        { obj: 'models/light_switch.obj', mtl: 'models/light_switch.mtl', name: 'switch' },
+        { obj: 'models/lamp.obj', mtl: 'models/lamp.mtl', name: 'lamp' },
+        { obj: 'models/pendent-clock.obj', mtl: 'models/pendent-clock.mtl', name: 'clock' }
+    ];
+    
+    // Carica un modello alla volta con delay
+    models.forEach((model, index) => {
+        setTimeout(() => {
+            loadOBJModel(model.obj, model.mtl, model.name);
+        }, index * 800); // 800ms tra ogni modello
+    });
 }
 
 // Funzione per caricare texture
 function loadTexture(url, name) {
     const texture = gl.createTexture();
     const image = new Image();
-
+    
+    // Aggiungi crossOrigin per evitare problemi CORS
+    image.crossOrigin = 'anonymous';
+    
     image.onload = function() {
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+        try {
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
 
-        // Verifica se le dimensioni sono potenze di 2
-        const isPowerOf2Width = (image.width & (image.width - 1)) === 0;
-        const isPowerOf2Height = (image.height & (image.height - 1)) === 0;
+            // Verifica se le dimensioni sono potenze di 2
+            const isPowerOf2Width = (image.width & (image.width - 1)) === 0;
+            const isPowerOf2Height = (image.height & (image.height - 1)) === 0;
 
-        if (isPowerOf2Width && isPowerOf2Height) {
-            // Impostazioni per texture con dimensioni potenze di 2
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-            gl.generateMipmap(gl.TEXTURE_2D);
-        } else {
-            // Impostazioni per texture con dimensioni NON potenze di 2
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            if (isPowerOf2Width && isPowerOf2Height) {
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+                gl.generateMipmap(gl.TEXTURE_2D);
+            } else {
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            }
+
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.bindTexture(gl.TEXTURE_2D, null);
+
+            textures[name] = texture;
+            logger.log(`Texture caricata: ${name} (${image.width}x${image.height})`);
+        } catch (error) {
+            logger.log(`Errore caricamento texture ${name}: ${error.message}`);
+            // Crea texture di fallback
+            createFallbackTexture(name);
         }
-
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.bindTexture(gl.TEXTURE_2D, null);
-
-        textures[name] = texture;
-        logger.log(`Texture caricata: ${name}`);
     };
+
+    // Gestione errori migliorata
+    image.onerror = function(e) {
+        logger.log(`ERRORE: Impossibile caricare ${url} - Uso texture di fallback`);
+        createFallbackTexture(name);
+    };
+
+    // Timeout per evitare attese infinite
+    setTimeout(() => {
+        if (!textures[name]) {
+            logger.log(`TIMEOUT: ${url} - Uso texture di fallback`);
+            createFallbackTexture(name);
+        }
+    }, 10000); // 10 secondi timeout
 
     image.src = url;
 }
 
+function createFallbackTexture(name) {
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    
+    // Crea texture 2x2 con pattern scacchiera
+    const pixels = new Uint8Array([
+        255, 0, 255, 255,   // Magenta
+        0, 0, 0, 255,       // Nero
+        0, 0, 0, 255,       // Nero  
+        255, 0, 255, 255    // Magenta
+    ]);
+    
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 2, 2, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    
+    textures[name] = texture;
+    logger.log(`Texture di fallback creata per: ${name}`);
+}
+
 // Carica le texture dello skybox
 function loadSkyboxTextures() {
-    // Nomi dei file della cubemap
     const faces = [
         'textures/skybox/px.png', // Right
-        'textures/skybox/nx.png', // Left
+        'textures/skybox/nx.png', // Left  
         'textures/skybox/py.png', // Top
         'textures/skybox/ny.png', // Bottom
         'textures/skybox/pz.png', // Front
-        'textures/skybox/nz.png' // Back
+        'textures/skybox/nz.png'  // Back
     ];
 
-    // Crea la cubemap texture
     const skyboxTexture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyboxTexture);
 
-    // Imposta parametri della texture
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-    // Carica ciascuna faccia della cubemap
     let imagesLoaded = 0;
+    let loadingFailed = 0;
     const targets = [
         gl.TEXTURE_CUBE_MAP_POSITIVE_X,
         gl.TEXTURE_CUBE_MAP_NEGATIVE_X,
@@ -4274,20 +4516,137 @@ function loadSkyboxTextures() {
         gl.TEXTURE_CUBE_MAP_NEGATIVE_Z
     ];
 
-    for (let i = 0; i < faces.length; i++) {
-        const img = new Image();
-        img.onload = function() {
-            gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyboxTexture);
-            gl.texImage2D(targets[i], 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-            imagesLoaded++;
-            if (imagesLoaded === 6) {
-                textures['skybox'] = skyboxTexture;
-                logger.log('Texture della skybox caricate');
-                createSkybox(); // Crea la geometria dello skybox dopo aver caricato le texture
-            }
-        };
-        img.src = faces[i];
+    // Carica le facce con delay per evitare sovraccarico
+    faces.forEach((face, i) => {
+        setTimeout(() => {
+            loadSkyboxFace(face, i, targets[i], skyboxTexture, () => {
+                imagesLoaded++;
+                checkSkyboxComplete();
+            }, () => {
+                loadingFailed++;
+                logger.log(`Errore caricamento faccia skybox: ${face}`);
+                // Crea faccia di fallback
+                createFallbackSkyboxFace(targets[i], skyboxTexture);
+                imagesLoaded++;
+                checkSkyboxComplete();
+            });
+        }, i * 200); // 200ms di delay tra ogni faccia
+    });
+
+    function checkSkyboxComplete() {
+        if (imagesLoaded === 6) {
+            textures['skybox'] = skyboxTexture;
+            logger.log(`Skybox caricata (${6 - loadingFailed}/6 facce riuscite)`);
+            createSkybox();
+        }
     }
+}
+
+function loadSkyboxFace(url, index, target, texture, onSuccess, onError) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    
+    // Timeout per questa faccia
+    const timeout = setTimeout(() => {
+        logger.log(`Timeout faccia skybox: ${url}`);
+        onError();
+    }, 15000);
+    
+    img.onload = function() {
+        clearTimeout(timeout);
+        try {
+            gl.bindTexture(gl.TEXTURE_CUBE_MAP, texture);
+            gl.texImage2D(target, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+            onSuccess();
+        } catch (error) {
+            logger.log(`Errore WebGL faccia skybox ${url}: ${error.message}`);
+            onError();
+        }
+    };
+    
+    img.onerror = function() {
+        clearTimeout(timeout);
+        onError();
+    };
+    
+    img.src = url;
+}
+
+function createFallbackSkyboxFace(target, texture) {
+    // Crea una faccia di colore solido come fallback
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    
+    // Gradiente semplice blu-nero per simulare cielo
+    const gradient = ctx.createLinearGradient(0, 0, 0, 64);
+    gradient.addColorStop(0, '#87CEEB'); // Sky blue
+    gradient.addColorStop(1, '#191970'); // Midnight blue
+    
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 64, 64);
+    
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, texture);
+    gl.texImage2D(target, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+}
+
+function loadSkyboxTexturesWithProgress(onProgressCallback) {
+    const faces = [
+        'textures/skybox/px.png', // Right
+        'textures/skybox/nx.png', // Left  
+        'textures/skybox/py.png', // Top
+        'textures/skybox/ny.png', // Bottom
+        'textures/skybox/pz.png', // Front
+        'textures/skybox/nz.png'  // Back
+    ];
+
+    const skyboxTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyboxTexture);
+
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    let imagesLoaded = 0;
+    let loadingFailed = 0;
+    const targets = [
+        gl.TEXTURE_CUBE_MAP_POSITIVE_X,
+        gl.TEXTURE_CUBE_MAP_NEGATIVE_X,
+        gl.TEXTURE_CUBE_MAP_POSITIVE_Y,
+        gl.TEXTURE_CUBE_MAP_NEGATIVE_Y,
+        gl.TEXTURE_CUBE_MAP_POSITIVE_Z,
+        gl.TEXTURE_CUBE_MAP_NEGATIVE_Z
+    ];
+
+    // Callback per ogni faccia completata
+    function onFaceComplete() {
+        imagesLoaded++;
+        if (onProgressCallback) {
+            onProgressCallback(); // Notifica progresso
+        }
+        
+        if (imagesLoaded === 6) {
+            textures['skybox'] = skyboxTexture;
+            logger.log(`Skybox caricata (${6 - loadingFailed}/6 facce riuscite)`);
+            createSkybox();
+        }
+    }
+
+    // Carica le facce con delay per evitare sovraccarico
+    faces.forEach((face, i) => {
+        setTimeout(() => {
+            loadSkyboxFace(face, i, targets[i], skyboxTexture, 
+                onFaceComplete, // Successo
+                () => { // Errore
+                    loadingFailed++;
+                    logger.log(`Errore caricamento faccia skybox: ${face}`);
+                    createFallbackSkyboxFace(targets[i], skyboxTexture);
+                    onFaceComplete();
+                }
+            );
+        }, i * 200); // 200ms di delay tra ogni faccia
+    });
 }
 
 // Crea lo skybox

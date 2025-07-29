@@ -353,9 +353,43 @@
             <p>L'applicazione include controlli touch ottimizzati per dispositivi mobili:</p>
             <ul class="feature-list">
                 <li>Pulsanti virtuali per il movimento (WASD)</li>
-                <li>Touch and drag per la rotazione della camera</li>
+                <li><strong>Controllo camera avanzato:</strong> rotazione fluida con un singolo dito sul canvas</li>
+                <li><strong>Input simultaneo:</strong> movimento WASD + rotazione camera contemporanei</li>
                 <li>Interfaccia adattiva per schermi piccoli</li>
                 <li>Controlli gesture per le interazioni</li>
+                <li>Feedback tattile con vibrazione (se supportata dal dispositivo)</li>
+            </ul>
+            <div class="highlight-box">
+                <p><strong>Innovazione Touch:</strong> Il sistema di controlli touch è progettato per permettere movimento e rotazione camera simultanei, utilizzando sempre il primo tocco disponibile indipendentemente dal numero di input attivi. Questo garantisce un'esperienza fluida anche durante azioni complesse.</p>
+            </div>
+
+            <h3>🛡️ Gestione Errori e Robustezza</h3>
+            <p>Il sistema implementa strategie avanzate per garantire funzionamento anche in condizioni avverse:</p>
+            <ul class="feature-list">
+                <li><strong>Texture Fallback:</strong> Pattern scacchiera automatico per texture non caricate</li>
+                <li><strong>Timeout Management:</strong> Gestione timeout 10 secondi per evitare attese infinite</li>
+                <li><strong>HTTP/2 Compatibility:</strong> Caricamento robusto per server con problemi protocollo</li>
+                <li><strong>Sequential Loading:</strong> Caricamento sequenziale skybox per evitare sovraccarico</li>
+                <li><strong>Cross-Origin Support:</strong> Compatibilità CORS per deployment su diversi domini</li>
+            </ul>
+
+            <h3>🎨 User Experience</h3>
+            <div class="highlight-box">
+                <p><strong>Caricamento Intelligente:</strong> Sistema di progresso visivo con barra di caricamento tematizzata, blocco automatico dell'interfaccia durante l'inizializzazione e feedback real-time sullo stato delle risorse.</p>
+            </div>
+            <ul class="feature-list">
+                <li><strong>Loading Progress:</strong> Indicatore percentuale con stile horror-themed</li>
+                <li><strong>Smart Button:</strong> Pulsante START bloccato fino a caricamento completo</li>
+                <li><strong>Resource Counter:</strong> Tracking preciso di 25 risorse (texture + modelli + skybox)</li>
+                <li><strong>Auto-dismiss:</strong> Rimozione automatica indicatori al completamento</li>
+            </ul>
+
+            <h3>🛠️ Strumenti di Sviluppo</h3>
+            <ul class="feature-list">
+                <li><strong>Blender 3D:</strong> Utilizzato per ottimizzazione mesh, UV mapping, preparazione asset e verifica topologia modelli OBJ secondo le raccomandazioni del corso</li>
+                <li><strong>Error Handling:</strong> Sistema robusto di gestione errori per deployment web</li>
+                <li><strong>Performance Monitoring:</strong> Ottimizzazioni specifiche per server con limitazioni HTTP/2</li>
+                <li><strong>Cross-Platform Testing:</strong> Validazione su desktop e mobile con diversi browser</li>
             </ul>
         </section>
 
@@ -491,29 +525,30 @@ void main() {
             
             <h3>🎯 Collision Detection</h3>
             <div class="highlight-box">
-                <p>Sistema di collision detection AABB (Axis-Aligned Bounding Box) per limitare il movimento del giocatore entro i confini della stanza, con gestione separata per modalità spettatore.</p>
+                <p><strong>Workflow Blender:</strong> Il processo di preparazione asset ha incluso ottimizzazione geometria, UV unwrapping per texture mapping corretto, e verifica topologia per performance WebGL ottimali.</p>
+                <img src="images/blender_workflow.png" alt="Blender UV Mapping Process" style="width:100%; margin:10px 0; border-radius:8px;">
             </div>
 
             <h3>🌑 Shadow Mapping Algorithm</h3>
             <div class="code-block">
-// Shadow Mapping con PCF
-float calculateShadow(vec4 fragPosLightSpace) {
-    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
-    projCoords = projCoords * 0.5 + 0.5;
-    
-    float shadow = 0.0;
-    vec2 texelSize = vec2(1.0) / vec2(1024.0);
-    
-    // PCF (Percentage Closer Filtering)
-    for(int x = -1; x <= 1; ++x) {
-        for(int y = -1; y <= 1; ++y) {
-            float pcfDepth = texture2D(u_shadowMap, 
-                projCoords.xy + vec2(x, y) * texelSize).r;
-            shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;
-        }
-    }
-    return shadow / 9.0;
-}
+            // Shadow Mapping con PCF
+            float calculateShadow(vec4 fragPosLightSpace) {
+                vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+                projCoords = projCoords * 0.5 + 0.5;
+                
+                float shadow = 0.0;
+                vec2 texelSize = vec2(1.0) / vec2(1024.0);
+                
+                // PCF (Percentage Closer Filtering)
+                for(int x = -1; x <= 1; ++x) {
+                    for(int y = -1; y <= 1; ++y) {
+                        float pcfDepth = texture2D(u_shadowMap, 
+                            projCoords.xy + vec2(x, y) * texelSize).r;
+                        shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;
+                    }
+                }
+                return shadow / 9.0;
+            }
             </div>
 
             <h3>🎨 Procedural Texture Generation</h3>
