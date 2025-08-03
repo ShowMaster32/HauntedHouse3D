@@ -106,18 +106,21 @@ body {
 }
 
 /* Istruzioni interazione con animazione pulsante */
-#instructions { 
-    position: absolute; 
-    bottom: 20px; 
-    left: 50%; 
-    transform: translateX(-50%); 
-    background-color: rgba(0, 0, 0, 0.7); 
-    padding: 10px; 
-    border-radius: 5px; 
-    border: 1px solid #ff4d4d;
-    animation: pulse 2s infinite;
+#instructions {
+    visibility: hidden;
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 10px;
+    border-radius: 5px;
+    z-index: 100;
     text-align: center;
     font-weight: bold;
+    border: 1px solid #ff4d4d;
+    animation: pulse 2s infinite;
 }
 
 @keyframes pulse {
