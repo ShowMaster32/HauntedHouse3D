@@ -3138,11 +3138,11 @@ function handleMouseMove(e) {
                                 function addSection(parent, title) {
                                     const section = document.createElement('div');
                                     section.innerHTML = `
-        <h3 style="margin: 20px 0 10px 20px; color: #ddd; font-size: 18px; 
-                   border-bottom: 1px solid #444; padding-bottom: 5px;">
-            ${title}
-        </h3>
-    `;
+                                        <h3 style="margin: 20px 0 10px 20px; color: #ddd; font-size: 18px; 
+                                                border-bottom: 1px solid #444; padding-bottom: 5px;">
+                                            ${title}
+                                        </h3>
+                                    `;
                                     parent.appendChild(section);
                                 }
                                 
@@ -3401,22 +3401,22 @@ function handleMouseMove(e) {
                                                     // Styling personalizzato per lo slider
                                                     const style = document.createElement('style');
                                                     style.textContent = `
-        input[type=range]::-webkit-slider-thumb {
-            appearance: none;
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            background: #ff4d4d;
-            cursor: pointer;
-        }
-        input[type=range]::-moz-range-thumb {
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            background: #ff4d4d;
-            cursor: pointer;
-        }
-    `;
+                                                        input[type=range]::-webkit-slider-thumb {
+                                                            appearance: none;
+                                                            width: 16px;
+                                                            height: 16px;
+                                                            border-radius: 50%;
+                                                            background: #ff4d4d;
+                                                            cursor: pointer;
+                                                        }
+                                                        input[type=range]::-moz-range-thumb {
+                                                            width: 16px;
+                                                            height: 16px;
+                                                            border-radius: 50%;
+                                                            background: #ff4d4d;
+                                                            cursor: pointer;
+                                                        }
+                                                    `;
                                                     document.head.appendChild(style);
                                                     
                                                     slider.addEventListener('input', function() {
@@ -3484,11 +3484,11 @@ function handleMouseMove(e) {
                                                                 const style = document.createElement('style');
                                                                 style.id = 'pulse-animation';
                                                                 style.textContent = `
-                    @keyframes pulse {
-                        0% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
-                        100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0.1; }
-                    }
-                `;
+                                                                    @keyframes pulse {
+                                                                        0% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
+                                                                        100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0.1; }
+                                                                    }
+                                                                `;
                                                                 document.head.appendChild(style);
                                                             }
                                                         }
@@ -3963,23 +3963,23 @@ function handleMouseMove(e) {
                                                             msgElement.id = 'temp-mobile-msg';
                                                             msgElement.textContent = message;
                                                             msgElement.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: rgba(0, 0, 0, 0.9);
-        color: #ff4d4d;
-        padding: 15px 25px;
-        border-radius: 10px;
-        border: 2px solid #ff4d4d;
-        font-weight: bold;
-        text-align: center;
-        z-index: 10000;
-        pointer-events: none;
-        animation: fadeInOut 0.3s ease;
-        font-size: 16px;
-        box-shadow: 0 0 20px rgba(255, 77, 77, 0.5);
-    `;
+                                                                position: fixed;
+                                                                top: 50%;
+                                                                left: 50%;
+                                                                transform: translate(-50%, -50%);
+                                                                background: rgba(0, 0, 0, 0.9);
+                                                                color: #ff4d4d;
+                                                                padding: 15px 25px;
+                                                                border-radius: 10px;
+                                                                border: 2px solid #ff4d4d;
+                                                                font-weight: bold;
+                                                                text-align: center;
+                                                                z-index: 10000;
+                                                                pointer-events: none;
+                                                                animation: fadeInOut 0.3s ease;
+                                                                font-size: 16px;
+                                                                box-shadow: 0 0 20px rgba(255, 77, 77, 0.5);
+                                                            `;
                                                             
                                                             document.body.appendChild(msgElement);
                                                             
@@ -4014,16 +4014,16 @@ function handleMouseMove(e) {
                                                         // CSS per le animazioni dei messaggi temporanei
                                                         const mobileAnimationStyles = document.createElement('style');
                                                         mobileAnimationStyles.textContent = `
-    @keyframes fadeInOut {
-        from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-        to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-    }
-    
-    @keyframes fadeOut {
-        from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-        to { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-    }
-`;
+                                                            @keyframes fadeInOut {
+                                                                from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+                                                                to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                                                            }
+                                                            
+                                                            @keyframes fadeOut {
+                                                                from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                                                                to { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+                                                            }
+                                                        `;
                                                         document.head.appendChild(mobileAnimationStyles);
                                                         
                                                         // Funzione per ridimensionare il canvas
