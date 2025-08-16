@@ -632,7 +632,8 @@ function handleMouseMove(e) {
                                         // Lista oggetti che proiettano ombre (no pareti/pavimento per performance)
                                         const shadowCasters = [
                                             'skull_0', 'skull_1', 'skull_2', 'skull_3', 'skull_4',
-                                            'doll', 'chair', 'chair_2', 'wheelie', 'clock', 'lamp'
+                                            'doll', 'chair', 'chair_2', 'wheelie', 'clock', 'lamp',
+                                            'horror_chair'
                                         ];
                                         
                                         // Itera attraverso ogni oggetto che deve proiettare ombre
@@ -4223,9 +4224,9 @@ function handleMouseMove(e) {
                                                             // Carica texture per gli oggetti
                                                             loadTexture('textures/Skull.jpg', 'skull_texture');
                                                             loadTexture('textures/wood-clock.png', 'wood_texture');
-                                                            loadTexture('textures/clock.png', 'clock_texture');
                                                             loadTexture('textures/DiffuseMap_LOD0.png', 'doll_texture');
                                                             loadTexture('textures/Doll_Doll_BaseColor.png', 'doll_base_texture');
+                                                            loadTexture('textures/Horror_Chair.png', 'horror_chair_texture');
                                                             
                                                             // Carica texture della skybox
                                                             loadSkyboxTextures();
@@ -4247,7 +4248,7 @@ function handleMouseMove(e) {
                                                                 }
                                                             });
                                                             loadOBJModel('models/lamp.obj', 'models/lamp.mtl', 'lamp');
-                                                            loadOBJModel('models/pendent-clock.obj', 'models/pendent-clock.mtl', 'clock');
+                                                            loadOBJModel('models/chair-AZ.obj', 'models/chair-AZ.mtl', 'horror_chair');
                                                             
                                                             // Inizializza shadow map dopo un breve delay
                                                             setTimeout(function() {
@@ -4628,12 +4629,11 @@ function handleMouseMove(e) {
                                                                 models[name].rotation = [0, 0, 0];
                                                                 models[name].scale = [0.15, 0.15, 0.15];
                                                                 models[name].texture = 'wood_texture';
-                                                            } else if (name === 'clock') {
-                                                                // RIPRISTINO: TUE coordinate originali
-                                                                models[name].position = [4, -5.5, -roomSize + 0.8];
+                                                            } else if (name === 'horror_chair') {
+                                                                models[name].position = [4, -3.8, -roomSize + 0.8];
                                                                 models[name].rotation = [0, -Math.PI / 2, 0];
                                                                 models[name].scale = [0.6, 0.6, 0.6];
-                                                                models[name].texture = 'clock_texture';
+                                                                models[name].texture = 'horror_chair_texture';
                                                             }
                                                         }
                                                         
