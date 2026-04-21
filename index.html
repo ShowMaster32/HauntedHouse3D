@@ -40,6 +40,15 @@
         <button id="toggleExternalLight">Luce Esterna</button>
         <button id="toggleRoomLight">Luce Stanza</button>
         <button id="advancedRendering">Rendering Avanzato</button>
+        <button id="toggleFog">Nebbia [G]</button>
+        <button id="toggleBump">Bump Mapping [B]</button>
+        <hr style="border-color:#555; margin:12px 0;">
+        <div style="font-size:0.8rem; color:#aaa; line-height:1.8;">
+            <strong>Tasti rapidi:</strong><br>
+            P = Pannello &nbsp; F = Luce &nbsp; G = Nebbia<br>
+            B = Bump map &nbsp; Shift = Sprint<br>
+            Q/E = Su/Giù (spettatore)
+        </div>
     </div>
     
     <!-- Container per i log e debug info -->
@@ -81,6 +90,12 @@
             </div>
             <div class="action-btn panel" id="touch-panel" data-key="KeyP">
                 <span>P</span>
+            </div>
+            <div class="action-btn" id="touch-fog" data-key="KeyG" style="background:rgba(20,60,80,0.85);">
+                <span>G</span>
+            </div>
+            <div class="action-btn" id="touch-bump" data-key="KeyB" style="background:rgba(60,40,20,0.85);">
+                <span>B</span>
             </div>
         </div>
     </div>
@@ -160,6 +175,15 @@ uniform float u_shadowBias;
 uniform int u_shadowSamples;
 uniform vec2 u_resolution;
 
+// Nebbia atmosferica
+uniform bool u_fogEnabled;
+uniform vec3 u_fogColor;
+uniform float u_fogDensity;
+
+// Bump mapping (perturbazione normali da heightmap)
+uniform bool u_useBumpMap;
+uniform sampler2D u_bumpMap;
+
 varying vec3 v_normal;
 varying vec3 v_position;
 varying vec2 v_texcoord;
@@ -210,6 +234,20 @@ float calculateShadowPCF(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir) {
 
 void main() {
     vec3 normal = normalize(v_normal);
+
+    // Bump mapping semplificato: perturbazione normali da heightmap in UV-space
+    // Funziona correttamente per superfici piatte (pareti) dove UV e world space sono allineati
+    if (u_useBumpMap) {
+        float bumpStrength = 2.5;
+        vec2 texelSize = vec2(1.0 / 512.0);
+        float h0 = texture2D(u_bumpMap, v_texcoord).r;
+        float hx = texture2D(u_bumpMap, v_texcoord + vec2(texelSize.x, 0.0)).r;
+        float hy = texture2D(u_bumpMap, v_texcoord + vec2(0.0, texelSize.y)).r;
+        normal.x += bumpStrength * (hx - h0);
+        normal.y += bumpStrength * (hy - h0);
+        normal = normalize(normal);
+    }
+
     vec3 lightDir = normalize(u_lightPos - v_position);
     
     // Colore base dalla texture
@@ -342,7 +380,16 @@ void main() {
     
     // Clamp finale per sicurezza
     finalColor = clamp(finalColor, 0.0, 1.0);
-    
+
+    // Nebbia esponenziale per atmosfera horror
+    // Mischia finalColor con u_fogColor in base alla distanza dalla camera
+    if (u_fogEnabled) {
+        float fogDist = length(v_position - u_viewPos);
+        float fogFactor = 1.0 - exp(-u_fogDensity * fogDist);
+        fogFactor = clamp(fogFactor, 0.0, 1.0);
+        finalColor = mix(finalColor, u_fogColor, fogFactor);
+    }
+
     gl_FragColor = vec4(finalColor, color.a);
 }
 </script>

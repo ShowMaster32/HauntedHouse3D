@@ -347,6 +347,14 @@
                     <span class="control-key">Q/E</span>
                     <span>Movimento verticale (modalità spettatore)</span>
                 </div>
+                <div class="control-item">
+                    <span class="control-key">G</span>
+                    <span>Toggle nebbia esponenziale</span>
+                </div>
+                <div class="control-item">
+                    <span class="control-key">B</span>
+                    <span>Toggle bump mapping sulle pareti</span>
+                </div>
             </div>
 
             <h3>📱 Supporto Mobile</h3>
@@ -440,6 +448,7 @@ uniform mat4 u_model;
 uniform mat4 u_view;
 uniform mat4 u_projection;
 uniform mat4 u_lightSpaceMatrix;
+uniform mat3 u_normalMatrix;  // transpose(inverse(mat3(u_model)))
 
 varying vec3 v_position;
 varying vec3 v_normal;
@@ -470,7 +479,7 @@ void main() {
             <h2>📊 Statistiche del Progetto</h2>
             <div class="stats-container">
                 <div class="stat-box">
-                    <span class="stat-number">2000+</span>
+                    <span class="stat-number">5000+</span>
                     <span class="stat-label">Linee di Codice</span>
                 </div>
                 <div class="stat-box">
@@ -482,7 +491,7 @@ void main() {
                     <span class="stat-label">Texture</span>
                 </div>
                 <div class="stat-box">
-                    <span class="stat-number">5+</span>
+                    <span class="stat-number">3</span>
                     <span class="stat-label">Shader Programs</span>
                 </div>
                 <div class="stat-box">
@@ -525,7 +534,7 @@ void main() {
                 </div>
                 <div class="requirement-card">
                     <h4>Advanced Rendering</h4>
-                    <p>Ombre, riflessioni, transparency, post-processing</p>
+                    <p>Shadow mapping PCF (tasto P), nebbia esponenziale (G), bump mapping height-map (B)</p>
                 </div>
                 <div class="requirement-card">
                     <h4>Modelli OBJ</h4>
@@ -538,9 +547,9 @@ void main() {
             <h2>🏗️ Algoritmi e Tecniche Implementate</h2>
             
             <h3>🎯 Collision Detection</h3>
+            <p>Il sistema di collision detection è basato su AABB (Axis-Aligned Bounding Box): la posizione del player viene <em>clampata</em> entro i limiti della stanza ad ogni frame. Per gli oggetti di scena si verifica la distanza minima dal player per prevenire compenetrazione.</p>
             <div class="highlight-box">
                 <p><strong>Workflow Blender:</strong> Il processo di preparazione asset ha incluso ottimizzazione geometria, UV unwrapping per texture mapping corretto, e verifica topologia per performance WebGL ottimali.</p>
-                <img src="images/blender_workflow.png" alt="Blender UV Mapping Process" style="width:100%; margin:10px 0; border-radius:8px;">
             </div>
 
             <h3>🌑 Shadow Mapping Algorithm</h3>
@@ -574,10 +583,9 @@ void main() {
 
             <h3>⚡ Ottimizzazioni Performance</h3>
             <ul class="feature-list">
-                <li><strong>Frustum Culling:</strong> Rendering solo oggetti visibili</li>
-                <li><strong>Depth Sorting:</strong> Gestione corretta oggetti trasparenti</li>
-                <li><strong>Buffer Reuse:</strong> Riutilizzo buffer WebGL per efficienza</li>
-                <li><strong>Texture Atlasing:</strong> Riduzione draw calls</li>
+                <li><strong>Depth Sorting:</strong> Gestione corretta trasparenza oggetti (painter's algorithm)</li>
+                <li><strong>Buffer Caching:</strong> Riutilizzo buffer WebGL per skybox e shadow pass, evitando allocazioni ogni frame</li>
+                <li><strong>Uniform Location Caching:</strong> Cache delle uniform location su <code>gl.cachedUniforms</code> per ridurre le chiamate <code>getUniformLocation</code></li>
             </ul>
         </section>
 
@@ -617,9 +625,9 @@ void main() {
             <h3>🔊 Audio Design</h3>
             <ul class="feature-list">
                 <li><strong>Ambient Loop:</strong> Atmosfera di sottofondo continua</li>
-                <li><strong>Interactive SFX:</strong> Suoni reattivi alla vicinanza della bambola</li>
+                <li><strong>Interactive SFX:</strong> Suoni reattivi alla vicinanza della bambola (proximity trigger)</li>
                 <li><strong>Light Switch:</strong> Effetto sonoro di flickering realistico</li>
-                <li><strong>Spatial Audio:</strong> Audio posizionale 3D</li>
+                <li><strong>Audio prossimale:</strong> Volume dell'audio regolato dinamicamente in base alla distanza del player dalla bambola</li>
             </ul>
         </section>
 
@@ -698,10 +706,13 @@ void main() {
 
             <h3>💡 Lighting System Innovation</h3>
             <ul class="feature-list">
-                <li><strong>Dynamic Flickering:</strong> Effetto realistico di lampeggio delle luci</li>
-                <li><strong>Dual Lighting:</strong> Sistema interno/esterno con blend dinamico</li>
-                <li><strong>HDR Tone Mapping:</strong> ACES filmic per risultati cinematografici</li>
-                <li><strong>Ambient Occlusion:</strong> Occlusione ambientale semplificata</li>
+                <li><strong>Dynamic Flickering:</strong> Effetto realistico di lampeggio della lampadina tramite variazione sinusoidale dell'intensità</li>
+                <li><strong>Dual Lighting:</strong> Sistema interno (lampadario) + esterno (finestre) con blend dinamico basato sullo stato dell'interruttore</li>
+                <li><strong>Vignette Effect:</strong> Effetto post-processing nel fragment shader per creare atmosfera horror ai bordi dello schermo</li>
+                <li><strong>Nebbia Esponenziale (tasto G):</strong> Fog shader in GLSL: <code>fogFactor = 1 - exp(-density * dist)</code>, miscelato al finalColor nel fragment shader. Colore nebbia quasi nero per atmosfera horror.</li>
+                <li><strong>Bump Mapping (tasto B):</strong> Perturbazione delle normali via heightmap procedurale (generata su Canvas). Campiona la texture su offset +dx/+dy per approssimare il gradiente e perturbare la normale prima dei calcoli Phong.</li>
+                <li><strong>Orologio animato:</strong> Quad piatto sulla parete di fondo con lancette ore/minuti come modelli separati. Rotazione intorno all'asse Z aggiornata ogni frame con <code>Date()</code>.</li>
+                <li><strong>Gamepad Support:</strong> Lettura da <code>navigator.getGamepads()</code> ad ogni frame. Stick sinistro = movimento, stick destro = camera, shoulder buttons = toggle effetti.</li>
             </ul>
 
             <h3>🎮 Interactive Elements</h3>
@@ -741,27 +752,12 @@ void main() {
                 <li><strong>Librerie corso:</strong> glm_utils.js, mesh_utils.js, webgl-utils.js, m4.js, dat.gui.js, jquery-3.6.0.js</li>
             </ul>
 
-            <h3>📖 Riferimenti Tecnici</h3>
-            <ul class="feature-list">
-                <li><strong>WebGL Tutorial:</strong> MDN Web Docs - WebGL API</li>
-                <li><strong>Shader Reference:</strong> OpenGL ES Shading Language Specification</li>
-                <li><strong>3D Math:</strong> Mathematics for 3D Game Programming and Computer Graphics</li>
-                <li><strong>Physically Based Rendering:</strong> Real-Time Rendering techniques</li>
-            </ul>
-
-            <div class="highlight-box">
-                <p><strong>Nota Accademica:</strong> Tutti gli asset utilizzati rispettano le licenze per uso educativo e non commerciale. Il progetto è stato sviluppato seguendo le best practices del corso e utilizza esclusivamente le librerie fornite dal docente.</p>
-            </div>
-        </section>
+           </section>
 
         <footer class="footer">
-            <p>📚 <strong>Corso:</strong> Computer Graphics - Laurea Magistrale in Informatica</p>
-            <p>🏫 <strong>Università:</strong> Alma Mater Studiorum - Università di Bologna</p>
-            <p>📅 <strong>Anno Accademico:</strong> 2023/2024</p>
-            <p style="margin-top: 1rem; opacity: 0.7;">
-                Progetto sviluppato utilizzando WebGL, JavaScript e GLSL<br>
-                Tutte le librerie utilizzate sono quelle messe a disposizione durante il corso
-            </p>
+            <p><strong>Alberto Zini</strong> &mdash; Corso di Computer Graphics, Laurea Magistrale in Informatica</p>
+            <p>Universit&agrave; di Bologna &mdash; A.A. 2023/24</p>
+            <p style="margin-top: 0.5rem; font-size: 0.85rem; opacity: 0.6;">Progetto d&apos;esame individuale &mdash; Casa Infestata WebGL 3D App</p>
         </footer>
     </div>
 </body>

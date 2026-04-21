@@ -361,7 +361,16 @@ function handleMouseMove(e) {
 
                 // === SHADOW BIAS E SAMPLES ===
                 u_shadowBias: gl.getUniformLocation(program, 'u_shadowBias'),           // Bias dinamico per evitare shadow acne
-                u_shadowSamples: gl.getUniformLocation(program, 'u_shadowSamples')     // Numero campioni PCF per ombre morbide
+                u_shadowSamples: gl.getUniformLocation(program, 'u_shadowSamples'),    // Numero campioni PCF per ombre morbide
+
+                // === NEBBIA ===
+                u_fogEnabled: gl.getUniformLocation(program, 'u_fogEnabled'),
+                u_fogColor: gl.getUniformLocation(program, 'u_fogColor'),
+                u_fogDensity: gl.getUniformLocation(program, 'u_fogDensity'),
+
+                // === BUMP MAPPING ===
+                u_useBumpMap: gl.getUniformLocation(program, 'u_useBumpMap'),
+                u_bumpMap: gl.getUniformLocation(program, 'u_bumpMap')
             };
         }
         
@@ -383,7 +392,20 @@ function handleMouseMove(e) {
         gl.uniform1i(uniforms.u_lightOn, isLightOn);
         gl.uniform1i(uniforms.u_externalLightOn, isExternalLightOn);
         gl.uniform1i(uniforms.u_advancedRendering, renderOptions.advancedRendering);
-        
+
+        // Nebbia atmosferica
+        gl.uniform1i(uniforms.u_fogEnabled, renderOptions.fog ? 1 : 0);
+        gl.uniform3fv(uniforms.u_fogColor, [0.03, 0.04, 0.05]); // Nebbia quasi nera per atmosfera horror
+        gl.uniform1f(uniforms.u_fogDensity, 0.08);
+
+        // Bump mapping: usa texture slot 2
+        gl.uniform1i(uniforms.u_useBumpMap, renderOptions.bumpMap ? 1 : 0);
+        if (renderOptions.bumpMap && textures['bumpMap']) {
+            gl.activeTexture(gl.TEXTURE2);
+            gl.bindTexture(gl.TEXTURE_2D, textures['bumpMap']);
+            gl.uniform1i(uniforms.u_bumpMap, 2);
+        }
+
         // Luce esterna più intensa
         const externalColor = isExternalLightOn ? [0.7, 0.8, 0.9] : [0.1, 0.1, 0.15];
         const externalIntensity = isExternalLightOn ? 0.2 : 0.05;
@@ -1155,7 +1177,13 @@ function handleMouseMove(e) {
                                             
                                             // Aggiungo foto autore
                                             createAuthorPicture();
-                                            
+
+                                            // Aggiungo orologio animato sulla parete di fondo
+                                            createClock();
+
+                                            // Creo bump map procedurale
+                                            createBumpTexture();
+
                                             logger.log('Stanza con illuminazione corretta creata');
                                         }
                                         
@@ -1212,7 +1240,157 @@ function handleMouseMove(e) {
                                             
                                             logger.log(`Quadro con foto dell'autore creato in posizione [${frameX}, ${frameY}, ${frameZ}]`);
                                         }
-                                        
+
+                                        // Crea un orologio da parete animato con lancette che girano in tempo reale
+                                        function createClock() {
+                                            logger.log('Creazione orologio da parete...');
+                                            const cx = 3.5;           // Posizione X sulla parete di fondo
+                                            const cy = -1.5;           // Altezza occhi
+                                            const cz = -roomSize + 0.02; // Sulla parete di fondo (Z negativo)
+                                            const r = 0.7;             // Raggio del quadrante
+
+                                            // Quadrante: quad piatto sulla parete
+                                            models['clockFace'] = {
+                                                vertices: [
+                                                    cx-r, cy+r, cz,  cx+r, cy+r, cz,  cx+r, cy-r, cz,
+                                                    cx-r, cy+r, cz,  cx+r, cy-r, cz,  cx-r, cy-r, cz
+                                                ],
+                                                normals: [0,0,1, 0,0,1, 0,0,1, 0,0,1, 0,0,1, 0,0,1],
+                                                texcoords: [0,0, 1,0, 1,1, 0,0, 1,1, 0,1],
+                                                position: [0,0,0], rotation: [0,0,0], scale: [1,1,1],
+                                                texture: 'wood_texture'
+                                            };
+
+                                            // Lancetta minuti: quad stretto verticale, base al centro del quadrante
+                                            // L'origine è il punto di pivot (in basso = centro orologio)
+                                            models['clockMinuteHand'] = {
+                                                vertices: [
+                                                    -0.025, 0, 0.02,   0.025, 0, 0.02,   0.025, 0.58, 0.02,
+                                                    -0.025, 0, 0.02,   0.025, 0.58, 0.02,  -0.025, 0.58, 0.02
+                                                ],
+                                                normals: [0,0,1, 0,0,1, 0,0,1, 0,0,1, 0,0,1, 0,0,1],
+                                                texcoords: [0,0, 1,0, 1,1, 0,0, 1,1, 0,1],
+                                                position: [cx, cy, cz],
+                                                rotation: [0, 0, 0],
+                                                scale: [1, 1, 1],
+                                                texture: 'clockHand'
+                                            };
+
+                                            // Lancetta ore: più corta e spessa
+                                            models['clockHourHand'] = {
+                                                vertices: [
+                                                    -0.035, 0, 0.025,   0.035, 0, 0.025,   0.035, 0.42, 0.025,
+                                                    -0.035, 0, 0.025,   0.035, 0.42, 0.025,  -0.035, 0.42, 0.025
+                                                ],
+                                                normals: [0,0,1, 0,0,1, 0,0,1, 0,0,1, 0,0,1, 0,0,1],
+                                                texcoords: [0,0, 1,0, 1,1, 0,0, 1,1, 0,1],
+                                                position: [cx, cy, cz],
+                                                rotation: [0, 0, 0],
+                                                scale: [1, 1, 1],
+                                                texture: 'clockHand'
+                                            };
+
+                                            // Crea texture scura per le lancette
+                                            textures['clockHand'] = createColorTexture([0.05, 0.02, 0.02, 1.0]);
+                                            logger.log('Orologio da parete creato');
+                                        }
+
+                                        // Aggiorna la rotazione delle lancette in base all'ora reale
+                                        function updateClock() {
+                                            if (!models['clockMinuteHand'] || !models['clockHourHand']) return;
+                                            const now = new Date();
+                                            const h = now.getHours() % 12;
+                                            const m = now.getMinutes();
+                                            const s = now.getSeconds();
+                                            // Rotazione in senso orario attorno all'asse Z (negativa in WebGL)
+                                            const minAngle = -((m + s / 60.0) / 60.0) * 2.0 * Math.PI;
+                                            const hourAngle = -((h + m / 60.0) / 12.0) * 2.0 * Math.PI;
+                                            models['clockMinuteHand'].rotation[2] = minAngle;
+                                            models['clockHourHand'].rotation[2] = hourAngle;
+                                        }
+
+                                        // Crea una bump map procedurale (noise in bianco e nero) tramite Canvas
+                                        function createBumpTexture() {
+                                            const size = 256;
+                                            const canvas = document.createElement('canvas');
+                                            canvas.width = size;
+                                            canvas.height = size;
+                                            const ctx = canvas.getContext('2d');
+                                            const imgData = ctx.createImageData(size, size);
+                                            const data = imgData.data;
+                                            // Genera noise con ottave per effetto irregolarità parete
+                                            for (let y = 0; y < size; y++) {
+                                                for (let x = 0; x < size; x++) {
+                                                    let v = 0;
+                                                    v += Math.sin(x * 0.15 + Math.sin(y * 0.07) * 3.0) * 0.4;
+                                                    v += Math.sin(y * 0.22 + Math.sin(x * 0.11) * 2.5) * 0.3;
+                                                    v += (Math.random() * 0.3);
+                                                    v = Math.max(0, Math.min(1, v * 0.5 + 0.5));
+                                                    const val = Math.floor(v * 255);
+                                                    const i = (y * size + x) * 4;
+                                                    data[i] = val; data[i+1] = val; data[i+2] = val; data[i+3] = 255;
+                                                }
+                                            }
+                                            ctx.putImageData(imgData, 0, 0);
+
+                                            const tex = gl.createTexture();
+                                            gl.bindTexture(gl.TEXTURE_2D, tex);
+                                            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+                                            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+                                            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+                                            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+                                            gl.generateMipmap(gl.TEXTURE_2D);
+                                            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                                            gl.bindTexture(gl.TEXTURE_2D, null);
+                                            textures['bumpMap'] = tex;
+                                            logger.log('Bump map procedurale creata');
+                                        }
+
+                                        // Leggi input da gamepad (se disponibile)
+                                        function pollGamepad() {
+                                            const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+                                            const gp = gamepads[0]; // Usa il primo gamepad trovato
+                                            if (!gp) return;
+
+                                            const deadzone = 0.15; // Soglia minima assi analogici
+                                            const speed = playerSpeed * (deltaTime || 0.016) * 60;
+
+                                            // Calcola vettori direzione (stessa logica WASD)
+                                            const yaw = camera.rotation[1];
+                                            const forward = [Math.sin(yaw), 0, -Math.cos(yaw)];
+                                            const right   = [Math.cos(yaw), 0,  Math.sin(yaw)];
+
+                                            // Stick sinistro: movimento (assi 0=sinistra/destra, 1=avanti/indietro)
+                                            const lx = Math.abs(gp.axes[0]) > deadzone ? gp.axes[0] : 0;
+                                            const ly = Math.abs(gp.axes[1]) > deadzone ? gp.axes[1] : 0;
+                                            playerVelocity[0] += (forward[0] * -ly + right[0] * lx) * speed;
+                                            playerVelocity[2] += (forward[2] * -ly + right[2] * lx) * speed;
+
+                                            // Stick destro: rotazione camera (assi 2=yaw, 3=pitch)
+                                            const rx = Math.abs(gp.axes[2]) > deadzone ? gp.axes[2] : 0;
+                                            const ry = Math.abs(gp.axes[3]) > deadzone ? gp.axes[3] : 0;
+                                            camera.rotation[1] += rx * 0.04;
+                                            camera.rotation[0] += ry * 0.03;
+                                            camera.rotation[0] = Math.max(-Math.PI/2 + 0.1,
+                                                Math.min(Math.PI/2 - 0.1, camera.rotation[0]));
+
+                                            // Tasto A (0) = interazione, tasto B (1) = sprint, X (2) = fog, Y (3) = bump
+                                            if (gp.buttons[0] && gp.buttons[0].pressed && isNearSwitch) {
+                                                toggleLight();
+                                            }
+                                            if (gp.buttons[1]) toggleSprint(gp.buttons[1].pressed);
+
+                                            // Shoulder buttons: fog (LB=4) e bump (RB=5)
+                                            if (gp.buttons[4] && gp.buttons[4].pressed && !gp._prevLB) {
+                                                renderOptions.fog = !renderOptions.fog;
+                                            }
+                                            if (gp.buttons[5] && gp.buttons[5].pressed && !gp._prevRB) {
+                                                renderOptions.bumpMap = !renderOptions.bumpMap;
+                                            }
+                                            gp._prevLB = gp.buttons[4] && gp.buttons[4].pressed;
+                                            gp._prevRB = gp.buttons[5] && gp.buttons[5].pressed;
+                                        }
+
                                         // Funzione per creare una parete con aperture per finestre
                                         function createWallWithHoles(wallName, wallType, windows) {
                                             logger.log(`Creazione parete ${wallName} con aperture...`);
@@ -2492,7 +2670,9 @@ function handleMouseMove(e) {
                                     reflections: false,
                                     showFPS: false,
                                     advancedRendering: false,
-                                    showLogs: false
+                                    showLogs: false,
+                                    fog: false,
+                                    bumpMap: false
                                 };
                                 
                                 // Input utente
@@ -2667,6 +2847,16 @@ function handleMouseMove(e) {
                                         renderOptions.advancedRendering = !renderOptions.advancedRendering;
                                         logger.log(`Rendering avanzato ${renderOptions.advancedRendering ? 'attivato' : 'disattivato'}`);
                                     });
+
+                                    document.getElementById('toggleFog').addEventListener('click', () => {
+                                        renderOptions.fog = !renderOptions.fog;
+                                        logger.log(`Nebbia ${renderOptions.fog ? 'attivata' : 'disattivata'}`);
+                                    });
+
+                                    document.getElementById('toggleBump').addEventListener('click', () => {
+                                        renderOptions.bumpMap = !renderOptions.bumpMap;
+                                        logger.log(`Bump mapping ${renderOptions.bumpMap ? 'attivato' : 'disattivato'}`);
+                                    });
                                     
                                     document.getElementById('toggleExternalLight').addEventListener('click', () => {
                                         isExternalLightOn = !isExternalLightOn;
@@ -2747,20 +2937,28 @@ function handleMouseMove(e) {
                                 function update(dt) {
                                     // Skip update if panel is open
                                     if (isPanelOpen || !gameStarted) return;
-                                    
+
+                                    // Input da gamepad (se disponibile)
+                                    pollGamepad();
+
                                     // Update camera based on input
                                     updateCamera(dt);
-                                    
+
+                                    // Aggiorna lancette orologio ogni 30 frame (~2 volte al secondo)
+                                    if (frameCount % 30 === 0) {
+                                        updateClock();
+                                    }
+
                                     // Aggiorna crosshair ogni 3 frame
                                     if (frameCount % 3 === 0) {
                                         updateCrosshair();
                                     }
-                                    
+
                                     // Coordinate camera solo se attive e ogni 5 frame
                                     if (showCameraCoordinates && frameCount % 5 === 0) {
                                         updateCameraCoordinates();
                                     }
-                                    
+
                                     // Vicinanza bambola ogni 10 frame
                                     if (frameCount % 10 === 0) {
                                         checkDollProximity();
@@ -2775,6 +2973,14 @@ function handleMouseMove(e) {
                                         if (isNearSwitch) {
                                             toggleLight();
                                         }
+                                    } else if (e.code === 'KeyG') {
+                                        // G = toggle nebbia
+                                        renderOptions.fog = !renderOptions.fog;
+                                        logger.log(`Nebbia ${renderOptions.fog ? 'attivata' : 'disattivata'}`);
+                                    } else if (e.code === 'KeyB') {
+                                        // B = toggle bump mapping
+                                        renderOptions.bumpMap = !renderOptions.bumpMap;
+                                        logger.log(`Bump mapping ${renderOptions.bumpMap ? 'attivato' : 'disattivato'}`);
                                     }
                                 }
                                 
@@ -2885,12 +3091,12 @@ function handleMouseMove(e) {
                                     
                                     // Mostra controlli completi
                                     document.getElementById('game-controls').innerHTML =
-                                    'W: Avanti | S: Indietro | A: Sinistra | D: Destra | F: Luce | P: Pannello | SHIFT: Sprint';
+                                    'W: Avanti | S: Indietro | A: Sinistra | D: Destra | Q: Scendi | E: Sali | SHIFT: Sprint | F: Luce | G: Nebbia | B: Bump | P: Pannello';
                                     
                                     // Aggiungi informazioni sul pannello di controllo
                                     const panelInfo = document.createElement('div');
                                     panelInfo.id = 'panel-info';
-                                    panelInfo.innerHTML = 'Nel pannello (P): Modalità Spettatore (Q: Scendi, E: Sali)';
+                                    panelInfo.innerHTML = 'Nel pannello (P): Modalità Spettatore | Shadows: tasto nel pannello | Mouse: guarda intorno';
                                     panelInfo.style.position = 'absolute';
                                     panelInfo.style.top = '40px';
                                     panelInfo.style.left = '50%';
