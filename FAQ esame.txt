@@ -1,0 +1,16 @@
+Computer Graphics (C.d.S. LM Informatica) A.A.2023/24
+Fondamenti di Computer Graphics (C.d.S. LM Ingegneria Informatica e Matematica) A.A.2023/24
+Project Frequently Asked Questions
+
+Sto lavorando in ambiente Linux e mi viene segnalato il seguente errore: gl.drawArrays: attempt to access out of range vertices in attribute 0 e non visualizza nulla; ho provato lo stesso codice anche in ambiente Windows e non solo non segnala alcun errore, ma visualizza tutto correttamente. Come mi devo comportare?
+
+Il problema è noto, e dipende dal fatto che in ambiente Windows tutto è più permissivo. L'errore: gl.drawArrays: attempt to access out of range vertices in attribute 0 spesso indica un errore di programmazione e significa che si è cercato di rendere un buffer che è troppo piccolo rispetto a quanto indicato nella gl.drawArrays.
+Ovviamente bisogna trovare e correggere l'errore, anche perché il progetto, una volta consegnato, verrà visionato in ambiente Linux; questo è quindi un alert per chi sviluppa in ambiente Windows!!! Prima di consegnare il progetto provatelo in ambiente Linux o Mac.
+
+Sulla ''fruibilità da tablet o mobile''; questo implica che tutti i movimenti o interazioni da tastiera devono essere possibili anche tramite click del mouse? Che nel caso mobile sarebbero le dita? Questo può essere sufficiente oppure ci sono altre modifiche da fare alle quali non ho pensato?
+
+Per la fruibilità da mobile si intende proprio avere un'attenzione al fatto di prevedere delle alternative ad eventuali funzionalità non gestibili su mobile, e se si usa la tastiera, si preveda un'alternativa su mobile.
+
+E' possibile utilizzare delle mesh scaricate da internet e non fatte da noi. Ne ho trovate alcune molto carine per il progetto, in particolare una per l'oggetto principale, però non ho utilizzato Blender e in più richiede qualche secondo iniziale per caricare il tutto ma poi procede tutto bene.
+
+E'sicuramente permesso scaricare delle mesh da internet, ma anche se non specificato nel testo del progetto, mi aspetto che usiate Blender, anche solo per ritoccarle. Se ci mette un po' a caricarle, vuol dire che sono pesanti; magari potrebbe usare Blender per semplificarle, anche se un tempo di caricamento più o meno lungo ce lo si deve sempre aspettare. Un altro utilizzo in cui mi aspetto che tutti usiate Blender è per associare una texture ad una mesh usando gli algoritmi di uv-mapping di Blender. Se non lo deve fare per le mesh che ha trovato, lo potrebbe fare per qualche altra o potrebbe cambiare le texture di una che le ha già ricalcolando le coordinate uv. Come logica, tenga presente che il progetto serve per mettere in campo tutto quello che si è visto nel corso.

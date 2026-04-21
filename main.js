@@ -223,31 +223,6 @@ function handleMouseMove(e) {
         coordElement.style.display = 'block';
     }
     
-    /* Controlla la distanza Euclidea in 3D alla bambola
-    *  d = √(dx² + dy² + dz²) -> Estensione nello spazio (3D)
-    */
-    function checkDollProximity() {
-        // Calcola distanza tra giocatore e bambola
-        const dx = camera.position[0] - dollPosition[0];
-        const dy = camera.position[1] - dollPosition[1];
-        const dz = camera.position[2] - dollPosition[2];
-        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        
-        // Se è vicino e la luce è spenta, attiva suono
-        const proximityRadius = 5;
-        if (distance < proximityRadius && !isLightOn) {
-            if (!sounds.laLaLa.playing && !sounds.demonLaugh.playing) {
-                const randomSound = Math.random() < 0.5 ? sounds.laLaLa : sounds.demonLaugh;
-                randomSound.play();
-                randomSound.playing = true;
-                
-                randomSound.onended = () => {
-                    randomSound.playing = false;
-                };
-            }
-        }
-    }
-    
     // Richiedi pointer lock Cross-Browser Compatibility
     function requestPointerLock() {
         canvas.requestPointerLock = canvas.requestPointerLock ||
@@ -382,7 +357,11 @@ function handleMouseMove(e) {
                 // === EFFETTI VISIVI AVANZATI ===
                 u_reflections: gl.getUniformLocation(program, 'u_reflections'),        // Flag: abilita riflessioni speculari (Phong specular)
                 u_advancedRendering: gl.getUniformLocation(program, 'u_advancedRendering'), // Flag: post-processing (vignette, desaturazione, film grain)
-                u_resolution: gl.getUniformLocation(program, 'u_resolution')           // Risoluzione schermo [width,height] per effetti screen-space
+                u_resolution: gl.getUniformLocation(program, 'u_resolution'),          // Risoluzione schermo [width,height] per effetti screen-space
+
+                // === SHADOW BIAS E SAMPLES ===
+                u_shadowBias: gl.getUniformLocation(program, 'u_shadowBias'),           // Bias dinamico per evitare shadow acne
+                u_shadowSamples: gl.getUniformLocation(program, 'u_shadowSamples')     // Numero campioni PCF per ombre morbide
             };
         }
         
@@ -477,9 +456,10 @@ function handleMouseMove(e) {
                     // Bias dinamico basato sulla distanza dalla luce
                     const distanceToLight = m4.length(m4.subtractVectors(camera.position, lightPosition));
                     const dynamicBias = Math.max(shadowBias, shadowBias * (distanceToLight / 20.0));
-                    
-                    gl.uniform1f(gl.getUniformLocation(program, 'u_shadowBias'), dynamicBias);
-                    gl.uniform1i(gl.getUniformLocation(program, 'u_shadowSamples'), shadowSamples);
+
+                    // Usa le uniform cached invece di chiamare getUniformLocation ogni frame
+                    gl.uniform1f(gl.cachedUniforms.u_shadowBias, dynamicBias);
+                    gl.uniform1i(gl.cachedUniforms.u_shadowSamples, shadowSamples);
                 }
                 
                 // Funzione per creare la matrice light space ottimizzata per le ombre degli oggetti
@@ -701,21 +681,26 @@ function handleMouseMove(e) {
                                     /**
                                     * Configura buffer WebGL specifici per shadow rendering
                                     * Solo attributo posizione richiesto (no texture, no normali)
-                                    * 
+                                    * Il buffer viene creato una volta sola e cachato sul modello (evita memory leak)
+                                    *
                                     * @param {Object} model - Modello 3D con array vertices
                                     */
                                     function setBuffersForShadowModel(model) {
                                         // Ottieni location dell'attributo posizione nel shadow shader
                                         const positionLoc = gl.getAttribLocation(shadowProgram, 'a_position');
-                                        
-                                        // Crea buffer temporaneo per i vertici di questo modello
-                                        const positionBuffer = gl.createBuffer();
-                                        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-                                        
-                                        // Carica dati dei vertici nel buffer GPU
-                                        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(model.vertices), gl.STATIC_DRAW);
-                                        
-                                        // Configura attributo: 3 componenti per vertice (X, Y, Z), no stride, no offset (parametri per GPU per interpretare i dati da un buffer di memoria)
+
+                                        // Crea il buffer solo la prima volta (poi lo riusa)
+                                        if (!model.shadowBuffer) {
+                                            model.shadowBuffer = gl.createBuffer();
+                                            gl.bindBuffer(gl.ARRAY_BUFFER, model.shadowBuffer);
+                                            // Carica dati dei vertici nel buffer GPU
+                                            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(model.vertices), gl.STATIC_DRAW);
+                                        }
+
+                                        // Usa sempre il buffer cachato
+                                        gl.bindBuffer(gl.ARRAY_BUFFER, model.shadowBuffer);
+
+                                        // Configura attributo: 3 componenti per vertice (X, Y, Z), no stride, no offset
                                         gl.enableVertexAttribArray(positionLoc);
                                         gl.vertexAttribPointer(positionLoc, 3, gl.FLOAT, false, 0, 0);
                                     }
@@ -889,11 +874,14 @@ function handleMouseMove(e) {
                                                 gl.activeTexture(gl.TEXTURE0);
                                                 gl.bindTexture(gl.TEXTURE_CUBE_MAP, textures['skybox']);
                                                 
-                                                // Configura i buffer dei vertici dello skybox
+                                                // Configura i buffer dei vertici dello skybox (creati una volta sola)
                                                 const skyboxPositionLoc = gl.getAttribLocation(skyboxProgram, 'a_position');
-                                                const skyboxVertexBuffer = gl.createBuffer();
-                                                gl.bindBuffer(gl.ARRAY_BUFFER, skyboxVertexBuffer);
-                                                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(models['skybox'].vertices), gl.STATIC_DRAW);
+                                                if (!models['skybox'].vertexBuffer) {
+                                                    models['skybox'].vertexBuffer = gl.createBuffer();
+                                                    gl.bindBuffer(gl.ARRAY_BUFFER, models['skybox'].vertexBuffer);
+                                                    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(models['skybox'].vertices), gl.STATIC_DRAW);
+                                                }
+                                                gl.bindBuffer(gl.ARRAY_BUFFER, models['skybox'].vertexBuffer);
                                                 gl.enableVertexAttribArray(skyboxPositionLoc);
                                                 gl.vertexAttribPointer(skyboxPositionLoc, 3, gl.FLOAT, false, 0, 0);
                                                 
