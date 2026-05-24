@@ -120,7 +120,7 @@
         }
 
         .highlight-box::before {
-            content: '💡';
+            content: '';
             position: absolute;
             top: -10px;
             left: 20px;
@@ -170,8 +170,13 @@
         }
 
         .feature-list li::before {
-            content: '✅';
-            font-size: 1.1rem;
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            flex-shrink: 0;
         }
 
         .controls-grid {
@@ -258,7 +263,7 @@
         }
 
         .requirement-card::before {
-            content: '✅';
+            content: '';
             position: absolute;
             top: -12px;
             right: 15px;
@@ -299,29 +304,48 @@
 <body>
     <div class="container">
         <header class="header">
-            <h1>🏚️ Casa Infestata</h1>
-            <p class="subtitle">Progetto Computer Graphics A.A.2023/24 - Applicazione 3D Interattiva</p>
+            <h1>Casa Infestata</h1>
+            <p class="subtitle">Progetto Computer Graphics A.A.2023/24 &mdash; Applicazione 3D Interattiva WebGL</p>
         </header>
 
+        <!-- ============================================================
+             DESCRIZIONE APPLICAZIONE
+             ============================================================ -->
         <section class="card">
-            <h2>📋 Descrizione dell'Applicazione</h2>
-            <p><strong>Casa Infestata</strong> è un'esperienza 3D immersiva che trasporta l'utente in un ambiente horror interattivo. L'applicazione combina elementi di esplorazione in prima persona con un sistema di illuminazione dinamica e interazioni ambientali.</p>
-            
+            <h2>Descrizione dell'Applicazione</h2>
+            <p>
+                <strong>Casa Infestata</strong> è un'applicazione 3D in prima persona realizzata interamente con WebGL puro,
+                senza l'uso di engine grafici esterni. L'utente si trova all'interno di una stanza buia e può esplorarne
+                liberamente l'ambiente, interagire con gli oggetti presenti e attivare o disattivare vari effetti grafici
+                in tempo reale tramite un pannello di controllo dedicato.
+            </p>
+
             <div class="highlight-box">
-                <p><strong>Concept Principale:</strong> Il giocatore si trova in una stanza buia e deve trovare l'interruttore della luce per illuminare l'ambiente, scoprendo gradualmente gli oggetti inquietanti che popolano lo spazio.</p>
+                <p>
+                    L'idea di partenza era costruire qualcosa che non fosse solo una scena statica: volevo che l'utente
+                    avesse davvero la sensazione di trovarsi dentro la stanza, con la luce che si accende e si spegne,
+                    le ombre che si spostano, i suoni che cambiano avvicinandosi agli oggetti.
+                    La scelta del tema horror nasce proprio da questo: un ambiente buio mette in evidenza il sistema
+                    di illuminazione dinamica in modo molto più efficace rispetto a una scena neutra.
+                </p>
             </div>
 
-            <h3>🎯 Obiettivi del Progetto</h3>
+            <h3>Cosa si può fare nell'applicazione</h3>
             <ul class="feature-list">
-                <li>Creare un'esperienza 3D coinvolgente e atmosferica</li>
-                <li>Implementare un sistema di illuminazione realistico</li>
-                <li>Fornire controlli intuitivi per desktop e mobile</li>
-                <li>Dimostrare competenze avanzate in WebGL e computer graphics</li>
+                <li>Esplorare la stanza in prima persona con controlli WASD + mouse (o touch su mobile)</li>
+                <li>Accendere e spegnere la luce premendo <strong>F</strong> vicino all'interruttore</li>
+                <li>Attivare la nebbia esponenziale con <strong>G</strong> e il bump mapping con <strong>B</strong></li>
+                <li>Aprire il pannello di controllo con <strong>P</strong> per modificare tutti i parametri grafici</li>
+                <li>Avvicinarsi alla bambola e sentire l'audio reagire alla distanza</li>
+                <li>Passare in modalità spettatore (noclip) per osservare la scena da qualsiasi angolo</li>
             </ul>
         </section>
 
+        <!-- ============================================================
+             CONTROLLI
+             ============================================================ -->
         <section class="card">
-            <h2>🎮 Sistema di Controlli</h2>
+            <h2>Controlli</h2>
             <div class="controls-grid">
                 <div class="control-item">
                     <span class="control-key">WASD</span>
@@ -329,11 +353,11 @@
                 </div>
                 <div class="control-item">
                     <span class="control-key">MOUSE</span>
-                    <span>Rotazione camera (First Person)</span>
+                    <span>Rotazione camera (prima persona)</span>
                 </div>
                 <div class="control-item">
                     <span class="control-key">F</span>
-                    <span>Interazione interruttore luce</span>
+                    <span>Interazione con l'interruttore</span>
                 </div>
                 <div class="control-item">
                     <span class="control-key">P</span>
@@ -341,11 +365,11 @@
                 </div>
                 <div class="control-item">
                     <span class="control-key">SHIFT</span>
-                    <span>Sprint (velocità aumentata)</span>
+                    <span>Sprint (velocita&apos; aumentata)</span>
                 </div>
                 <div class="control-item">
-                    <span class="control-key">Q/E</span>
-                    <span>Movimento verticale (modalità spettatore)</span>
+                    <span class="control-key">Q / E</span>
+                    <span>Su/Giu&apos; in modalita&apos; spettatore</span>
                 </div>
                 <div class="control-item">
                     <span class="control-key">G</span>
@@ -353,93 +377,68 @@
                 </div>
                 <div class="control-item">
                     <span class="control-key">B</span>
-                    <span>Toggle bump mapping sulle pareti</span>
+                    <span>Toggle bump mapping</span>
                 </div>
             </div>
 
-            <h3>📱 Supporto Mobile</h3>
-            <p>L'applicazione include controlli touch ottimizzati per dispositivi mobili:</p>
-            <ul class="feature-list">
-                <li>Pulsanti virtuali per il movimento (WASD)</li>
-                <li><strong>Controllo camera avanzato:</strong> rotazione fluida con un singolo dito sul canvas</li>
-                <li><strong>Input simultaneo:</strong> movimento WASD + rotazione camera contemporanei</li>
-                <li>Interfaccia adattiva per schermi piccoli</li>
-                <li>Controlli gesture per le interazioni</li>
-                <li>Feedback tattile con vibrazione (se supportata dal dispositivo)</li>
-            </ul>
-            <div class="highlight-box">
-                <p><strong>Innovazione Touch:</strong> Il sistema di controlli touch è progettato per permettere movimento e rotazione camera simultanei, utilizzando sempre il primo tocco disponibile indipendentemente dal numero di input attivi. Questo garantisce un'esperienza fluida anche durante azioni complesse.</p>
-            </div>
+            <h3>Supporto mobile</h3>
+            <p>
+                Su dispositivi touch l'interfaccia espone un pad direzionale virtuale per il movimento (WASD)
+                e pulsanti dedicati per le azioni principali. La rotazione della camera si gestisce trascinando
+                il dito direttamente sul canvas. I due input (movimento + rotazione) possono avvenire
+                contemporaneamente grazie alla gestione separata dei touch point attivi.
+            </p>
 
-            <h3>🛡️ Gestione Errori e Robustezza</h3>
-            <p>Il sistema implementa strategie avanzate per garantire funzionamento anche in condizioni avverse:</p>
-            <ul class="feature-list">
-                <li><strong>Texture Fallback:</strong> Pattern scacchiera automatico per texture non caricate</li>
-                <li><strong>Timeout Management:</strong> Gestione timeout 10 secondi per evitare attese infinite</li>
-                <li><strong>HTTP/2 Compatibility:</strong> Caricamento robusto per server con problemi protocollo</li>
-                <li><strong>Sequential Loading:</strong> Caricamento sequenziale skybox per evitare sovraccarico</li>
-                <li><strong>Cross-Origin Support:</strong> Compatibilità CORS per deployment su diversi domini</li>
-            </ul>
+            <h3>Gamepad</h3>
+            <p>
+                E&apos; presente anche il supporto al gamepad tramite l'API <code>navigator.getGamepads()</code>,
+                letta ad ogni frame: lo stick sinistro controlla il movimento, quello destro la camera,
+                i tasti shoulder attivano/disattivano gli effetti grafici principali.
+            </p>
 
-            <h3>🎨 User Experience</h3>
-            <div class="highlight-box">
-                <p><strong>Caricamento Intelligente:</strong> Sistema di progresso visivo con barra di caricamento tematizzata, blocco automatico dell'interfaccia durante l'inizializzazione e feedback real-time sullo stato delle risorse.</p>
-            </div>
-            <ul class="feature-list">
-                <li><strong>Loading Progress:</strong> Indicatore percentuale con stile horror-themed</li>
-                <li><strong>Smart Button:</strong> Pulsante START bloccato fino a caricamento completo</li>
-                <li><strong>Resource Counter:</strong> Tracking preciso di 25 risorse (texture + modelli + skybox)</li>
-                <li><strong>Auto-dismiss:</strong> Rimozione automatica indicatori al completamento</li>
-            </ul>
-
-            <h3>🛠️ Strumenti di Sviluppo</h3>
-            <ul class="feature-list">
-                <li><strong>Blender 3D:</strong> Utilizzato per ottimizzazione mesh, UV mapping, preparazione asset e verifica topologia modelli OBJ secondo le raccomandazioni del corso.</li>
-                <li><strong>Error Handling:</strong> Sistema robusto di gestione errori per deployment web</li>
-                <li><strong>Performance Monitoring:</strong> Ottimizzazioni specifiche per server con limitazioni HTTP/2</li>
-                <li><strong>Cross-Platform Testing:</strong> Validazione su desktop e mobile con diversi browser</li>
-            </ul>
-            <div class="highlight-box" style="margin-top: 20px;">
-                <p><strong>Video Tutorial - Creazione Horror Chair con Blender:</strong></p>
-                <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; margin-top: 15px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.3);">
-                    <iframe 
-                        src="https://www.youtube.com/embed/Iiruxj3vdfk" 
-                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; border-radius: 10px;"
-                        title="Creazione Horror Chair in Blender per Progetto Computer Graphics" 
-                        frameborder="0" 
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-                        allowfullscreen>
-                    </iframe>
-                </div>
-                <p style="margin-top: 15px; font-size: 0.9rem; opacity: 0.9;">Il video mostra il processo completo di modellazione, texturing e UV mapping della sedia horror personalizzata, dalla creazione della mesh all'esportazione in formato OBJ per l'utilizzo nel progetto WebGL.</p>
-            </div>
+            <h3>Caricamento risorse</h3>
+            <p>
+                All'avvio l'applicazione carica in modo asincrono texture, modelli OBJ e le sei facce della skybox.
+                Una barra di avanzamento mostra il progresso in tempo reale e il pulsante START rimane bloccato
+                fino al completamento. Per ogni risorsa che non riesce a caricare viene applicato un fallback
+                automatico: le texture mancanti vengono sostituite con un pattern a scacchiera generato via Canvas API,
+                mentre i modelli OBJ con errori vengono semplicemente omessi senza bloccare il resto.
+            </p>
         </section>
 
+        <!-- ============================================================
+             ARCHITETTURA TECNICA
+             ============================================================ -->
         <section class="card">
-            <h2>⚙️ Architettura Tecnica</h2>
-            
+            <h2>Architettura Tecnica</h2>
+
             <div class="tech-grid">
                 <div class="tech-card">
-                    <h4>🎨 Rendering Engine</h4>
-                    <p>WebGL puro con shaders personalizzati per massime performance e controllo completo del pipeline grafico.</p>
+                    <h4>Rendering</h4>
+                    <p>WebGL 1.0 puro, senza librerie di scena. Tre shader program distinti: principale (Phong + ombre + fog + bump), shadow pass e skybox.</p>
                 </div>
                 <div class="tech-card">
-                    <h4>🧮 Matematica 3D</h4>
-                    <p>Libreria m4.js per operazioni matriciali, trasformazioni geometriche e calcoli di proiezione prospettica.</p>
+                    <h4>Matematica 3D</h4>
+                    <p>Libreria <code>m4.js</code> del corso per matrici, proiezione prospettica e trasformazioni geometriche. La matrice normale viene calcolata come trasposta dell'inversa della sotto-matrice 3x3 del modello.</p>
                 </div>
                 <div class="tech-card">
-                    <h4>🎵 Audio System</h4>
-                    <p>Sistema audio HTML5 con suoni ambientali, effetti sonori reattivi e feedback interattivo.</p>
+                    <h4>Audio</h4>
+                    <p>HTML5 Audio API. Loop ambientale sempre attivo, effetto sonoro dell'interruttore al cambio di stato, audio della bambola con volume modulato dinamicamente in base alla distanza del player.</p>
                 </div>
                 <div class="tech-card">
-                    <h4>📦 Asset Management</h4>
-                    <p>Caricamento asincrono di modelli OBJ, texture mapping avanzato e gestione memoria ottimizzata.</p>
+                    <h4>Gestione asset</h4>
+                    <p>Caricamento asincrono con una <code>Map</code> usata come cache per evitare ricaricamenti. Parser OBJ scritto da zero, compatibile con materiali MTL e texture UV.</p>
                 </div>
             </div>
 
-            <h3>🖥️ Shaders GLSL</h3>
+            <h3>Shader GLSL &mdash; vertex shader</h3>
+            <p>
+                Il vertex shader principale riceve posizione, normale e coordinate UV per ogni vertice.
+                Calcola la posizione nello spazio mondo moltiplicando per la matrice modello, trasforma
+                le normali con la matrice normale e calcola la posizione nel riferimento della luce
+                (necessaria per il confronto con la shadow map nel fragment shader).
+            </p>
             <div class="code-block">
-// Vertex Shader - Trasformazioni geometriche
 attribute vec4 a_position;
 attribute vec3 a_normal;
 attribute vec2 a_texcoord;
@@ -447,11 +446,11 @@ attribute vec2 a_texcoord;
 uniform mat4 u_model;
 uniform mat4 u_view;
 uniform mat4 u_projection;
+uniform mat4 u_normalMatrix;
 uniform mat4 u_lightSpaceMatrix;
-uniform mat3 u_normalMatrix;  // transpose(inverse(mat3(u_model)))
 
-varying vec3 v_position;
 varying vec3 v_normal;
+varying vec3 v_position;
 varying vec2 v_texcoord;
 varying vec4 v_fragPosLightSpace;
 
@@ -465,22 +464,274 @@ void main() {
 }
             </div>
 
-            <h3>💡 Sistema di Illuminazione</h3>
+            <h3>Sistema di illuminazione</h3>
+            <p>
+                Il modello di illuminazione e&apos; Phong con tre componenti: ambientale, diffusa e speculare.
+                Sono presenti due sorgenti di luce distinte: il lampadario centrale (luce interna, puntiforme)
+                e le finestre (luce esterna, direzionale). Le due luci possono essere attivate o disattivate
+                indipendentemente dal pannello. L'intensita&apos; ambientale cambia leggermente a seconda
+                che la luce esterna sia accesa o meno.
+            </p>
             <ul class="feature-list">
-                <li><strong>Phong Lighting Model:</strong> Componenti ambient, diffuse e specular</li>
-                <li><strong>Shadow Mapping:</strong> Ombre dinamiche in tempo reale</li>
-                <li><strong>PCF (Percentage Closer Filtering):</strong> Ombre soft e realistiche</li>
-                <li><strong>Multi-light System:</strong> Luce interna (lampadario) + luce esterna (finestre)</li>
-                <li><strong>Attenuation:</strong> Attenuazione realistica della luce con la distanza</li>
+                <li><strong>Attenuazione:</strong> formula quadratica <code>1 / (1 + k1*d + k2*d&sup2;)</code> sulla luce del lampadario</li>
+                <li><strong>Soffitto:</strong> la normale del soffitto e&apos; rivolta verso il basso, quindi il dot product con la direzione della luce e&apos; quasi zero; ho aggiunto una correzione che calcola un'illuminazione graduale in base alla distanza dalla lampada</li>
+                <li><strong>Pavimento:</strong> boost moltiplicativo sulla componente diffusa per bilanciare l'illuminazione visiva</li>
+                <li><strong>Flickering:</strong> l'intensita&apos; della lampada oscilla ogni frame tramite una funzione sinusoidale su <code>Date.now()</code>, con variazione casuale sovrapposta</li>
             </ul>
         </section>
 
+        <!-- ============================================================
+             TECNICHE IMPLEMENTATE
+             ============================================================ -->
         <section class="card">
-            <h2>📊 Statistiche del Progetto</h2>
+            <h2>Tecniche di Rendering Implementate</h2>
+
+            <h3>Shadow Mapping con PCF</h3>
+            <p>
+                Le ombre vengono generate con un shadow pass dedicato: prima del frame principale
+                la scena viene renderizzata dal punto di vista della luce su una framebuffer texture
+                di risoluzione 2048x2048. Nel fragment shader principale, ogni frammento viene
+                trasformato nello spazio della luce e la sua profondit&agrave; viene confrontata con
+                il valore memorizzato nella shadow map. Per ammorbidire i bordi delle ombre
+                si usa PCF (Percentage Closer Filtering) con kernel 3x3.
+            </p>
+            <div class="code-block">
+// PCF 3x3: media di 9 campioni attorno al frammento
+float shadow = 0.0;
+vec2 texelSize = vec2(1.0 / 2048.0);
+for(int x = -1; x &lt;= 1; ++x) {
+    for(int y = -1; y &lt;= 1; ++y) {
+        float pcfDepth = texture2D(u_shadowMap,
+            projCoords.xy + vec2(x, y) * texelSize).r;
+        shadow += currentDepth - bias &gt; pcfDepth ? 1.0 : 0.0;
+    }
+}
+shadow /= 9.0;
+            </div>
+
+            <h3>Nebbia Esponenziale (tasto G)</h3>
+            <p>
+                La nebbia e&apos; implementata nel fragment shader calcolando la distanza di ogni frammento
+                dalla camera (<code>v_position - u_viewPos</code>) e applicando la formula
+                <code>fogFactor = 1 - exp(-density * dist)</code>. Il colore finale viene interpolato
+                tra il colore illuminato e il colore della nebbia (quasi nero) in base al <code>fogFactor</code>.
+                La densit&agrave; e&apos; impostata in modo che la nebbia cominci a essere percepibile
+                intorno ai 3&ndash;4 metri e diventi opaca verso i 10 metri.
+            </p>
+
+            <h3>Bump Mapping (tasto B)</h3>
+            <p>
+                Il bump mapping viene applicato alle pareti. La heightmap e&apos; una texture procedurale
+                generata via Canvas API. Nel fragment shader si campiona la heightmap sul frammento
+                corrente e su due offset (<code>+dx</code>, <code>+dy</code>) per approssimare
+                il gradiente locale della superficie. Il gradiente perturba la normale prima
+                del calcolo Phong, simulando una superficie irregolare senza modificare la geometria.
+            </p>
+
+            <h3>Rendering Avanzato (pannello)</h3>
+            <p>
+                Attivando il rendering avanzato dal pannello di controllo si aggiungono quattro effetti
+                post-processing calcolati nel fragment shader:
+            </p>
+            <ul class="feature-list">
+                <li><strong>Vignette:</strong> scurimento progressivo verso i bordi, calcolato sulla distanza del frammento dal centro dello schermo in coordinate NDC corrette per l'aspect ratio</li>
+                <li><strong>Desaturazione parziale:</strong> il colore viene mescolato al 30% con la sua versione in scala di grigi per un'atmosfera pi&ugrave; cupa</li>
+                <li><strong>Tono freddo nelle ombre:</strong> nelle zone scure si aggiunge una sfumatura bluastra modulata dal livello di luminosit&agrave; del frammento</li>
+                <li><strong>Film grain:</strong> un rumore pseudo-casuale generato da una funzione hash su <code>gl_FragCoord</code> aggiunge una leggera granulosit&agrave; al fotogramma</li>
+            </ul>
+
+            <h3>Skybox Cubemap</h3>
+            <p>
+                La skybox usa un cubo con shader dedicato. Il vertex shader elimina la componente di traslazione
+                dalla view matrix (conservando solo la rotazione) e imposta <code>gl_Position = pos.xyww</code>
+                per forzare la skybox al massimo della profondit&agrave;, evitando che superi il near plane.
+                Il fragment shader modula l'intensit&agrave; della cubemap in base allo stato della luce esterna:
+                di notte il cielo appare pi&ugrave; scuro (moltiplicatore 0.3 invece di 1.0).
+            </p>
+
+            <h3>Collision Detection (AABB)</h3>
+            <p>
+                Il sistema di collisioni con le pareti e&apos; basato su AABB semplificato:
+                la posizione del player viene clampata entro i limiti della stanza ad ogni frame
+                dopo aver applicato il movimento. Per gli oggetti di scena (sedia, bambola, ecc.)
+                si controlla la distanza minima dal centro del player e si annulla la componente
+                di velocit&agrave; nella direzione dell'ostacolo.
+            </p>
+
+            <h3>Orologio Animato</h3>
+            <p>
+                Sulla parete di fondo e&apos; presente un orologio realizzato con un quad piatto.
+                Le lancette delle ore e dei minuti sono modelli separati, ruotati ogni frame
+                attorno all'asse Z in base all'orario reale letto da <code>new Date()</code>.
+                L'angolo viene calcolato in radianti e passato come uniform alla matrice modello.
+            </p>
+        </section>
+
+        <!-- ============================================================
+             ASSET
+             ============================================================ -->
+        <section class="card">
+            <h2>Asset e Contenuti</h2>
+
+            <h3>Modelli 3D</h3>
+            <ul class="feature-list">
+                <li><strong>Teschi (5):</strong> posizionati lungo le pareti della stanza</li>
+                <li><strong>Bambola:</strong> oggetto interattivo con trigger audio basato sulla prossimit&agrave;</li>
+                <li><strong>Arredi:</strong> sedie normali e sedia a rotelle</li>
+                <li><strong>Horror Chair:</strong> sedia gotica modellata personalmente con Blender, esportata in OBJ con UV mapping e texture invecchiate; e&apos; l'elemento centrale della stanza</li>
+                <li><strong>Interruttore:</strong> modello funzionante con animazione di rotazione al cambio di stato</li>
+                <li><strong>Lampadario:</strong> mesh emissiva centrale, sorgente della luce interna</li>
+                <li><strong>Orologio:</strong> quad con lancette come oggetti separati animati in tempo reale</li>
+            </ul>
+
+            <h3>Texture</h3>
+            <div class="tech-grid">
+                <div class="tech-card">
+                    <h4>Foto dell'autore</h4>
+                    <p>Applicata come texture al quadro sulla parete frontale sinistra, come richiesto dalla specifica del progetto.</p>
+                </div>
+                <div class="tech-card">
+                    <h4>Texture architetturali</h4>
+                    <p>Pareti, pavimento e soffitto con mapping UV ottimizzato per evitare distorsioni visibili.</p>
+                </div>
+                <div class="tech-card">
+                    <h4>Materiali vetro</h4>
+                    <p>Texture trasparenti per le finestre con alpha blending e depth sorting per la corretta sovrapposizione.</p>
+                </div>
+                <div class="tech-card">
+                    <h4>Procedurali</h4>
+                    <p>Heightmap per bump mapping e texture di fallback (scacchiera) generate via Canvas API, senza file aggiuntivi.</p>
+                </div>
+            </div>
+
+            <h3>Audio</h3>
+            <ul class="feature-list">
+                <li><strong>Loop ambientale:</strong> audio di sottofondo sempre attivo per creare atmosfera</li>
+                <li><strong>Bambola (proximity):</strong> il volume cresce avvicinandosi all'oggetto; il calcolo avviene ogni frame confrontando la posizione del player con quella della bambola</li>
+                <li><strong>Interruttore:</strong> suono riprodotto al cambio di stato della luce</li>
+            </ul>
+
+            <h3>Lavorazione con Blender</h3>
+            <p>
+                Blender e&apos; stato usato per ottimizzare la geometria dei modelli scaricati,
+                correggere le normali, eseguire l'UV unwrapping e verificare che l'esportazione OBJ
+                fosse compatibile con il parser scritto per il progetto.
+                Per la Horror Chair ho modellato tutto da zero: il video sotto mostra il processo
+                completo di modellazione, UV unwrapping e texturing.
+            </p>
+            <div class="highlight-box" style="margin-top: 20px;">
+                <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; margin-top: 15px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.3);">
+                    <iframe
+                        src="https://www.youtube.com/embed/Jxh7tv8AgJE?si=Gp9qMcqmcfelmpqa"
+                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; border-radius: 10px;"
+                        title="YouTube video player"
+                        frameborder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        referrerpolicy="strict-origin-when-cross-origin"
+                        allowfullscreen>
+                    </iframe>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================
+             PANNELLO DI CONTROLLO
+             ============================================================ -->
+        <section class="card">
+            <h2>Pannello di Controllo (tasto P)</h2>
+            <p>
+                Premendo <strong>P</strong> si apre un pannello laterale che raccoglie tutti i toggle
+                principali dell'applicazione. E&apos; il modo pi&ugrave; rapido per testare i vari effetti
+                senza dover ricordare i tasti rapidi.
+            </p>
+
+            <div class="tech-grid">
+                <div class="tech-card">
+                    <h4>Illuminazione</h4>
+                    <ul>
+                        <li>Toggle luce interna (lampadario)</li>
+                        <li>Toggle luce esterna (finestre)</li>
+                        <li>Attiva/disattiva ombre (shadow map PCF)</li>
+                    </ul>
+                </div>
+                <div class="tech-card">
+                    <h4>Effetti grafici</h4>
+                    <ul>
+                        <li>Riflessioni speculari</li>
+                        <li>Rendering avanzato (vignette, grain, desaturazione)</li>
+                        <li>Nebbia esponenziale</li>
+                        <li>Bump mapping sulle pareti</li>
+                    </ul>
+                </div>
+                <div class="tech-card">
+                    <h4>Debug e informazioni</h4>
+                    <ul>
+                        <li>FPS counter in tempo reale</li>
+                        <li>Log di sistema attivabili/disattivabili</li>
+                        <li>Coordinate camera live</li>
+                    </ul>
+                </div>
+                <div class="tech-card">
+                    <h4>Navigazione</h4>
+                    <ul>
+                        <li>Modalit&agrave; spettatore (noclip, libera da collisioni)</li>
+                        <li>Reset posizione player</li>
+                        <li>Modificatori di velocit&agrave;</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================
+             CONFORMITA' REQUISITI
+             ============================================================ -->
+        <section class="card">
+            <h2>Requisiti del Progetto</h2>
+            <div class="requirements-grid">
+                <div class="requirement-card">
+                    <h4>Geometria 3D e proiezione</h4>
+                    <p>Proiezione prospettica con FOV dinamico, aspect ratio adattivo al resize della finestra, matrice view calcolata da posizione e rotazione camera.</p>
+                </div>
+                <div class="requirement-card">
+                    <h4>Input utente</h4>
+                    <p>Tastiera + mouse su desktop, touch controls su mobile. Entrambi attivi simultaneamente.</p>
+                </div>
+                <div class="requirement-card">
+                    <h4>Illuminazione</h4>
+                    <p>Modello Phong con due sorgenti (interna + esterna), attenuazione, flickering dinamico.</p>
+                </div>
+                <div class="requirement-card">
+                    <h4>Texture mapping</h4>
+                    <p>Texture su tutti gli oggetti, foto dell'autore applicata al quadro a parete, heightmap procedurale per bump mapping.</p>
+                </div>
+                <div class="requirement-card">
+                    <h4>Pannello di controllo</h4>
+                    <p>Pannello accessibile con P, con toggle per tutte le funzionalit&agrave; grafiche e di debug.</p>
+                </div>
+                <div class="requirement-card">
+                    <h4>Modelli OBJ</h4>
+                    <p>Caricamento e parsing di modelli OBJ con gestione materiali MTL e texture UV.</p>
+                </div>
+                <div class="requirement-card">
+                    <h4>Ombre dinamiche</h4>
+                    <p>Shadow mapping con shadow pass dedicato, risoluzione 2048x2048, PCF per bordi morbidi.</p>
+                </div>
+                <div class="requirement-card">
+                    <h4>Supporto mobile</h4>
+                    <p>Touch controls con pad virtuale, rotazione camera via trascinamento, responsive layout.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================
+             STATISTICHE
+             ============================================================ -->
+        <section class="card">
+            <h2>Statistiche del Progetto</h2>
             <div class="stats-container">
                 <div class="stat-box">
                     <span class="stat-number">5000+</span>
-                    <span class="stat-label">Linee di Codice</span>
+                    <span class="stat-label">Linee di codice</span>
                 </div>
                 <div class="stat-box">
                     <span class="stat-number">15+</span>
@@ -492,267 +743,43 @@ void main() {
                 </div>
                 <div class="stat-box">
                     <span class="stat-number">3</span>
-                    <span class="stat-label">Shader Programs</span>
+                    <span class="stat-label">Shader program</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-number">2048</span>
+                    <span class="stat-label">Shadow map (px)</span>
                 </div>
                 <div class="stat-box">
                     <span class="stat-number">60</span>
-                    <span class="stat-label">FPS Target</span>
-                </div>
-                <div class="stat-box">
-                    <span class="stat-number">100%</span>
-                    <span class="stat-label">Requisiti Soddisfatti</span>
+                    <span class="stat-label">FPS target</span>
                 </div>
             </div>
         </section>
 
+        <!-- ============================================================
+             CREDITI E LIBRERIE
+             ============================================================ -->
         <section class="card">
-            <h2>✅ Conformità Requisiti del Progetto</h2>
-            <div class="requirements-grid">
-                <div class="requirement-card">
-                    <h4>Geometria 3D</h4>
-                    <p>Proiezione prospettica con FOV dinamico e aspect ratio adattivo</p>
-                </div>
-                <div class="requirement-card">
-                    <h4>Input Utente</h4>
-                    <p>Controlli keyboard/mouse desktop + touch mobile completi</p>
-                </div>
-                <div class="requirement-card">
-                    <h4>Illuminazione</h4>
-                    <p>Sistema multi-luce con ombre dinamiche e modello Phong</p>
-                </div>
-                <div class="requirement-card">
-                    <h4>Texture Mapping</h4>
-                    <p>Texture procedurali + foto dell'autore applicata al quadro</p>
-                </div>
-                <div class="requirement-card">
-                    <h4>Pannello Controllo</h4>
-                    <p>UI completa con toggle per tutte le funzionalità grafiche</p>
-                </div>
-                <div class="requirement-card">
-                    <h4>Supporto Mobile</h4>
-                    <p>Touch controls, responsive design, controlli gesture</p>
-                </div>
-                <div class="requirement-card">
-                    <h4>Advanced Rendering</h4>
-                    <p>Shadow mapping PCF (tasto P), nebbia esponenziale (G), bump mapping height-map (B)</p>
-                </div>
-                <div class="requirement-card">
-                    <h4>Modelli OBJ</h4>
-                    <p>Caricamento dinamico con parser personalizzato</p>
-                </div>
-            </div>
-        </section>
+            <h2>Librerie e Risorse</h2>
 
-        <section class="card">
-            <h2>🏗️ Algoritmi e Tecniche Implementate</h2>
-            
-            <h3>🎯 Collision Detection</h3>
-            <p>Il sistema di collision detection è basato su AABB (Axis-Aligned Bounding Box): la posizione del player viene <em>clampata</em> entro i limiti della stanza ad ogni frame. Per gli oggetti di scena si verifica la distanza minima dal player per prevenire compenetrazione.</p>
-            <div class="highlight-box">
-                <p><strong>Workflow Blender:</strong> Il processo di preparazione asset ha incluso ottimizzazione geometria, UV unwrapping per texture mapping corretto, e verifica topologia per performance WebGL ottimali.</p>
-            </div>
-
-            <h3>🌑 Shadow Mapping Algorithm</h3>
-            <div class="code-block">
-            // Shadow Mapping con PCF
-            float calculateShadow(vec4 fragPosLightSpace) {
-                vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
-                projCoords = projCoords * 0.5 + 0.5;
-                
-                float shadow = 0.0;
-                vec2 texelSize = vec2(1.0) / vec2(1024.0);
-                
-                // PCF (Percentage Closer Filtering)
-                for(int x = -1; x <= 1; ++x) {
-                    for(int y = -1; y <= 1; ++y) {
-                        float pcfDepth = texture2D(u_shadowMap, 
-                            projCoords.xy + vec2(x, y) * texelSize).r;
-                        shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;
-                    }
-                }
-                return shadow / 9.0;
-            }
-            </div>
-
-            <h3>🎨 Procedural Texture Generation</h3>
+            <h3>Librerie del corso</h3>
             <ul class="feature-list">
-                <li><strong>Glassmaterial:</strong> Texture vetro trasparente con riflessi casuali</li>
-                <li><strong>Rough Surface:</strong> Texture ruvida per interruttore con effetto invecchiamento</li>
-                <li><strong>Skybox Cubemap:</strong> Ambiente 360° per immersione realistica</li>
+                <li><code>glm_utils.js</code> &mdash; utilit&agrave; per operazioni vettoriali</li>
+                <li><code>mesh_utils.js</code> &mdash; supporto per la gestione delle mesh</li>
+                <li><code>webgl-utils.js</code> &mdash; helper per la creazione del contesto WebGL</li>
+                <li><code>m4.js</code> &mdash; libreria matriciale per trasformazioni 3D</li>
+                <li><code>dat.gui.js</code> &mdash; componente GUI incluso nella specifica del corso</li>
+                <li><code>jquery-3.6.0.js</code> &mdash; incluso come da specifica</li>
             </ul>
 
-            <h3>⚡ Ottimizzazioni Performance</h3>
+            <h3>Asset di terze parti</h3>
             <ul class="feature-list">
-                <li><strong>Depth Sorting:</strong> Gestione corretta trasparenza oggetti (painter's algorithm)</li>
-                <li><strong>Buffer Caching:</strong> Riutilizzo buffer WebGL per skybox e shadow pass, evitando allocazioni ogni frame</li>
-                <li><strong>Uniform Location Caching:</strong> Cache delle uniform location su <code>gl.cachedUniforms</code> per ridurre le chiamate <code>getUniformLocation</code></li>
+                <li><strong>Modelli 3D:</strong> scaricati da repository gratuiti (licenza libera per uso educativo) e modificati con Blender per adattarli al progetto</li>
+                <li><strong>Texture:</strong> da librerie gratuite con licenza CC0, pi&ugrave; texture procedurali generate via Canvas API</li>
+                <li><strong>Audio:</strong> effetti sonori da librerie gratuite per uso educativo</li>
+                <li><strong>Font:</strong> Creepster e Inter da Google Fonts (solo nella relazione)</li>
             </ul>
         </section>
-
-        <section class="card">
-            <h2>🎨 Asset e Contenuti</h2>
-            
-            <h3>🗿 Modelli 3D (Formato OBJ)</h3>
-            <ul class="feature-list">
-                <li><strong>Skull Collection:</strong> 5 teschi posizionati lungo le pareti</li>
-                <li><strong>Creepy Doll:</strong> Bambola interattiva con audio triggers</li>
-                <li><strong>Furniture Set:</strong> Sedie, sedia a rotelle</li>
-                <li><strong>Horror Chair:</strong> Sedia horror personalizzata creata dall'autore con Blender, elemento centrale dell'atmosfera inquietante con design gotico e texture invecchiate</li>
-                <li><strong>Light Switch:</strong> Interruttore funzionante con animazioni</li>
-                <li><strong>Hanging Lamp:</strong> Lampadario centrale emissivo</li>
-            </ul>
-
-            <h3>🖼️ Sistema Texture</h3>
-            <div class="tech-grid">
-                <div class="tech-card">
-                    <h4>📸 Foto Autore</h4>
-                    <p>Applicata al quadro sulla parete frontale sinistra, conforme ai requisiti del progetto</p>
-                </div>
-                <div class="tech-card">
-                    <h4>🏠 Architectural</h4>
-                    <p>Texture per pareti, pavimento, soffitto con mapping UV ottimizzato</p>
-                </div>
-                <div class="tech-card">
-                    <h4>🪟 Glass Materials</h4>
-                    <p>Materiali trasparenti per finestre con effetti di rifrazione</p>
-                </div>
-                <div class="tech-card">
-                    <h4>🌅 Environment</h4>
-                    <p>Skybox cubemap per illuminazione ambientale realistica</p>
-                </div>
-            </div>
-
-            <h3>🔊 Audio Design</h3>
-            <ul class="feature-list">
-                <li><strong>Ambient Loop:</strong> Atmosfera di sottofondo continua</li>
-                <li><strong>Interactive SFX:</strong> Suoni reattivi alla vicinanza della bambola (proximity trigger)</li>
-                <li><strong>Light Switch:</strong> Effetto sonoro di flickering realistico</li>
-                <li><strong>Audio prossimale:</strong> Volume dell'audio regolato dinamicamente in base alla distanza del player dalla bambola</li>
-            </ul>
-        </section>
-
-        <section class="card">
-            <h2>🔧 Pannello di Controllo Avanzato</h2>
-            <p>Sistema di debug e controllo completo accessibile tramite tasto <strong>P</strong>:</p>
-
-            <div class="tech-grid">
-                <div class="tech-card">
-                    <h4>💡 Lighting Controls</h4>
-                    <ul>
-                        <li>Toggle luce interna/esterna</li>
-                        <li>Controllo intensità illuminazione</li>
-                        <li>Attivazione/disattivazione ombre</li>
-                    </ul>
-                </div>
-                <div class="tech-card">
-                    <h4>🎨 Rendering Options</h4>
-                    <ul>
-                        <li>Advanced rendering effects</li>
-                        <li>Riflessioni speculari</li>
-                        <li>Modalità wireframe</li>
-                    </ul>
-                </div>
-                <div class="tech-card">
-                    <h4>📊 Debug Tools</h4>
-                    <ul>
-                        <li>FPS counter real-time</li>
-                        <li>Sistema di logging attivabile</li>
-                        <li>Coordinate camera live</li>
-                    </ul>
-                </div>
-                <div class="tech-card">
-                    <h4>🎮 Gameplay Modes</h4>
-                    <ul>
-                        <li>Modalità spettatore (noclip)</li>
-                        <li>Reset posizione player</li>
-                        <li>Speed modifiers</li>
-                    </ul>
-                </div>
-            </div>
-        </section>
-
-        <section class="card">
-            <h2>📱 Compatibilità e Performance</h2>
-            
-            <h3>🌐 Browser Support</h3>
-            <ul class="feature-list">
-                <li><strong>Desktop:</strong> Chrome 80+, Firefox 75+, Safari 13+, Edge 80+</li>
-                <li><strong>Mobile:</strong> iOS Safari 13+, Chrome Mobile 80+, Samsung Internet</li>
-                <li><strong>WebGL:</strong> Supporto WebGL 1.0 con estensioni opzionali</li>
-            </ul>
-
-            <h3>⚡ Performance Metrics</h3>
-            <div class="highlight-box">
-                <p><strong>Target:</strong> 60 FPS costanti su hardware moderno<br>
-                <strong>Minimum:</strong> 30 FPS su dispositivi entry-level<br>
-                <strong>Memory Usage:</strong> ~50MB VRAM per texture e modelli</p>
-            </div>
-
-            <h3>📐 Responsive Design</h3>
-            <ul class="feature-list">
-                <li>Adattamento automatico a diverse risoluzioni</li>
-                <li>Scaling UI per schermi piccoli</li>
-                <li>Controlli touch ottimizzati per mobile</li>
-                <li>Aspect ratio dinamico per il viewport</li>
-            </ul>
-        </section>
-
-        <section class="card">
-            <h2>🚀 Innovazioni e Particolarità</h2>
-            
-            <div class="highlight-box">
-                <p><strong>Unique Selling Points:</strong> Elementi che distinguono questo progetto dalla media</p>
-            </div>
-
-            <h3>💡 Lighting System Innovation</h3>
-            <ul class="feature-list">
-                <li><strong>Dynamic Flickering:</strong> Effetto realistico di lampeggio della lampadina tramite variazione sinusoidale dell'intensità</li>
-                <li><strong>Dual Lighting:</strong> Sistema interno (lampadario) + esterno (finestre) con blend dinamico basato sullo stato dell'interruttore</li>
-                <li><strong>Vignette Effect:</strong> Effetto post-processing nel fragment shader per creare atmosfera horror ai bordi dello schermo</li>
-                <li><strong>Nebbia Esponenziale (tasto G):</strong> Fog shader in GLSL: <code>fogFactor = 1 - exp(-density * dist)</code>, miscelato al finalColor nel fragment shader. Colore nebbia quasi nero per atmosfera horror.</li>
-                <li><strong>Bump Mapping (tasto B):</strong> Perturbazione delle normali via heightmap procedurale (generata su Canvas). Campiona la texture su offset +dx/+dy per approssimare il gradiente e perturbare la normale prima dei calcoli Phong.</li>
-                <li><strong>Orologio animato:</strong> Quad piatto sulla parete di fondo con lancette ore/minuti come modelli separati. Rotazione intorno all'asse Z aggiornata ogni frame con <code>Date()</code>.</li>
-                <li><strong>Gamepad Support:</strong> Lettura da <code>navigator.getGamepads()</code> ad ogni frame. Stick sinistro = movimento, stick destro = camera, shoulder buttons = toggle effetti.</li>
-            </ul>
-
-            <h3>🎮 Interactive Elements</h3>
-            <ul class="feature-list">
-                <li><strong>Proximity Triggers:</strong> Audio reattivo alla posizione del player</li>
-                <li><strong>Visual Feedback:</strong> Crosshair dinamico per interazioni</li>
-                <li><strong>Animated Objects:</strong> Animazioni procedurali per interruttori</li>
-                <li><strong>State Management:</strong> Persistenza stati oggetti durante la sessione</li>
-            </ul>
-
-            <h3>🔧 Technical Excellence</h3>
-            <ul class="feature-list">
-                <li><strong>Custom OBJ Parser:</strong> Implementazione parser 3D da zero</li>
-                <li><strong>Multi-shader Pipeline:</strong> Sistema modulare per diversi effetti</li>
-                <li><strong>Memory Management:</strong> Cleanup automatico risorse WebGL</li>
-                <li><strong>Error Handling:</strong> Fallback robusti per asset mancanti</li>
-            </ul>
-        </section>
-
-        <section class="card">
-            <h2>📚 Crediti e Risorse</h2>
-            
-            <h3>🎨 Asset e Contenuti</h3>
-            <ul class="feature-list">
-                <li><strong>Icone Interface:</strong> Emoji Unicode standard per compatibilità cross-platform</li>
-                <li><strong>Modelli 3D:</strong> Modelli OBJ scaricati da risorse gratuite online e modificati con Blender</li>
-                <li><strong>Texture:</strong> Combinate da risorse gratuite e texture procedurali generate via Canvas API</li>
-                <li><strong>Suoni:</strong> Effetti sonori da librerie audio gratuite per progetti educativi</li>
-                <li><strong>Font:</strong> 'Creepster' da Google Fonts, 'Inter' da Google Fonts</li>
-            </ul>
-
-            <h3>🛠️ Librerie e Strumenti</h3>
-            <ul class="feature-list">
-                <li><strong>WebGL:</strong> API grafica 3D nativa del browser</li>
-                <li><strong>JavaScript:</strong> Linguaggio principale per la logica applicativa</li>
-                <li><strong>GLSL:</strong> OpenGL Shading Language per i fragment e vertex shader</li>
-                <li><strong>Librerie corso:</strong> glm_utils.js, mesh_utils.js, webgl-utils.js, m4.js, dat.gui.js, jquery-3.6.0.js</li>
-            </ul>
-
-           </section>
 
         <footer class="footer">
             <p><strong>Alberto Zini</strong> &mdash; Corso di Computer Graphics, Laurea Magistrale in Informatica</p>
